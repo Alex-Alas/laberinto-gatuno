@@ -11,7 +11,8 @@ const ctx={console,Int16Array,performance:{now:()=>Date.now()},requestAnimationF
   visualViewport:{width:375,addEventListener:()=>0},
   Image:function(){this.complete=false;this.naturalWidth=0;this.decode=()=>Promise.resolve()},
   Audio:function(s){this.src=s;this.paused=true;this.muted=false;
-                    this.play=()=>{this.paused=false;return Promise.resolve()}},
+                    this.play=()=>{this.paused=false;return Promise.resolve()};
+                    this.pause=()=>{this.paused=true}},
   css:{},
   document:{getElementById:el,documentElement:{style:{setProperty(k,v){ctx.css[k]=v}}}}};
 ctx.window=ctx;
@@ -142,10 +143,66 @@ for(const t of [...coins,C*R-1]){ let guard=0;
   if(guard>=400) throw new Error('el bot se atoro');
 }
 if(!win) throw new Error('no gano');
+if(!unlockT) throw new Error('no aviso al desbloquear la salida');
 if(tEnd+pen<0) throw new Error('tiempo neto negativo');
 if(log.length!==hits+fails) throw new Error('log descuadrado');
+const teclas=log.length, prec=Math.round(acc()*100);   // la partida completa, antes de los resets
+// 11) medidor de combo: llena, satura y cambia de tramo
+gen(); foes=[]; combo=0;
+if(comboFill()!==0) throw new Error('el medidor no arranca vacio');
+combo=Math.round(COMBO_MAX/2);
+if(Math.abs(comboFill()-.5)>.05) throw new Error('el medidor no llena a la mitad');
+combo=COMBO_MAX*3;
+if(comboFill()!==1) throw new Error('el medidor se pasa de 1');
+const tramos=new Set([0,5,10,COMBO_MAX].map(c=>{combo=c;return comboCol()}));
+if(tramos.size!==4) throw new Error('los tramos del combo no cambian de color');
+combo=0;
+
+// 12) SFX: sin WebAudio en el stub tienen que ser no-op, no reventar la partida
+sfxOk(); sfxBad(); sfxLate(); sfxCoin(); sfxUnlock();
+BGM.muted=true; sfxOk(); BGM.muted=false;
+
+// 13) extra vibes: cambia de pista, late a 120 BPM y NO toca el gameplay
+gen(); foes=[];
+const posA=cell(), gotA=got, durA=dur(), foeA=foeMs(), qA=qteLen();
+if(track()!==BGM) throw new Error('no arranca en la pista normal');
+if(!VIBE.loop||!(VIBE.volume>0&&VIBE.volume<1)) throw new Error('pista de vibes mal configurada');
+if(BEAT!==0.5) throw new Error('120 BPM tiene que dar 0.5s por beat');
+const KICK=0.174;                    // bombo medido sobre el mp3 (lowpass 120Hz)
+if(bopAt(KICK)<.999) throw new Error('el bop no cae sobre el bombo del mp3');
+if(Math.abs(bopAt(KICK)-bopAt(KICK+BEAT))>1e-9) throw new Error('el bop no es periodico');
+if(bopAt(KICK+BEAT/2)>.4) throw new Error('el bop no decae entre beats');
+if(bopAt(KICK+BEAT*.9)>.1) throw new Error('el bop llega alto al beat siguiente');
+BGM.paused=false; vibe.onclick();
+if(!vibes||track()!==VIBE) throw new Error('no cambio a la pista de vibes');
+if(!BGM.paused||VIBE.paused) throw new Error('las dos pistas suenan a la vez');
+if(cell()!==posA||got!==gotA||dur()!==durA||foeMs()!==foeA||qteLen()!==qA)
+  throw new Error('extra vibes toco el gameplay');
+mus.onclick(); if(!VIBE.muted) throw new Error('el mute no llega a la pista de vibes'); mus.onclick();
+vibe.onclick();
+if(vibes||track()!==BGM||!VIBE.paused) throw new Error('no volvio a la pista normal');
+
+// 14) onboarding: se ve al cargar, reusa los sprites y se va con la 1a tecla
+if(!dpj.src.startsWith('data:image/webp')||!dfoe.src.startsWith('data:image/webp'))
+  throw new Error('el onboarding no reusa los sprites embebidos');
+introShow(); if(intro.style.display!=='grid') throw new Error('no abrio el onboarding');
+gen(); foes=[]; press(letters[Object.keys(letters)[0]]);
+if(intro.style.display!=='none') throw new Error('la 1a tecla no cerro el onboarding');
+if(typeof how.onclick!=='function'||typeof igo.onclick!=='function')
+  throw new Error('faltan los botones del onboarding');
+
+// 15) salida: la unica condicion es juntar las 5 monedas
+gen(); foes=[];
+got=0; if(exitOpen()) throw new Error('la salida arranca abierta');
+got=4; if(exitOpen()) throw new Error('la salida abre antes de las 5 monedas');
+got=5; if(!exitOpen()) throw new Error('la salida no abre con las 5 monedas');
+p={x:C-1,y:R-1};
+got=4; unlockT=0;         frame();              // pintar la salida cerrada no rompe
+got=5; unlockT=now();     frame();              // ni la abierta con el cartel encima
+got=0; unlockT=0;
+
 frame();
-console.log('OK 10/10 | teclas',log.length,'precision',Math.round(acc()*100)+'%');
+console.log('OK 15/15 | partida completa:',teclas,'teclas, precision',prec+'%');
 `;
 
 vm.runInNewContext(src+harness,ctx);

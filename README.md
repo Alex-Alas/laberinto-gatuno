@@ -7,9 +7,17 @@ Un solo archivo HTML, sin dependencias — sprites, música y efectos van embebi
 **Jugar:** abrí `index.html` en cualquier navegador. En el teléfono, tocá el laberinto
 o el botón **TECLADO** para abrir el teclado del sistema.
 
+Al cargar se abre un tutorial con la mecánica dibujada (los sprites del propio juego, un
+anillo de tiempo animado y los chips de letra). Se cierra con **JUGAR**, tocando afuera o
+con la primera tecla, y se reabre con **? CÓMO SE JUEGA**. La línea de controles cambia
+sola entre escritorio y teléfono con `@media (pointer:coarse)`.
+
 ## Reglas
 
-- Juntá las 5 monedas y llegá al cuadro verde.
+- Juntá las 5 monedas y llegá al cuadro verde. **La salida está cerrada hasta la quinta
+  moneda**: hasta entonces se dibuja roja y con el candado cerrado, y el encabezado dice
+  cuántas faltan. Al juntarlas se pone verde, el candado se abre y salta un cartel
+  `SALIDA DESBLOQUEADA` con su arpegio. Era la regla que más gente no entendía.
 - El anillo alrededor del jugador es tu ventana de reacción: arranca en 1.7 s y se
   encoge 70 ms por cada punto de combo. Si se agota: +0.4 s de penalización y combo a cero.
 - Letra equivocada: +0.6 s y combo a cero. Cualquier error te devuelve **un paso**
@@ -31,6 +39,34 @@ Escala con las monedas recogidas (`got`, 0 a 5):
 
 El QTE siempre da 700 ms por letra, así que crece en largo, no en presión por tecla.
 A las 3 monedas aparece un tercer gato.
+
+## Combo y sonido
+
+Barra debajo del encabezado: llena de 0 a `COMBO_MAX` (15, que es donde la ventana de
+reacción toca su piso de 650 ms) y cambia de tramo por color — cian, amarillo, naranja y
+rosa en MAX. Da un saltito en cada acierto (`cpop`, decae al 88% por cuadro).
+
+Los efectos son osciladores de WebAudio, no más mp3 embebidos: el acierto es un blip de
+55 ms que **sube un semitono por punto de combo** (tope a los 12, para que no se vuelva
+chillón), el error un buzz descendente de sawtooth, el "tarde" uno más suave, la moneda
+dos notas y el desbloqueo un arpegio de cuatro. Todo entre 0.04 y 0.08 de ganancia para
+que no canse. El botón **MUSICA** silencia también los efectos. Sin WebAudio disponible,
+`sfx()` no hace nada y el juego sigue igual.
+
+## Extra vibes
+
+Botón que cambia la música por `Before_the_Iron_Bell` (120 BPM) y pone a latir parte de
+la interfaz: el encabezado, el medidor de combo, el resplandor del canvas y el de las
+paredes. Es **sólo visual** — no toca la dificultad, ni el reloj, ni la IA.
+
+La fase sale de `VIBE.currentTime`, no de un timer aparte, así que la imagen no se puede
+desincronizar del audio (ni siquiera al loopear). `bopAt()` es `(1 - fase)^1.8`: golpe
+seco en el beat y caída suave hasta el siguiente.
+
+El bombo del mp3 **no cae en 0**. Filtrando el archivo con un lowpass de 120 Hz y buscando
+el offset que maximiza el flujo espectral sobre la rejilla de 0.5 s, la grilla real es
+`0.174 s + n·0.5` (3.5x más marcada que cualquier otra fase). De ahí sale
+`VIBE_OFF = .326`, que es la perilla a mover si alguna vez se cambia el archivo.
 
 ## Baby mode
 
@@ -61,3 +97,9 @@ Corre el juego en un `vm` con stubs de DOM: formato del timer, retroceso por err
 QTE (éxito y fallo), baby mode y su cooldown, ruta del teclado móvil, que el layout no
 desborde, que los chips de letra nunca queden bajo el jugador, 25 laberintos donde el
 gato debe llegar por el camino mínimo, y una partida completa jugada por un bot.
+
+Los últimos cinco cubren lo nuevo: que el medidor de combo llene y sature en `COMBO_MAX`
+con un color por tramo, que los `sfx()` sean no-op sin WebAudio, que extra vibes cambie
+de pista sin tocar ni una variable de gameplay y que `bopAt()` pique justo en el bombo
+medido (0.174 s), que el tutorial reuse los sprites y se cierre con la primera tecla, y
+que la salida sólo abra con las 5 monedas.
