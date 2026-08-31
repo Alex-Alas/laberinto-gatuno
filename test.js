@@ -79,12 +79,15 @@ function botGame(id){
 // foto de TODO lo que define la dificultad: tiene que dar igual en los dos perfiles
 function snap(){
   juega('clasico');                          // la foto se saca siempre del mismo nivel
-  const q=[], b0=baby, g0=got, c0=combo;
+  const q=[], b0=baby, g0=got, c0=combo, s0=stl;
   for(let n=0;n<=5;n++){ got=n; q.push(foeMs(),chaseP(),qteLen()) }
-  for(let c=0;c<=20;c++){ combo=c; deal(); q.push(durBase,comboFill(),comboCol(),rankFill()) }
+  for(let c=0;c<=20;c++){ combo=c; deal(); q.push(durBase,comboFill()) }
+  for(let v=0;v<=STYLE_MAX+4;v++){ stl=v; q.push(rankI(),rankFill(),comboCol()) }
   for(let b=0;b<=3;b++){ baby=b; q.push(babyK(),dur()) }
-  baby=b0; got=g0; combo=c0; deal();
+  baby=b0; got=g0; combo=c0; stl=s0; deal();
   return JSON.stringify([C,R,S,POOL,COMBO_MAX,MS_LETRA,BEAT,VIBE_OFF,q,
+                         [STYLE_ERR,STYLE_LOSS,STYLE_QTE,STYLE_MAX,
+                          GRACE_MS,MEOW_MS,MEOW_CD,MEOW_R,RADAR_MS,RES_MS],
                          LEVELS.map(l=>[l.id,l.C,l.R,l.coins,l.foes,l.dur0,l.durMin,l.foe0,l.foeMin]),
                          RANKS.map(r=>[r.c,r.k]),
                          [0,.1,.174,.25,.5].map(bopAt)]);
@@ -132,6 +135,10 @@ got=5; const d5=[foeMs(),chaseP(),qteLen()];
 if(!(d5[0]<d0[0]&&d5[1]>d0[1]&&d5[2]===8)) throw new Error('la dificultad no escala');
 // el clásico tiene que seguir dando los mismos numeros de siempre
 if(d0[0]!==750||d5[0]!==300||d0[1]!==.7||d5[2]!==8) throw new Error('el clasico cambio de balance');
+// el nivel 3 iba mas acelerado que el 2: ahora comparten la ventana por letra
+const cl=LEVELS.find(l=>l.id==='clasico'), so=LEVELS.find(l=>l.id==='sotano');
+if(cl.dur0!==so.dur0||cl.durMin!==so.durMin)
+  throw new Error('el nivel 2 y el 3 tienen que compartir el timer de las letras');
 got=0; deal(); if(durBase!==1700) throw new Error('la ventana por letra del clasico cambio');
 combo=COMBO_MAX; deal(); if(durBase!==650) throw new Error('el minimo de la ventana cambio');
 combo=0; deal();
@@ -235,20 +242,49 @@ combo=Math.round(COMBO_MAX/2);
 if(Math.abs(comboFill()-.5)>.05) throw new Error('el medidor no llena a la mitad');
 combo=COMBO_MAX*3;
 if(comboFill()!==1) throw new Error('el medidor se pasa de 1');
-const tramos=new Set([0,5,10,COMBO_MAX].map(c=>{combo=c;return comboCol()}));
-if(tramos.size!==4) throw new Error('los tramos del combo no cambian de color');
-combo=0;
+const tramos=new Set([0,5,10,COMBO_MAX].map(c=>{stl=c;return comboCol()}));
+if(tramos.size!==4) throw new Error('los tramos del estilo no cambian de color');
+combo=0; stl=0;
 
 // 11b) rangos estilo DMC: letra, nombre, color y medidor hacia el rango siguiente
 if(RANKS[0].k!=='D'||RANKS[RANKS.length-1].k!=='SSS') throw new Error('faltan los rangos D..SSS');
 if(RANKS.some((r,i)=>i&&r.c<=RANKS[i-1].c)) throw new Error('los rangos no suben');
-combo=0; if(rankI()!==0||rankFill()!==0) throw new Error('el rango no arranca en D vacio');
-combo=RANKS[1].c; if(rankI()!==1||rankFill()!==0) throw new Error('el medidor no se vacia al subir');
-combo=RANKS[1].c+1;
+stl=0; if(rankI()!==0||rankFill()!==0) throw new Error('el rango no arranca en D vacio');
+stl=RANKS[1].c; if(rankI()!==1||rankFill()!==0) throw new Error('el medidor no se vacia al subir');
+stl=RANKS[1].c+1;
 if(!(rankFill()>0&&rankFill()<1)) throw new Error('el medidor no llena hacia el rango siguiente');
-combo=999; if(rankI()!==RANKS.length-1||rankFill()!==1) throw new Error('el tope del rango');
+stl=999; if(rankI()!==RANKS.length-1||rankFill()!==1) throw new Error('el tope del rango');
 if(comboCol()!==RANKS[RANKS.length-1].col) throw new Error('el color no sale del rango');
-combo=0;
+if(rankI(RANKS[1].c)!==1) throw new Error('rankI() tiene que poder leer otro valor (el maximo)');
+stl=0; combo=0;
+
+// 11c) ESTILO y COMBO son dos medidores: el error borra uno y abolla el otro
+juega('clasico'); gen(); foes=[]; coins=[]; combo=0; stl=0; nextAsk=1e9;
+for(let i=0;i<6;i++) step();
+if(combo!==6||stl!==6) throw new Error('los aciertos no suben las dos cosas');
+wrong();
+if(combo!==0) throw new Error('el error tiene que borrar el combo');
+if(stl!==6-STYLE_ERR) throw new Error('el error no deberia reiniciar el estilo');
+if(!(STYLE_LOSS>=STYLE_ERR*3)) throw new Error('perder contra un gato tiene que doler MUCHO mas');
+// "tarde" es lo mismo que la letra equivocada
+stl=10; combo=5; penalize(400,'#f70','late','-');
+if(combo!==0||stl!==10-STYLE_ERR) throw new Error('el "tarde" no separa combo y estilo');
+// perder contra un gato: la racha se corta igual, pero el estilo se hunde
+stl=20; combo=7; qteStart(); press([...POOL].find(c=>c!==qte.seq[0])); scareHide();
+if(combo!==0) throw new Error('perder el QTE tiene que borrar el combo');
+if(stl!==20-STYLE_LOSS) throw new Error('perder el QTE no hundio el estilo');
+// ganarlo suma mas que una letra suelta, y el estilo tiene tope
+stl=0; combo=0; qteStart(); qte.seq.slice().forEach(k=>press(k));
+if(stl!==STYLE_QTE||combo!==1) throw new Error('ganar el QTE no sumo estilo y combo');
+stl=STYLE_MAX; styleUp(5);
+if(stl!==STYLE_MAX) throw new Error('el estilo se pasa de su tope');
+styleDown(STYLE_MAX*2); if(stl!==0) throw new Error('el estilo se fue abajo de cero');
+// y el rango lee el estilo, no el combo
+stl=RANKS[RANKS.length-1].c; combo=0;
+if(rankI()!==RANKS.length-1) throw new Error('el rango deberia leer el estilo');
+stl=0; combo=COMBO_MAX;
+if(rankI()!==0) throw new Error('el combo ya no manda el rango');
+combo=0; stl=0; nextAsk=12;
 
 // 12) SFX: sin WebAudio en el stub tienen que ser no-op, no reventar la partida
 sfxOk(); sfxBad(); sfxLate(); sfxCoin(); sfxUnlock();
@@ -303,9 +339,13 @@ got=LV.coins; coins=[]; tutCheck();
 if(tstep!==5||!exitOpen()) throw new Error('el paso de la salida no arranco');
 win=true; tutCheck();
 if(tutOn||tut.className) throw new Error('el tutorial no termino');
-if(!lvlOn||lvl.className!=='open') throw new Error('al terminar no abrio el selector de nivel');
+// terminarlo GANANDO ya no salta al selector: primero va la pantalla de resultados
+if(lvlOn) throw new Error('el tutorial ganado no deberia abrir el selector');
 if(css['--tuth']!=='0px') throw new Error('el tutorial no le devolvio el alto al tablero');
-lvlHide();
+// pero si el nivel se cierra sin ganar (no deberia pasar), el selector sigue ahi
+win=false; tutOn=true; tstep=TUT.length-1; tutEnd();
+if(!lvlOn||lvl.className!=='open') throw new Error('sin ganar, terminar el tutorial va al selector');
+lvlHide(); win=false;
 // saltarlo lleva al mismo lugar
 juega('tutorial'); tskip.onclick();
 if(tutOn||!lvlOn) throw new Error('SALTAR no llevo al selector');
@@ -369,9 +409,9 @@ got=0; unlockT=0;
 
 frame();
 
-// 16b) RESPIRO: vencer a un gato congela 1.5s el reloj de la letra y a los gatos
+// 16b) RESPIRO: vencer a un gato congela 2s el reloj de la letra y a los gatos
 juega('clasico'); gen(); foes=[];
-if(GRACE_MS!==1500) throw new Error('el respiro tiene que durar 1.5s');
+if(GRACE_MS!==2000) throw new Error('el respiro tiene que durar 2s');
 step();                                          // arranca el reloj
 qteStart(); qte.seq.slice().forEach(k=>press(k));
 if(!(graceT>now())) throw new Error('ganar el QTE no congelo el reloj de la letra');
@@ -423,26 +463,33 @@ for(let i=0;i<DET_EVERY*(DET_MAX+1);i++){ qteStart(); qte.seq.slice().forEach(k=
 if(det!==DET_MAX) throw new Error('las cargas no toparon en DET_MAX');
 gen(); if(det||qteWins) throw new Error('la partida nueva arranco con determinacion');
 
-// 16d) AHUYENTADOR: maullido con el combo al tope, 2.5s de huida y 45s de espera
-juega('clasico'); gen(); foes=[]; combo=0; meowAt=-1e9; scareUntil=0;
+// 16d) AHUYENTADOR: se ARMA al llenar el combo una vez y despues solo espera el
+// cooldown.  Pedirlo al tope EN EL MOMENTO lo volvia inservible: justo cuando un
+// gato te alcanza es cuando el combo se esta por romper.
+juega('clasico'); gen(); foes=[]; coins=[]; combo=0; meowAt=-1e9; scareUntil=0; nextAsk=1e9;
 if(MEOW_CD!==45000||MEOW_MS!==2500) throw new Error('el maullido cambio de numeros');
 step();
-if(meow()) throw new Error('maullo sin el combo al tope');
-combo=COMBO_MAX;
-if(!meowReady()) throw new Error('con el combo al tope deberia estar listo');
-if(!meow()) throw new Error('no maullo con el combo al tope');
-if(combo!==COMBO_MAX) throw new Error('el maullido no deberia gastar el combo');
+if(meowOn) throw new Error('el maullido no deberia arrancar armado');
+if(meow()) throw new Error('maullo sin haber cargado nunca el combo');
+for(let i=0;i<COMBO_MAX;i++) step();          // el combo toca el tope: queda armado
+if(combo<COMBO_MAX) throw new Error('el bot no llego al tope del combo');
+if(!meowOn) throw new Error('llenar el combo no armo el maullido');
+if(!meowReady()) throw new Error('armado y sin cooldown deberia estar listo');
+const cA=combo;
+if(!meow()) throw new Error('no maullo con el maullido armado');
+if(combo!==cA) throw new Error('el maullido no deberia gastar el combo');
 if(!(scareUntil>now())||scareUntil-now()>MEOW_MS+60) throw new Error('el susto no dura 2.5s');
 if(meow()) throw new Error('maullo dos veces sin esperar el cooldown');
 meowAt=now()-MEOW_CD+1000;
 if(meowReady()) throw new Error('el cooldown de 45s se corto antes');
 meowAt=now()-MEOW_CD-1;
 if(!meowReady()) throw new Error('el cooldown no se cumplio');
-// sin combo al tope no hay maullido por mas que el cooldown este listo
-combo=0;
-if(meowReady()||meow()) throw new Error('el maullido tiene que pedir SIEMPRE el combo al tope');
+// y ESTA es la gracia: sigue disponible con el combo roto
+combo=0; wrong();
+if(!meowOn||!meowReady()) throw new Error('romper el combo no deberia desarmar el maullido');
+if(!meow()) throw new Error('el maullido tiene que servir justo cuando se rompe el combo');
 // los gatos cercanos se ALEJAN y mientras huyen no abren QTE
-gen(); foes=[]; combo=COMBO_MAX; meowAt=-1e9; scareUntil=0;
+gen(); foes=[]; meowOn=true; combo=0; meowAt=-1e9; scareUntil=0;
 const dn=flow(); let cerca=-1, lejos=-1;
 for(let i=0;i<C*R;i++){
   if(cerca<0&&dn[i]>=2&&dn[i]<=MEOW_R&&open(i).length>1) cerca=i;
@@ -459,7 +506,7 @@ const dL=flow()[lejos]; moveFoes(); qte=null;
 if(flow()[foes[0]]>=dL) throw new Error('el maullido no deberia llegar tan lejos');
 Math.random=rnd; scareUntil=0;
 // ESPACIO y ENTER son las teclas; el Enter de un boton del menu no se toca
-combo=COMBO_MAX; meowAt=-1e9; scareUntil=0;
+meowOn=true; meowAt=-1e9; scareUntil=0;
 onkeydown({key:' ',preventDefault(){}});
 if(!(scareUntil>now())) throw new Error('ESPACIO no maullo');
 meowAt=-1e9; scareUntil=0;
@@ -473,8 +520,31 @@ meowAt=-1e9; scareUntil=0; const nEsp=log.length;
 kb.value=' '; kb.oninput();
 if(!(scareUntil>now())) throw new Error('el espacio del teclado del telefono no maullo');
 if(log.length!==nEsp) throw new Error('el espacio se conto como letra del laberinto');
-gen(); if(scareUntil||meowAt>-1e8) throw new Error('la partida nueva arranco con el maullido usado');
-combo=0;
+gen(); if(scareUntil||meowAt>-1e8||meowOn)
+  throw new Error('la partida nueva arranco con el maullido usado');
+combo=0; nextAsk=12;
+
+// 16f) RADAR: en el sotano el maullido tambien es un eco de monedas y gatos
+juega('sotano'); gen(); foes=[far()]; meowOn=true; meowAt=-1e9; radar=null;
+const rev0=revealT;
+if(!meow()) throw new Error('no maullo en el sotano');
+if(!radar) throw new Error('el maullido no dejo radar en el sotano');
+if(radar.pts.length!==coins.length+foes.length)
+  throw new Error('el radar no marco todas las monedas y los gatos');
+if(!radar.pts.some(m=>m.k)||!radar.pts.some(m=>!m.k))
+  throw new Error('el radar tiene que marcar las dos cosas');
+// es una PISTA, no un mapa: cada marca miente hasta RADAR_J celdas, pero no mas
+coins.forEach((c,i)=>{ const m=radar.pts[i];
+  if(Math.abs(m.x-(c%C+.5))>RADAR_J+1e-9||Math.abs(m.y-((c/C|0)+.5))>RADAR_J+1e-9)
+    throw new Error('la marca de la moneda no cae cerca de la moneda');
+  if(m.x===c%C+.5&&m.y===(c/C|0)+.5) throw new Error('la marca es exacta: eso ya es un mapa') });
+// y NO enciende el sotano: la niebla y los faroles quedan como estaban
+if(revealT!==rev0) throw new Error('el radar no deberia encender el sotano');
+lastDraw=0; frame();                          // se dibuja sin romper el cuadro
+// a la vista no hace falta: el radar es del sotano
+juega('clasico'); gen(); foes=[]; meowOn=true; meowAt=-1e9; radar=null; meow();
+if(radar) throw new Error('el radar es del sotano, no del clasico');
+juega('clasico'); combo=0;
 
 // 16e) el cartel del rango esquiva al gato en cualquier esquina
 juega('clasico');
@@ -490,14 +560,47 @@ for(const q of [[0,0],[C-1,0],[0,R-1],[C-1,R-1],[(C/2)|0,0],[(C/2)|0,R-1]]){
     throw new Error('el cartel del rango tapa al gato en '+q);
 }
 // con el gato arriba a la derecha el cartel se va a la izquierda, y entra desde ahi
-p={x:C-1,y:0}; vis={x:C-1,y:0}; combo=0; lastRank=0; lastDraw=0; frame();
-combo=RANKS[RANKS.length-1].c; lastDraw=0; frame();
+p={x:C-1,y:0}; vis={x:C-1,y:0}; stl=0; lastRank=0; lastDraw=0; frame();
+stl=RANKS[RANKS.length-1].c; lastDraw=0; frame();
 if(!has(rpop,'l')) throw new Error('el cartel no se corrio del gato');
 if(!has(rpop,'show')) throw new Error('el cartel corrido no se animo');
-p={x:0,y:0}; vis={x:0,y:0}; combo=0; lastRank=0; lastDraw=0; frame();
-combo=RANKS[RANKS.length-1].c; lastDraw=0; frame();
+p={x:0,y:0}; vis={x:0,y:0}; stl=0; lastRank=0; lastDraw=0; frame();
+stl=RANKS[RANKS.length-1].c; lastDraw=0; frame();
 if(has(rpop,'l')) throw new Error('sin estorbo el cartel deberia quedarse a la derecha');
-combo=0; lastRank=0; juega('clasico');
+stl=0; combo=0; lastRank=0; juega('clasico');
+
+// 26) PANTALLA DE RESULTADOS: todo nivel termina en su resumen.  El tutorial
+// abria el selector encima del final y el jugador no llegaba a ver ni su tiempo.
+juega('tutorial'); botGame();
+if(!win) throw new Error('el bot no gano el tutorial');
+if(resOn) throw new Error('el resumen no deberia entrar de golpe');
+if(!resAt) throw new Error('ganar no dejo el resumen en camino');
+lastDraw=0; frame();
+if(resOn) throw new Error('el resumen entro sin esperar los RES_MS');
+if(lvlOn) throw new Error('el tutorial ganado no deberia abrir el selector');
+resAt=now()-1; lastDraw=0; frame();
+if(!resOn||res.className!=='open') throw new Error('el resumen no aparecio al terminar');
+if(lvlOn) throw new Error('el selector se abrio igual encima del resumen');
+// las tres salidas: el nivel siguiente, otra vuelta al mismo, o el selector
+for(const b of [rnext,ragain,rlvls]) if(typeof b.onclick!=='function')
+  throw new Error('al resumen le falta una salida');
+if(rnext.style.display==='none') throw new Error('despues del tutorial hay nivel siguiente');
+rnext.onclick();
+if(resOn||res.className) throw new Error('el resumen no cerro al elegir');
+if(LV.id!=='clasico') throw new Error('SIGUIENTE no arranco el nivel de al lado');
+if(win||t0||got) throw new Error('SIGUIENTE no arranco una partida nueva');
+// REINTENTAR rehace el mismo nivel
+botGame('clasico'); resAt=now()-1; lastDraw=0; frame();
+if(!resOn) throw new Error('el clasico no mostro su resumen');
+ragain.onclick();
+if(LV.id!=='clasico'||win||resOn) throw new Error('REINTENTAR no rehizo el mismo nivel');
+// del ultimo nivel no se sigue a ningun lado; NIVELES lleva al selector
+botGame('sotano'); resAt=now()-1; lastDraw=0; frame();
+if(!resOn) throw new Error('el sotano no mostro su resumen');
+if(rnext.style.display!=='none') throw new Error('el ultimo nivel ofrecio un siguiente');
+rlvls.onclick();
+if(!lvlOn||resOn) throw new Error('NIVELES no llevo al selector');
+lvlHide(); juega('clasico');
 
 // 17) escritorio: el perfil lite NO se aplica, todo queda como estaba
 if(MOBILE) throw new Error('escritorio detectado como movil');
@@ -531,7 +634,7 @@ if(document.fullscreenElement) throw new Error('el boton no salio de pantalla co
 if(fsb.className) throw new Error('el boton quedo marcado al salir');
 if(fsb.style.display==='none') throw new Error('con API disponible el boton tiene que verse');
 
-console.log('OK 22/22 | partida completa:',teclas,'teclas, precision',prec+'%');
+console.log('OK 26/26 | partida completa:',teclas,'teclas, precision',prec+'%');
 `;
 
 // ---- 19) el mismo juego en un teléfono: perfil lite, gameplay intacto ----
@@ -578,16 +681,37 @@ p={x:0,y:R-1}; vis={x:0,y:R-1}; lastDraw=0; frame();
 if(bar.className==='low') throw new Error('la barra se movio con el gato abajo');
 
 // el rango: al subir, la letra festeja y toda la GUI toma su color
-combo=0; lastRank=0; lastDraw=0; frame();
-combo=RANKS[RANKS.length-1].c; lastDraw=0; frame();
+stl=0; lastRank=0; lastDraw=0; frame();
+stl=RANKS[RANKS.length-1].c; lastDraw=0; frame();
 if(lastRank!==RANKS.length-1) throw new Error('la barra no siguio al rango');
 if(brank.className!=='rank up') throw new Error('el ascenso de rango no se festejo');
 if(!has(rpop,'rank')||!has(rpop,'show')) throw new Error('no aparecio el nombre del rango');
 if(css['--rc']!==RANKS[RANKS.length-1].col) throw new Error('la GUI no tomo el color del rango');
-combo=0; lastDraw=0; frame();
+stl=0; lastDraw=0; frame();
 if(lastRank!==0) throw new Error('no volvio a bajar de rango');
 if(brank.className==='rank up') throw new Error('bajar de rango no se festeja');
-if(!bfill.style.width) throw new Error('el medidor de combo no se dibujo');
+if(!bfill.style.width) throw new Error('el medidor de estilo no se dibujo');
+
+// ---- 20a) los DOS medidores y el estado del maullido se dibujan por separado ----
+// el ancho de abajo es el estilo; la barrita de al lado de la x es el combo, y el
+// del combo es el que arma el maullido: por eso se llena hasta COMBO_MAX y avisa
+juega('clasico'); combo=0; stl=0; meowOn=false; meowAt=-1e9; lastDraw=0; frame();
+if(bcfill.style.width!=='0.0%') throw new Error('el medidor de combo no arranca vacio');
+if(has(bcbar,'full')) throw new Error('el medidor de combo arranco lleno');
+if(bmeow.className) throw new Error('el ♪ deberia arrancar apagado');
+combo=COMBO_MAX; stl=0; lastDraw=0; frame();
+if(bcfill.style.width!=='100.0%') throw new Error('el medidor de combo no llego al tope');
+if(!has(bcbar,'full')) throw new Error('el medidor de combo lleno no se marco');
+if(bfill.style.width!=='0.0%') throw new Error('el combo al tope no deberia llenar el estilo');
+// armado y en cooldown: el ♪ se prende a medias y la barrita cuenta los 45 s
+meowOn=true; meowAt=now()-MEOW_CD/2; lastDraw=0; frame();
+if(bmeow.className!=='cd') throw new Error('el ♪ no muestra el cooldown');
+const mw=parseFloat(bmfill.style.width);
+if(!(mw>40&&mw<60)) throw new Error('la barrita del cooldown no va por la mitad: '+mw);
+meowAt=-1e9; lastDraw=0; frame();
+if(bmeow.className!=='ready') throw new Error('el ♪ no se prendio con el maullido listo');
+if(bmfill.style.width!=='100%') throw new Error('el cooldown cumplido no dejo la barrita llena');
+combo=0; stl=0; meowOn=false; meowAt=-1e9;
 
 // el menú congela el reloj igual que el diálogo de skill issue
 juega('clasico'); press(letters[Object.keys(letters)[0]]);
@@ -607,13 +731,18 @@ gen(); menuOpen(); pauseAt-=400; menuClose();
 if(t0) throw new Error('el menu arranco el reloj sin jugar');
 
 // ---- 20b) el maullido en el teléfono: no hay barra espaciadora a mano ----
-juega('clasico'); combo=COMBO_MAX; meowAt=-1e9; scareUntil=0;
+juega('clasico'); meowOn=true; meowAt=-1e9; scareUntil=0;
 if(typeof bcombo.onclick!=='function') throw new Error('el rango de combo no es el boton del maullido');
 bcombo.onclick({stopPropagation(){}});
 if(!(scareUntil>now())) throw new Error('tocar el rango de combo no maullo');
-scareUntil=0; combo=0; meowAt=-1e9;
-bcombo.onclick({stopPropagation(){}});          // sin combo al tope: no maulla y no rompe
-if(scareUntil>now()) throw new Error('maullo sin el combo al tope desde el telefono');
+// y el ♪, que es el indicador, es tambien el boton
+scareUntil=0; meowAt=-1e9;
+if(typeof bmeow.onclick!=='function') throw new Error('el indicador del maullido no es boton');
+bmeow.onclick({stopPropagation(){}});
+if(!(scareUntil>now())) throw new Error('tocar el ♪ no maullo');
+scareUntil=0; meowOn=false; meowAt=-1e9;
+bmeow.onclick({stopPropagation(){}});           // sin armar: no maulla y no rompe
+if(scareUntil>now()) throw new Error('maullo sin haber cargado nunca el combo');
 
 // ---- 21) pantalla completa automática: SOLO la primera vez ----
 fsAuto=true; document.exitFullscreen();
@@ -676,7 +805,7 @@ if(!/flex:none/.test(barr)) throw new Error('la barra tiene que conservar su alt
 if(!/height:var\(--barh\)/.test(bloque('.lite #bar')))
   throw new Error('la barra del telefono perdio el alto fijo que le reserva el tablero');
 if(/#bar\.low/.test(style)) throw new Error('quedo la regla de la barra que se mudaba de borde');
-for(const sel of ['.lite #menu','.lite #lvl','.lite #skill'])
+for(const sel of ['.lite #menu','.lite #lvl','.lite #skill','.lite #res'])
   if(!/align-items:start/.test(bloque(sel))) throw new Error(sel+' no esta alineado arriba');
 const stage=html.match(/<div id=stage>[\s\S]*?<\/div>\s*<div id=scare>/)[0];
 if(stage.indexOf('id=bar')>stage.indexOf('id=board'))
@@ -713,7 +842,8 @@ if(/var\(--rc,#4cf\)22/.test(style)) throw new Error('quedo el degradado con el 
 // los assets van embebidos en base64: cualquier palabra corta aparece ahi por azar,
 // asi que estos grep miran el codigo con los data: URI afuera
 const code=src.replace(/'data:[^']*'/g,"'#'");
-if(/#cmeter|#cbar|#clab/.test(style)||/cmeter|cbar|clab/.test(code))
+// con \b, porque el medidor de combo NUEVO se llama #bcbar y contiene 'cbar'
+if(/#cmeter\b|#cbar\b|#clab\b/.test(style)||/\b(cmeter|cbar|clab)\b/.test(code))
   throw new Error('quedo el medidor de combo viejo del escritorio');
 if(/id=hud|id=sub[>\s]/.test(html.slice(0,html.indexOf('<script>')))||/hudt|hudx|subt|babyEl/.test(code))
   throw new Error('quedo el HUD suelto viejo (h2 + p) del escritorio');
@@ -743,4 +873,28 @@ for(const sel of mq.slice(mq.indexOf('{')+1,mq.indexOf('\n }')).match(/^[^{\n]+\
   if(!/:root:not\(\.lite\)/.test(sel))
     throw new Error('la grilla de escritorio pisa al telefono: '+sel.trim());
 
-console.log('OK 27/27 | el perfil lite prende solo en pointer:coarse y no toca la dificultad');
+// ---- 26) los DOS medidores y el indicador del maullido, en la misma barra ----
+// Separar estilo de combo solo sirve si se VEN distinto, y el maullido, que ahora
+// se arma solo una vez y despues se enfria, necesita decir en que estado esta.
+for(const id of ['bcbar','bcfill','bmeow','bmcd','bmfill'])
+  if(barm.indexOf('id='+id)<0) throw new Error('la barra no trae '+id);
+if(!/grid-row:2/.test(bloque('#bcbar'))) throw new Error('el medidor de combo no va debajo de la x');
+if(!/#bcbar.full/.test(style)) throw new Error('el medidor de combo lleno no se distingue');
+for(const sel of ['#bmeow.ready','#bmeow.cd'])
+  if(style.indexOf(sel+'{')<0) throw new Error('al ♪ le falta el estado '+sel);
+if(!/opacity:\.?\d/.test(bloque('#bmeow'))) throw new Error('el ♪ sin armar tiene que verse apagado');
+if(!/bmeow\.className/.test(code)||!/bmfill\.style\.width/.test(code))
+  throw new Error('el cuadro no escribe la disponibilidad ni el cooldown del maullido');
+if(!/bcfill\.style\.width/.test(code)) throw new Error('el cuadro no dibuja el medidor de combo');
+// el ♪ es tambien boton: en el telefono no hay barra espaciadora
+if(!/bmeow\.onclick/.test(code)) throw new Error('el ♪ no es boton');
+
+// ---- 27) la pantalla de resultados existe y esta cableada ----
+for(const id of ['res','rtag','rttl','rtime','rsub','rgrid','rpb','rnext','ragain','rlvls'])
+  if(html.indexOf('id='+id)<0) throw new Error('al resumen le falta '+id);
+if(style.indexOf('#res.open{')<0) throw new Error('el resumen no se abre con .open');
+if(!/#res button/.test(style)) throw new Error('los botones del resumen no heredan el estilo del resto');
+for(const m of ['rtime.textContent','rgrid.innerHTML','rnext.onclick','rlvls.onclick'])
+  if(code.indexOf(m)<0) throw new Error('el resumen no escribe '+m);
+
+console.log('OK 30/30 | el perfil lite prende solo en pointer:coarse y no toca la dificultad');

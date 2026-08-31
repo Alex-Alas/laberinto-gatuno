@@ -57,11 +57,12 @@
  #btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-width:var(--w)}
  /* los mismos botones del menú del teléfono: blanco más grande y esquina redonda,
     que en escritorio ahora van en fila abajo de la consola */
- #btns button,#skill button,#lvl button,#tut button{font:inherit;font-size:12px;letter-spacing:2px;
+ #btns button,#skill button,#lvl button,#tut button,#res button{font:inherit;font-size:12px;letter-spacing:2px;
       color:#9ef;cursor:pointer;background:#0b0b12;border:1px solid #1ff6;border-radius:6px;padding:9px 15px}
  #btns button:hover,#btns button:focus-visible,
  #skill button:hover,#skill button:focus-visible,
  #lvl button:hover,#lvl button:focus-visible,
+ #res button:hover,#res button:focus-visible,
  #tut button:hover,#tut button:focus-visible{background:#12243a;box-shadow:0 0 14px #0ff4;outline:none}
  #skill{position:fixed;inset:0;display:none;place-items:center;z-index:50;background:#000a}
  #skill>div{background:#12060c;border:1px solid #f558;border-radius:6px;padding:22px 26px;
@@ -141,22 +142,55 @@
     se leen en el menú; en escritorio van acá y #sub deja de hacer falta */
  #bstat{display:none;font-size:11px;letter-spacing:1px;opacity:.6;
       white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
- #bcombo{display:flex;align-items:center;gap:7px;flex:none;padding:0 11px 0 8px;
+ /* Son DOS medidores distintos y tienen que verse distintos: el de ESTILO es el
+    rango con su color (--rc) y el llenado ancho pegado abajo (#bfill), y el de
+    COMBO es la barrita blanca al lado de la x.  Un error borra la blanca entera
+    y al estilo apenas lo abolla; perder contra un gato sí se lleva un pedazo
+    grande del de color.  Cuando la blanca se llena, el maullido queda armado. */
+ #bcombo{display:grid;grid-template-columns:auto minmax(36px,auto);align-items:center;
+      column-gap:7px;row-gap:3px;flex:none;padding:0 11px 0 8px;
       border-left:1px solid #1ff4;box-shadow:inset 0 0 22px -8px var(--rc,#4cf)}
- #brank{font-size:29px;transform:skewX(-11deg);transform-origin:50% 60%;
-      min-width:34px;text-align:center}
+ #brank{grid-row:1/4;grid-column:1;font-size:29px;transform:skewX(-11deg);
+      transform-origin:50% 60%;min-width:34px;text-align:center}
  #brank.up{animation:rankup .5s ease-out}
- #bx{font-size:15px;font-weight:bold;letter-spacing:0;color:var(--rc,#4cf);
-      text-shadow:0 0 10px currentColor}
- #bmax{display:none;font-size:9.5px;letter-spacing:1px;opacity:.5;white-space:nowrap}
- /* el llenado es el progreso HACIA EL RANGO SIGUIENTE: se vacía y vuelve a subir
-    en cada ascenso, que es lo que hace que la racha se sienta */
+ #bx{grid-row:1;grid-column:2;font-size:15px;font-weight:bold;letter-spacing:0;
+      color:#cff;text-shadow:0 0 10px currentColor}
+ #bcbar{grid-row:2;grid-column:2;height:4px;border-radius:2px;overflow:hidden;
+      background:#9ef2;box-shadow:inset 0 0 0 1px #9ef3}
+ #bcfill{display:block;height:100%;width:0;background:#dff;
+      box-shadow:0 0 8px #cff;transition:width .1s linear}
+ #bcbar.full{box-shadow:inset 0 0 0 1px #9ff8,0 0 10px #9ff6}
+ #bcbar.full #bcfill{background:#9ff;box-shadow:0 0 12px #9ff,0 0 20px #9ff8}
+ #bmax{grid-row:3;grid-column:2;display:none;font-size:9.5px;letter-spacing:1px;
+      opacity:.5;white-space:nowrap}
+ /* el llenado ancho es el medidor de ESTILO: lo que falta para el rango SIGUIENTE.
+    Se vacía y vuelve a subir en cada ascenso, que es lo que hace que se sienta */
  #bfill{position:absolute;left:0;bottom:0;height:4px;width:0;color:var(--rc,#4cf);
       background:currentColor;box-shadow:0 0 10px currentColor,0 0 22px currentColor;
       opacity:calc(.55 + var(--bop,0)*.45);transition:width .12s linear}
  #bar.up{animation:barup .45s ease-out}
  @keyframes barup{0%{background:#fff;box-shadow:0 0 34px #fff}
       to{background:linear-gradient(180deg,#0c1524f2,#05070ef2)}}
+
+ /* ---- maullido: disponibilidad y cooldown ----------------------------------
+    El maullido ya no pide tener el combo al tope en el momento: se ARMA la
+    primera vez que lo llenás y de ahí en más lo único que lo frena es el
+    cooldown.  Eso hay que poder verlo sin leer texto, así que el ♪ vive en la
+    barra —o sea en los dos perfiles—: apagado = todavía no lo cargaste nunca,
+    con la barrita llenándose = esperando los 45 s, prendido y latiendo = listo.
+    En el teléfono además es el botón, que es donde no hay barra espaciadora. */
+ #bmeow{position:relative;display:flex;align-items:center;justify-content:center;
+      flex:none;width:40px;font:inherit;font-size:19px;line-height:1;color:#9ff;
+      background:none;border:0;border-left:1px solid #1ff4;cursor:pointer;opacity:.26;
+      -webkit-tap-highlight-color:transparent}
+ #bmeow.cd{opacity:.62}
+ #bmeow.ready{opacity:1;text-shadow:0 0 10px #9ff,0 0 24px #9ff9;
+      animation:meowon 1.7s ease-in-out infinite}
+ @keyframes meowon{0%,to{transform:scale(1)}50%{transform:scale(1.15)}}
+ #bmcd{position:absolute;left:6px;right:6px;bottom:6px;height:3px;border-radius:2px;
+      background:#9ef3;overflow:hidden}
+ #bmeow.ready #bmcd{opacity:0}
+ #bmfill{display:block;height:100%;width:0;background:#9ff;box-shadow:0 0 8px #9ff}
 
  /* ---- escritorio: la misma barra, con lo que en el teléfono no entra ---------
     Sin teclado virtual encima sobra ancho, así que la barra crece y suma la placa
@@ -172,10 +206,11 @@
     columna del récord respira un poco mas que en el teléfono */
  :root:not(.lite) #bcombo{display:grid;grid-template-columns:auto auto;
       align-items:center;column-gap:15px;padding:0 16px 0 14px}
- :root:not(.lite) #brank{grid-row:1/3;font-size:36px;min-width:44px}
+ :root:not(.lite) #brank{grid-row:1/4;font-size:36px;min-width:44px}
  :root:not(.lite) #bx{font-size:17px}
  :root:not(.lite) #bmax{display:block}
  :root:not(.lite) #bfill{height:5px}
+ :root:not(.lite) #bmeow{width:58px;font-size:24px}
 
  /* ---- escritorio: dos columnas ----------------------------------------------
     El tablero manda y a la derecha va la columna de servicio —log de teclas y
@@ -246,6 +281,11 @@
  .vibes #bcombo{box-shadow:inset 0 0 22px -8px var(--rc,#4cf),
       inset 0 0 calc(var(--bop,0)*30px) calc(var(--bop,0)*-6px) var(--rc,#4cf)}
  .vibes #bx{text-shadow:0 0 calc(6px + var(--bop,0)*16px) currentColor}
+ .vibes #bcfill{box-shadow:0 0 calc(6px + var(--bop,0)*14px) currentColor}
+ /* el latido no puede borrar los tres estados del ♪: cada uno late en su nivel */
+ .vibes #bmeow{opacity:calc(.26 + var(--bop,0)*.14)}
+ .vibes #bmeow.cd{opacity:calc(.6 + var(--bop,0)*.2)}
+ .vibes #bmeow.ready{opacity:1}
  .vibes #burger{opacity:calc(.7 + var(--bop,0)*.3)}
 
  /* ---- tutorial guiado ------------------------------------------------------
@@ -295,6 +335,34 @@
  #lmeta span{border:1px solid #1ff4;border-radius:4px;padding:3px 7px;opacity:.75;background:#0b0b12}
  #lvl .row{display:flex;gap:8px;margin-top:auto;padding-top:4px}
  #lgo{flex:1;padding:11px!important;color:#cff!important;border-color:currentColor!important}
+
+ /* ---- pantalla de resultados -----------------------------------------------
+    Terminar un nivel dejaba el tablero quieto con un "GANASTE!" en la barra y, en
+    el tutorial, mandaba derecho al selector: el jugador nunca llegaba a ver su
+    tiempo.  Ahora todo nivel termina en su resumen —tiempo neto, precisión, rango
+    y récord— y desde ahí se elige a dónde ir. */
+ #res{position:fixed;inset:0;display:none;place-items:center;z-index:65;
+      background:#04060cf2;padding:10px}
+ #res.open{display:grid}
+ #res>div{width:min(520px,96vw);max-height:94dvh;overflow:auto;text-align:center;
+      background:#080c14;border:1px solid #1ff6;border-radius:10px;padding:18px 20px;
+      box-shadow:0 0 40px #0ff3}
+ #rtag{font-size:9px;letter-spacing:3px;opacity:.6}
+ #rttl{margin:2px 0 12px;font:italic 900 30px/1 var(--dmcf);letter-spacing:0;
+      color:#0f9;text-shadow:0 0 18px currentColor,0 2px 0 #000}
+ #rtime{font-size:33px;letter-spacing:1px;color:#eff;text-shadow:0 0 14px #0ff8}
+ #rsub{font-size:11px;letter-spacing:2px;opacity:.55;margin-top:2px}
+ #rgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));
+      gap:7px;margin:14px 0 9px}
+ #rgrid div{border:1px solid #1ff4;border-radius:6px;padding:7px 4px;background:#0b0b12}
+ #rgrid b{display:block;font-size:17px;color:#cff;letter-spacing:1px}
+ #rgrid i{display:block;font:italic 900 22px/1.1 var(--dmcf);color:var(--rc,#4cf);
+      text-shadow:0 0 12px currentColor}
+ #rgrid small{display:block;font-size:9px;letter-spacing:2px;opacity:.5;margin-top:2px}
+ #rpb{min-height:15px;font-size:12px;letter-spacing:2px;color:#fd0;
+      text-shadow:0 0 12px #fd06}
+ #res .row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px}
+ #res .row button{flex:1;min-width:118px}
 
  /* ---- perfil móvil: la clase .lite la pone el script en <html> ----------
     Nada de esto se aplica en escritorio.  Lo caro en el teléfono no era el
@@ -346,6 +414,7 @@
  .lite #menu.open{display:grid}
  .lite #lvl{align-items:start;justify-items:center;padding:6px}
  .lite #skill{align-items:start;justify-items:center;padding:6px}
+ .lite #res{align-items:start;justify-items:center;padding:6px}
  .lite #menu>div{display:block;width:min(420px,94vw);max-height:96dvh;overflow:auto;
       background:#080c14;border:1px solid #1ff6;border-radius:10px;padding:16px;
       box-shadow:0 0 40px #0ff3}
@@ -361,7 +430,7 @@
  .lite #lname{font-size:22px}
 </style>
 <div id=stage>
- <div id=bar><button id=burger aria-label="Menú">&#9776;</button><div id=bmeta><span id=bname>-</span><span id=bpb></span></div><div id=binfo><span id=bt>00:00:000</span><span id=bc>-</span><span id=bstat></span></div><div id=bcombo><b id=brank class=rank>D</b><span id=bx>x0</span><span id=bmax></span></div><i id=bfill></i></div>
+ <div id=bar><button id=burger aria-label="Menú">&#9776;</button><div id=bmeta><span id=bname>-</span><span id=bpb></span></div><div id=binfo><span id=bt>00:00:000</span><span id=bc>-</span><span id=bstat></span></div><div id=bcombo><b id=brank class=rank>D</b><span id=bx>x0</span><span id=bcbar><i id=bcfill></i></span><span id=bmax></span></div><button id=bmeow aria-label="Maullido">&#9834;<span id=bmcd><i id=bmfill></i></span></button><i id=bfill></i></div>
  <div id=board><canvas id=cv></canvas><img id=boom alt=""><b id=rpop class=rank></b></div>
  <div id=tut><p id=tmsg>-</p><div class=trow><span id=tnum>1/6</span><span id=tbar><i id=tfill></i></span><button id=tskip>SALTAR &#9654;</button></div></div>
 </div>
@@ -375,7 +444,7 @@
   <p class=help id=hkb>En el teléfono: tocá el laberinto o <b>TECLADO</b> para abrir el teclado y escribí las letras.</p>
   <p class=help>Letra = avanzar &middot; QTE al chocar con enemigo &middot; <span class=k>acierto</span> <span class=b>error</span> <span class=l>tarde</span> <span class=q>qte</span></p>
   <p class=help><b>DETERMINACIÓN</b>: cada 3 gatos vencidos ganás una letra <span class=v>violeta</span> que atraviesa un muro.<br>
-     <b>MAULLIDO</b>: con el combo al tope, ESPACIO o ENTER ahuyenta 2,5 s a los gatos cercanos (45 s de espera).</p>
+     <b>MAULLIDO</b>: cargá el combo al tope una vez y queda armado (♪ en la barra); ESPACIO o ENTER ahuyenta 2,5 s a los gatos cercanos y en el sótano deja un radar. Después, 45 s de espera.</p>
 </div></div>
 <div id=lvl><div>
   <h3>&#9638; ELEGÍ NIVEL</h3>
@@ -390,6 +459,15 @@
       <div class=row><button id=lgo>&#9654; JUGAR</button></div>
     </div>
   </div>
+</div></div>
+<div id=res><div>
+  <div id=rtag>-</div>
+  <div id=rttl>NIVEL COMPLETADO</div>
+  <div id=rtime>00:00:000</div>
+  <div id=rsub>-</div>
+  <div id=rgrid></div>
+  <div id=rpb></div>
+  <div class=row><button id=rnext>&#9654; SIGUIENTE</button><button id=ragain>&#10227; REINTENTAR</button><button id=rlvls>&#9638; NIVELES</button></div>
 </div></div>
 <div id=skill><div>
   <img id=sgif alt="">
@@ -409,6 +487,9 @@ const cv=$('cv'), x=cv.getContext('2d'),
       bname=$('bname'), bpb=$('bpb'), bstat=$('bstat'), bmax=$('bmax'),
       bar=$('bar'), bt=$('bt'), bc=$('bc'), bx=$('bx'), bfill=$('bfill'), brank=$('brank'),
       bcombo=$('bcombo'), burger=$('burger'), menu=$('menu'), mstats=$('mstats'), fsb=$('fs'),
+      bcbar=$('bcbar'), bcfill=$('bcfill'), bmeow=$('bmeow'), bmfill=$('bmfill'),
+      res=$('res'), rtag=$('rtag'), rttl=$('rttl'), rtime=$('rtime'), rsub=$('rsub'),
+      rgrid=$('rgrid'), rpb=$('rpb'), rnext=$('rnext'), ragain=$('ragain'), rlvls=$('rlvls'),
       lvl=$('lvl'), llist=$('llist'), ltag=$('ltag'), lname=$('lname'), ldesc=$('ldesc'),
       lpts=$('lpts'), lmeta=$('lmeta'), lgo=$('lgo'),
       tut=$('tut'), tmsg=$('tmsg'), tnum=$('tnum'), tfill=$('tfill'), tskip=$('tskip');
@@ -530,10 +611,10 @@ const LEVELS=[
  desc:'La partida de siempre: 15x11, cinco monedas y dos gatos negros que calculan el camino más corto hasta vos.',
  pts:['Un tercer gato entra a la mitad','Cada moneda acelera la cacería','La salida abre con las 5 monedas']},
 {id:'sotano',name:'EL SÓTANO',tag:'NIVEL 3 · PESADILLA',col:'#f4a',
- C:17,R:13,coins:7,foes:3,mid:4,dur0:1500,durMin:600,foe0:700,foeMin:280,
+ C:17,R:13,coins:7,foes:3,mid:4,dur0:1700,durMin:650,foe0:700,foeMin:280,
  fog:4.2,lamps:3,stalk:1,
  desc:'Un sótano el doble de grande y a oscuras: sólo ves lo que tenés al lado y algo ahí adentro no deja de seguirte nunca.',
- pts:['<b>NIEBLA</b>: el mapa te lo acordás vos','<b>FAROLES</b>: pisá uno y el sótano se enciende 5 segundos','<b>ACECHADOR</b>: nunca despista; es lento pero no para','Siete monedas: partida larga de verdad']}
+ pts:['<b>NIEBLA</b>: el mapa te lo acordás vos','<b>FAROLES</b>: pisá uno y el sótano se enciende 5 segundos','<b>ACECHADOR</b>: nunca despista; es lento pero no para','<b>MAULLIDO</b>: acá además es radar de monedas y gatos','Siete monedas: partida larga de verdad']}
 ];
 // Los modos todavía no se juegan: el selector ya los lista para que el día que
 // existan sólo haya que sacarles el soon.
@@ -561,12 +642,36 @@ let tutOn=false, tstep=0, tflag=0, tAt=0;    // estado del tutorial guiado
 let g,p,vis,coins,lamps,revealT,got,win,t0,tEnd,parts,
     letters,phase,shownAt,durBase,combo,maxCombo,hits,fails,pen,shake,flash,cpop,unlockT,
     foes,prevFoe,foeTick,foeBeat,qte,log,trail,frozen,scareT,note,
-    graceT=0,qteWins=0,det=0,scareUntil=0,meowAt=-1e9,
+    graceT=0,qteWins=0,det=0,scareUntil=0,meowAt=-1e9,meowOn=false,radar=null,
+    stl=0,maxStl=0,                          // el medidor de ESTILO y su tope de la partida
     baby=0,paused=false,pauseAt=0,nextAsk=12;
 
 // ---- balance: detector de skill issue ----
 const COMBO_MAX=15;                         // a 15 el reloj de reacción ya toca su mínimo
 const comboFill=()=>Math.min(1,combo/COMBO_MAX);
+// ---- los dos medidores ------------------------------------------------------
+// COMBO es la racha: sube de a uno, manda la ventana de reacción y el tono del
+// blip, y CUALQUIER error lo borra entero.  ESTILO es el otro, el que da el
+// rango: sube igual pero un error apenas lo abolla (STYLE_ERR) y lo que de
+// verdad lo hunde es perder contra un gato (STYLE_LOSS).  Antes eran la misma
+// variable, así que una tecla mal tirada te bajaba de SSS a D: la racha se
+// pierde de una, el estilo se gasta de a poco.
+const STYLE_ERR=2,                          // letra equivocada o tarde: un mordisco
+      STYLE_LOSS=8,                         // perder el QTE: eso sí duele
+      STYLE_QTE=2;                          // ganarlo suma más que una letra
+// el tope deja al SSS a cinco puntos de distancia: sin él, media partida buena
+// dejaba el medidor tan arriba que ningún castigo se notaba
+const STYLE_MAX=26;
+const styleUp=n=>{ stl=Math.min(STYLE_MAX,stl+n); maxStl=Math.max(maxStl,stl) };
+const styleDown=n=>{ stl=Math.max(0,stl-n) };
+// subir el combo es también lo que ARMA el maullido: se carga una vez y queda
+function comboUp(){
+  combo++; maxCombo=Math.max(maxCombo,combo);
+  if(combo>=COMBO_MAX&&!meowOn){
+    meowOn=true; sfxUnlock();
+    say('AHUYENTADOR LISTO','ESPACIO O ENTER SUELTA EL MAULLIDO','#9ff');
+  }
+}
 // Rangos al estilo Devil May Cry: la racha deja de ser un número y pasa a ser un
 // grado con nombre.  El tope de la dificultad sigue en COMBO_MAX; SS y SSS son
 // puro flex, para que siempre quede algo arriba que perseguir.
@@ -574,31 +679,44 @@ const RANKS=[{c:0,k:'D',n:'DORMIDO',col:'#8ad'},   {c:3,k:'C',n:'CURIOSO',col:'#
              {c:6,k:'B',n:'BRAVO',col:'#6f9'},     {c:9,k:'A',n:'ARRASANDO',col:'#fd0'},
              {c:12,k:'S',n:'SALVAJE',col:'#f80'},  {c:16,k:'SS',n:'SUPREMO',col:'#f4a'},
              {c:21,k:'SSS',n:'SIN PIEDAD',col:'#fff'}];
-const rankI=()=>{let i=0; while(i+1<RANKS.length&&combo>=RANKS[i+1].c) i++; return i};
-// el medidor del teléfono muestra lo que falta para el rango SIGUIENTE: se vacía
-// y vuelve a llenarse en cada ascenso, que es lo que hace que la racha se sienta
+// el rango sale del ESTILO (v: para leer el rango de otro valor, como el máximo
+// de la partida en la pantalla de resultados)
+const rankI=v=>{const q=v===undefined?stl:v;
+  let i=0; while(i+1<RANKS.length&&q>=RANKS[i+1].c) i++; return i};
+// el medidor muestra lo que falta para el rango SIGUIENTE: se vacía y vuelve a
+// llenarse en cada ascenso, que es lo que hace que la racha se sienta
 const rankFill=()=>{const i=rankI(), a=RANKS[i].c, b=RANKS[i+1]&&RANKS[i+1].c;
-  return b===undefined?1:Math.min(1,(combo-a)/(b-a))};
+  return b===undefined?1:Math.min(1,(stl-a)/(b-a))};
 const comboCol =()=>RANKS[rankI()].col;
 // ---- las dos habilidades ----------------------------------------------------
 // DETERMINACIÓN: cada 3 gatos vencidos en un QTE, una carga.  Con carga, los muros
 // de tu celda también muestran letra (en violeta) y teclearla te cruza el muro.
-// AHUYENTADOR: con el combo al tope, ESPACIO o ENTER sueltan un maullido que pone
-// a los gatos cercanos a correr para el otro lado.  El costo no es el combo (que
-// se sigue pidiendo al tope) sino el cooldown: 45 s desde el último maullido.
-const GRACE_MS=1500,                        // respiro sin reloj al ganar un QTE
+// AHUYENTADOR: ESPACIO o ENTER sueltan un maullido que pone a los gatos cercanos
+// a correr para el otro lado (y en el sótano deja un radar).  Se ARMA la primera
+// vez que el combo llega al tope y queda armado toda la partida: el costo no es
+// el combo sino el cooldown de 45 s desde el último maullido.
+const GRACE_MS=2000,                        // respiro sin reloj al ganar un QTE
       DET_EVERY=3, DET_MAX=3,
       MEOW_MS=2500, MEOW_CD=45000, MEOW_R=7;   // MEOW_R: "cercano" en celdas de laberinto
+// el eco del maullido en el sótano: cuánto dura y cuánto miente (en celdas)
+const RADAR_MS=4500, RADAR_J=.45;
+const ping=(i,k)=>({x:i%C+.5+(Math.random()*2-1)*RADAR_J,
+                    y:(i/C|0)+.5+(Math.random()*2-1)*RADAR_J,k});
 const DV={n:[0,-1],e:[1,0],s:[0,1],w:[-1,0]};
 const meowCd  =T=>Math.max(0,MEOW_CD-(T-meowAt));
-const meowReady=T=>comboFill()>=1&&meowCd(T===undefined?now():T)<=0;
+// pedía el combo AL TOPE en el momento de maullar, y eso lo volvía inservible:
+// justo cuando un gato te alcanza es cuando el combo se está por romper.  Ahora
+// se ARMA la primera vez que lo llenás y de ahí en más sólo lo frena el cooldown.
+const meowReady=T=>meowOn&&meowCd(T===undefined?now():T)<=0;
 // cómo se leen las dos habilidades: entero en escritorio y en el menú, en iconos
 // en la barra del teléfono, donde no hay renglón para una frase
 const habTxt=T=>(det?`  ·  DETERMINACIÓN ${'\u25C8'.repeat(det)}`:'')
-  +(meowCd(T)?`  ·  MAULLIDO EN ${Math.ceil(meowCd(T)/1000)}s`
-     :comboFill()>=1 ? '  ·  MAULLIDO LISTO [ESPACIO]'
-     :comboFill()>=.6? `  ·  MAULLIDO A x${COMBO_MAX}` : '');   // callado si falta mucho
-const habIco=T=>(det?'  '+'\u25C8'.repeat(det):'')+(meowReady(T)?'  \u266A':'');
+  +(!meowOn ? (comboFill()>=.6?`  ·  MAULLIDO A x${COMBO_MAX}`:'')   // callado si falta mucho
+     :meowCd(T)? `  ·  MAULLIDO EN ${Math.ceil(meowCd(T)/1000)}s`
+     : '  ·  MAULLIDO LISTO [ESPACIO]');
+// en el teléfono el ♪ tiene su propio botón en la barra (#bmeow), así que acá
+// queda sólo la determinación, que no tiene otro lugar donde leerse
+const habIco=()=>(det?'  '+'\u25C8'.repeat(det):'');
 
 const exitOpen =()=>got>=LV.coins;          // única condición para escapar: las monedas
 const babyK=()=>1+.35*baby;                 // cada baby point = 35% más de tiempo
@@ -617,6 +735,8 @@ function unpause(){
   const d=now()-pauseAt;
   if(t0){ t0+=d; shownAt+=d; foeTick+=d }   // sin primera tecla no hay reloj que correr
   graceT+=d; scareUntil+=d; meowAt+=d;      // ni el respiro, ni el maullido, ni su cooldown
+  if(radar) radar.t+=d;
+  if(resAt) resAt+=d;                       // ni el resumen, que si no salta sobre el menú
   paused=false;
 }
 function babyEnd(yes){
@@ -641,11 +761,12 @@ function gen(){
     g[c][a]=0; g[n][b]=0; g[n].v=1; st.push(n);
   }
   p={x:0,y:0}; vis={x:0,y:0}; got=0; win=false; t0=null; tEnd=0; parts=[];
-  combo=0; maxCombo=0; hits=0; fails=0; pen=0; shake=0; flash=0; cpop=0; unlockT=0;
+  combo=0; maxCombo=0; stl=0; maxStl=0; hits=0; fails=0; pen=0; shake=0; flash=0; cpop=0; unlockT=0;
   qte=null; foeTick=0; foeBeat=0; log=[]; logEl.innerHTML=''; trail=[];
   frozen=false; clearTimeout(scareT); scare.style.display='none'; boom.style.display='none';
   paused=false; nextAsk=12; skill.style.display='none';   // el baby mode sí se conserva
   graceT=0; qteWins=0; det=0; scareUntil=0; meowAt=-1e9; note=null;   // habilidades de cero
+  meowOn=false; radar=null; resHide(); newPB=false;
   coins=[]; lamps=[]; revealT=0;
   // en el tutorial las monedas y los gatos los va soltando cada paso, no el gen()
   if(!LV.tut){ spawn(coins,LV.coins); spawn(lamps,LV.lamps||0);
@@ -727,6 +848,12 @@ function meow(){
   if(win||frozen||paused||qte||tutHold()) return false;
   if(!meowReady()){ sfx(120,180,'sine',.035,80); return false }   // negado: un gruñido
   meowAt=now(); scareUntil=meowAt+MEOW_MS;
+  // RADAR: a oscuras el maullido vuelve con algo más que gatos asustados.  Las
+  // monedas son las que quedan; los gatos son los que HABÍA al maullar (para
+  // cuando el eco se apaga ya se corrieron, que es justo la gracia).  No se
+  // guarda la celda sino un punto con ruido: es una pista, no un mapa.
+  if(LV.fog) radar={t:meowAt,
+    pts:[...coins.map(i=>ping(i,0)),...foes.map(i=>ping(i,1))]};
   // maullido de verdad: sube y después cae, no un beep
   sfx(520,240,'sawtooth',.055,900);
   setTimeout(()=>sfx(900,420,'sawtooth',.05,280),150);
@@ -745,9 +872,9 @@ function qteStart(){
 function qteEnd(okAll){
   const cell=p.y*C+p.x;
   if(okAll){
-    pen-=500; combo++; maxCombo=Math.max(maxCombo,combo); tflag++;
+    pen-=500; comboUp(); styleUp(STYLE_QTE); tflag++;
     // Salís del QTE con la pantalla llena de secuencia y sin saber para dónde
-    // estabas yendo: el reloj de la letra arranca recién 1.5 s después, y en ese
+    // estabas yendo: el reloj de la letra arranca recién 2 s después, y en ese
     // rato los gatos tampoco dan un paso.  Es tiempo para MIRAR, no para correr.
     graceT=now()+GRACE_MS;
     if(++qteWins%DET_EVERY===0&&det<DET_MAX){          // tres gatos = una carga
@@ -760,7 +887,9 @@ function qteEnd(okAll){
     boom.style.cssText=`position:absolute;display:block;pointer-events:none;z-index:2;top:${(p.y*S-25)/cv.height*100}%;left:${(p.x*S-25)/cv.width*100}%;width:${84/cv.width*100}%`;  // en % para que escale en móvil
     setTimeout(()=>boom.style.display='none',900);
   } else {
-    pen+=2000; combo=0; flash=1; shake=14; sfxBad();
+    // perder contra un gato es lo único que le pega FUERTE al estilo: la racha
+    // se corta igual que con un error, pero acá el medidor de color se hunde
+    pen+=2000; combo=0; styleDown(STYLE_LOSS); flash=1; shake=14; sfxBad();
     burst(p.x*S+S/2,p.y*S+S/2,'#f45',20);
     for(let i=0;i<3;i++) stepBack();                   // fallar = 3 pasos atrás
   }
@@ -820,7 +949,7 @@ function stepBack(){
   if(c!==undefined){ p={x:c%C,y:c/C|0} }
 }
 function penalize(ms,col,kind,k){
-  pen+=ms; combo=0; fails++; shake=9; flash=1;
+  pen+=ms; combo=0; styleDown(STYLE_ERR); fails++; shake=9; flash=1;
   kind==='late'?sfxLate():sfxBad();
   push(k,kind); burst(p.x*S+S/2,p.y*S+S/2,col,10);
   stepBack(); deal();
@@ -845,7 +974,7 @@ function banner(T,at,a,b,col,dy){
 }
 
 const root=document.documentElement;
-let lastW,lastLab,lastSc,lastBop,            // el frame no reescribe estilos que no cambiaron
+let lastW,lastLab,lastCw,lastMst,lastMw,lastSc,lastBop,   // el frame no reescribe estilos que no cambiaron
     lastT,lastEx,lastSub,lastMeta,lastRank=0,hudAt=0,lastDraw=0;
 const REVEAL_MS=5000;                        // lo que dura encendido un farol
 // ---- niebla horneada -------------------------------------------------------
@@ -962,6 +1091,7 @@ function frame(){
   const left = qte ? (qte.until-T)/qte.ms : (live?1-(T-shownAt)/dur():1);
 
   if(tutOn) tutCheck();
+  if(resAt&&T>=resAt) resShow();             // ganaste hace RES_MS: entra el resumen
   if(qte && T>qte.until) qteEnd(false);
   else if(live && !qte && left<=0) penalize(400,'#f70','late','-');
   // con el maullido encima los gatos se mueven más seguido, pero para el otro lado
@@ -1114,6 +1244,24 @@ function frame(){
     x.globalAlpha=1; x.shadowBlur=0;
   }
 
+  // RADAR del maullido (sótano).  El eco vuelve con una idea de dónde hay monedas
+  // y de dónde estaban los gatos.  NO enciende el sótano: la niebla se dibujó
+  // arriba y sigue igual, no se ve una pared más.  Son anillos flojos, corridos
+  // hasta media celda a propósito, que laten un rato y se apagan solos.
+  if(radar&&T-radar.t<RADAR_MS){
+    const k=(T-radar.t)/RADAR_MS,
+          a=Math.min(1,k*8)*(1-k)*(1-k),     // entra de golpe y se va apagando
+          q=.5+.5*Math.sin(T/180);
+    x.lineWidth=1.6;
+    radar.pts.forEach(m=>{
+      const col=m.k?'#f7a':'#fe4';           // k=1 gato, k=0 moneda
+      x.globalAlpha=a*(m.k?.8:.95);
+      x.strokeStyle=col; x.shadowColor=col; x.shadowBlur=(7+6*q)*GLOW;
+      x.beginPath(); x.arc(m.x*S,m.y*S,S*(.19+.13*q),0,6.283); x.stroke();
+    });
+    x.globalAlpha=1; x.shadowBlur=0;
+  }
+
   // una sombra difuminada por partícula (hasta 34) era el segundo gasto del cuadro:
   // en móvil el halo se finge con un cuadrado más grande y transparente
   if(MOBILE){
@@ -1208,14 +1356,24 @@ function frame(){
   }
   const mon='\u25CF'.repeat(got)+'\u25CB'.repeat(falta),
         lock=win?'\u{1F3C1} GANASTE!  '+mon
-            :MOBILE?(falta?'\u{1F512}':'\u{1F513}')+mon+habIco(T)
+            :MOBILE?(falta?'\u{1F512}':'\u{1F513}')+mon+habIco()
             :(falta?`\u{1F512} SALIDA BLOQUEADA · faltan ${falta} ${falta==1?'moneda':'monedas'}`
                    :'\u{1F513} SALIDA ABIERTA')+'  '+mon;
   if(lock!==lastEx){ bc.textContent=lock; bc.style.color=falta&&!win?'#f88':'#0f9'; lastEx=lock }
   const lab='x'+combo;
   if(lab!==lastLab){ bx.textContent=lab; lastLab=lab }
+  // el llenado ancho de abajo es el ESTILO (hacia el rango siguiente); la barrita
+  // de al lado de la x es el COMBO, que al llenarse arma el maullido para siempre
   const w=(rankFill()*100).toFixed(1)+'%';
   if(w!==lastW){ bfill.style.width=w; lastW=w }
+  const cw=(comboFill()*100).toFixed(1)+'%';
+  if(cw!==lastCw){ bcfill.style.width=cw;
+                   bcbar.className=comboFill()>=1?'full':''; lastCw=cw }
+  // el ♪: apagado = nunca cargaste el combo · llenándose = cooldown · prendido = listo
+  const cd=meowCd(T), mst=meowOn?(cd?'cd':'ready'):'',
+        mw=meowOn?(100-cd/MEOW_CD*100).toFixed(0)+'%':'0%';
+  if(mst!==lastMst){ bmeow.className=mst; lastMst=mst }
+  if(mw!==lastMw){ bmfill.style.width=mw; lastMw=mw }
   const sc=(1+cpop*.45+bop*.09).toFixed(2);  // cada acierto —y cada beat— golpea la letra
   if(sc!==lastSc){ brank.style.transform=`skewX(-11deg) scale(${sc})`; lastSc=sc }
   if(MOBILE){
@@ -1257,7 +1415,7 @@ function key(k){
   const thru=!!(phase&&phase[dir]);               // letra violeta: se cruza el muro
 
   const react=now()-shownAt;
-  hits++; combo++; maxCombo=Math.max(maxCombo,combo); push(k,'ok'); cpop=1; sfxOk();
+  hits++; comboUp(); styleUp(1); push(k,'ok'); cpop=1; sfxOk();
   if(react<350){                               // reflejo rápido: descuento de tiempo
     pen-=Math.min(300,100+combo*10);
     pen=Math.max(pen,-(now()-t0)*.25);         // el bono nunca baja del 75% del crudo
@@ -1281,7 +1439,9 @@ function key(k){
   if(exitOpen()&&p.x==C-1&&p.y==R-1){
     win=true; tEnd=now()-t0;
     const bb=bests[LV.id];                       // el récord es de cada nivel
-    if(!LV.tut&&(bb===undefined||tEnd+pen<bb)) bests[LV.id]=tEnd+pen;
+    newPB=!LV.tut&&(bb===undefined||tEnd+pen<bb);
+    if(newPB) bests[LV.id]=tEnd+pen;
+    resAt=now()+RES_MS;                          // primero se ve el escape, después el resumen
     burst(p.x*S+S/2,p.y*S+S/2,'#0f9',30);
     [784,988,1175,1568].forEach((f,i)=>setTimeout(()=>sfx(f,220,'triangle',.08),i*110));
     return;
@@ -1351,6 +1511,7 @@ bar.onclick=tap;
 // en el teléfono no hay barra espaciadora a mano: el bloque del rango es el botón
 // del maullido, y si todavía no está listo hace lo mismo que el resto de la barra
 bcombo.onclick=e=>{ if(e&&e.stopPropagation) e.stopPropagation(); if(!meow()) tap() };
+bmeow.onclick =e=>{ if(e&&e.stopPropagation) e.stopPropagation(); if(!meow()) tap() };
 
 // ---- menú hamburguesa ------------------------------------------------------
 // Mismo markup que la fila de botones de escritorio; en el teléfono se abre como
@@ -1359,6 +1520,7 @@ bcombo.onclick=e=>{ if(e&&e.stopPropagation) e.stopPropagation(); if(!meow()) ta
 let menuOn=false, menuPaused=false;
 const stats=()=>`precisión ${Math.round(acc()*100)}%  ·  pen +${fmt(pen)}  ·  teclas ${log.length}`
   +`  ·  combo x${combo} (récord x${maxCombo})`
+  +`  ·  estilo ${RANKS[rankI()].k} (tope ${RANKS[rankI(maxStl)].k})`
   +habTxt(now())
   +(baby?`  ·  BABY MODE ${baby}`:'')
   +(bests[LV.id]?`  ·  MEJOR ${fmt(bests[LV.id])}s`:'');
@@ -1425,6 +1587,48 @@ llist.onclick=e=>{ const b=e.target.closest&&e.target.closest('button[data-id]')
 lgo.onclick=lvlPlay;
 nvl.onclick=()=>{ lvlShow(); nvl.blur() };
 
+// ---- pantalla de resultados ------------------------------------------------
+// Terminar un nivel dejaba el tablero quieto con un "GANASTE!" chiquito en la
+// barra, y el tutorial mandaba derecho al selector: el jugador nunca llegaba a
+// ver su tiempo.  Ahora todo nivel termina en su resumen —tiempo neto, crudo y
+// penalización, rango máximo, combo, precisión, monedas— con las tres salidas:
+// el nivel siguiente, otra vuelta al mismo, o el selector.  Entra RES_MS después
+// de pisar la salida para que primero se vea el escape y su chispazo.
+const RES_MS=1200;
+let resOn=false, resAt=0, newPB=false;
+const nextLv=()=>{ const i=LEVELS.findIndex(l=>l.id===LV.id);
+                   return i<0?null:LEVELS[i+1]||null };
+function resShow(){
+  resAt=0;
+  if(resOn) return;
+  resOn=true; menuClose(); kb.blur();        // en el teléfono el teclado tapa medio panel
+  const top=RANKS[rankI(maxStl)], nx=nextLv();
+  rtag.textContent=LV.tag;
+  rttl.textContent=LV.tut?'TUTORIAL COMPLETADO':'NIVEL COMPLETADO';
+  rtime.textContent=fmt(tEnd+pen);
+  rsub.textContent=`CRUDO ${fmt(tEnd)}  ·  ${pen<0?'BONUS -':'PENALIZACIÓN +'}${fmt(Math.abs(pen))}`;
+  // el rango que muestra es el MÁXIMO de la partida, no el que quedó: el estilo
+  // ya no se reinicia de un error, pero un mal final igual lo baja
+  rgrid.innerHTML=
+     `<div><i class=rank style="--rc:${top.col}">${top.k}</i><small>${top.n}</small></div>`
+    +`<div><b>x${maxCombo}</b><small>COMBO MÁX.</small></div>`
+    +`<div><b>${Math.round(acc()*100)}%</b><small>PRECISIÓN</small></div>`
+    +`<div><b>${got}/${LV.coins}</b><small>MONEDAS</small></div>`
+    +`<div><b>${hits+fails}</b><small>TECLAS</small></div>`
+    +(qteWins?`<div><b>${qteWins}</b><small>GATOS</small></div>`:'')
+    +(baby?`<div><b>${baby}</b><small>BABY POINTS</small></div>`:'');
+  rpb.textContent=newPB?'\u2605 ¡NUEVA MEJOR MARCA!'
+    :bests[LV.id]!==undefined?'MEJOR MARCA '+fmt(bests[LV.id]):'';
+  rnext.textContent=nx?'\u25B6 '+nx.name:'\u25B6 SIGUIENTE';
+  rnext.style.display=nx?'':'none';          // del último nivel no se sigue a ningún lado
+  res.className='open';
+}
+function resHide(){ resOn=false; resAt=0; res.className='' }
+function resGo(id){ resHide(); if(id) setLevel(id); gen(); autoFS(); kbFocus() }
+rnext.onclick =()=>{ const nx=nextLv(); resGo(nx?nx.id:null) };
+ragain.onclick=()=>resGo(null);
+rlvls.onclick =()=>{ const nx=nextLv(); resHide(); if(nx) pick=nx.id; lvlShow() };
+
 // ---- tutorial guiado -------------------------------------------------------
 // Reemplaza al cartel de onboarding: en vez de leer cinco reglas de golpe, el
 // nivel 1 enciende UN sistema por paso y no avanza hasta que el jugador lo usó.
@@ -1434,7 +1638,7 @@ const TUT=[
   hold:1, ok:()=>hits>=4},
  {t:'Ese <b>ANILLO</b> alrededor del gato es tu tiempo. Si se vacía —o tecleás una letra que no está— retrocedés un paso.',
   ok:()=>hits>=9},
- {t:'Aciertos seguidos suben el <b>COMBO</b> y con él tu <b>RANGO</b>: cada letra dura menos, pero el tiempo te lo descuenta. Encadená 4.',
+ {t:'Aciertos seguidos suben el <b>COMBO</b> —un error lo borra entero— y suman <b>ESTILO</b>, que es tu <b>RANGO</b> y aguanta mucho más. Encadená 4.',
   enter:()=>{combo=0}, ok:()=>combo>=4},
  {t:'Cuidado: un <b>GATO NEGRO</b> viene por vos. Cuando te alcance arranca un <b>QTE</b>: tecleá la secuencia completa antes de que se vacíe la barra.',
   enter:()=>{foes=[tutFoe(3)]; prevFoe=[]},
@@ -1479,11 +1683,15 @@ function tutCheck(){
   shownAt=now();                             // el paso nuevo no hereda el reloj gastado
   tutSay(); sfxUnlock();
 }
-// terminar (o saltar) el tutorial lleva SIEMPRE al selector de nivel
+// SALTAR el tutorial lleva al selector, como siempre.  Terminarlo GANANDO no:
+// ahí el resumen del nivel ya está en camino (entra RES_MS después de pisar la
+// salida) y desde el resumen se elige a dónde ir.  Antes el selector se abría
+// encima del final y el jugador no veía ni su tiempo.
 function tutEnd(){
   tutOn=false; tut.className=''; root.style.setProperty('--tuth','0px');
   try{ localStorage.setItem('lg.tut','1') }catch(e){}
-  pick='clasico'; lvlShow();
+  pick='clasico';
+  if(!win) lvlShow();
 }
 tskip.onclick=()=>{ tskip.blur(); tutEnd() };
 how.onclick=()=>{ menuClose(); lvlHide(); setLevel('tutorial'); gen(); how.blur() };
