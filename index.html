@@ -11,26 +11,38 @@
            ella el CSS saca solo el ancho máximo que entra en el alto de pantalla.
     --dmcf: pila de fuentes pesadas para el rango de combo.  El juego se publica
            como Artifact de un solo archivo, así que no hay @font-face externo: el
-           look "Devil May Cry" sale de la pila + itálica + skew + degradado. */
+           look "Devil May Cry" sale de la pila + itálica + skew + degradado.
+    --ui  : la MISMA familia, en peso de texto.  Impact es un grotesco condensado,
+           así que el resto de la GUI dejó el monoespaciado y usa los condensados
+           que ya trae el sistema: Arial Narrow (Windows y macOS), Roboto Condensed
+           (Android), Avenir Next Condensed (iOS), Liberation Sans Narrow (Linux), y
+           font-stretch para las variables.  Donde no haya ninguno cae en
+           Helvetica/Arial, que igual es de la misma familia de formas que Impact —
+           nunca en el monoespaciado, que era lo que desentonaba.  Mismo esqueleto
+           de letra que el rango, pero legible en 12px; el display se queda para
+           los titulares, que es lo único que tiene que gritar. */
  :root{--w:510px;--ar:1.3636;--barh:54px;
-       --dmcf:Impact,Haettenschweiler,'Franklin Gothic Heavy','Arial Black','Roboto Condensed',system-ui,sans-serif}
- body{background:#08080c;color:#9ef;font:14px ui-monospace,monospace;
+       --dmcf:Impact,Haettenschweiler,'Franklin Gothic Heavy','Arial Black','Roboto Condensed',system-ui,sans-serif;
+       --ui:'Arial Narrow','Roboto Condensed','Avenir Next Condensed','Liberation Sans Narrow',
+            'Helvetica Neue',Helvetica,Arial,sans-serif}
+ body{background:#08080c;color:#9ef;font:15px/1.4 var(--ui);
+      font-stretch:87.5%;font-variant-numeric:tabular-nums;
       display:flex;flex-direction:column;align-items:center;justify-content:center;
       min-height:100dvh;margin:0;padding:10px 8px;gap:6px;text-shadow:0 0 8px #0ff8;
       touch-action:manipulation;-webkit-user-select:none;user-select:none}
- h2{margin:0;letter-spacing:2px;font-size:16px;text-align:center;line-height:1.5;
+ h2{margin:0;letter-spacing:2px;font-size:17px;font-weight:700;text-align:center;line-height:1.5;
       transform:scale(calc(1 + var(--bop,0)*.085))}
  #sub{opacity:.6;font-size:12px;margin:0;letter-spacing:1px;text-align:center}
  #kb{position:fixed;bottom:0;left:0;width:1px;height:1px;opacity:0;border:0;padding:0;font-size:16px}
  #log{width:var(--w);min-height:34px;max-height:56px;overflow:hidden;line-height:17px;
-      font-size:13px;letter-spacing:3px;word-break:break-all;text-align:center;
+      font-size:14px;font-weight:700;letter-spacing:3px;word-break:break-all;text-align:center;
       border:1px solid #1ff3;border-radius:4px;padding:4px 6px;background:#0b0b1288}
  #log span{text-shadow:0 0 6px currentColor}
  canvas{background:#0b0b12;border:1px solid #1ff4;border-radius:4px;
       box-shadow:0 0 calc(24px + var(--bop,0)*34px) #0ff3,inset 0 0 40px #0ff1;
       display:block;width:100%;height:auto}
  p.help{opacity:.45;margin:0;font-size:12px;text-align:center;max-width:var(--w)}
- .k{color:#6f9}.b{color:#f55}.l{color:#fa0}.q{color:#4cf}
+ .k{color:#6f9}.b{color:#f55}.l{color:#fa0}.q{color:#4cf}.v{color:#d8a6ff}
  #stage{position:relative;width:var(--w)}
  /* el tablero es su propia caja: lo que se superpone al laberinto (explosión,
     cartel de rango) se posiciona contra el canvas y no contra la barra de info */
@@ -71,15 +83,25 @@
  @keyframes rankup{0%{transform:skewX(-11deg) scale(2.2);filter:drop-shadow(0 0 22px #fff) brightness(2.6)}
       55%{transform:skewX(-11deg) scale(1.14)}
       to{transform:skewX(-11deg) scale(1)}}
- /* cartel del nombre del rango: entra de un golpe desde la derecha y se apaga */
+ /* Cartel del nombre del rango.  La esquina NO es fija: rpopPlace() prueba las
+    cuatro contra la celda del gato y se queda en la primera que no lo tapa, así
+    que el JS escribe top/right/bottom/left y acá sólo va el arranque.  La clase
+    .l espeja la entrada para que el cartel siempre venga desde afuera del
+    tablero y no desde el centro. */
  #rpop{position:absolute;right:7px;top:7px;z-index:3;pointer-events:none;opacity:0;
+      white-space:nowrap;max-width:calc(100% - 14px);
       font:italic 900 16px/1 var(--dmcf);letter-spacing:.5px;transform:skewX(-11deg);
       color:var(--rc,#4cf);text-shadow:0 0 14px currentColor,0 2px 0 #000,2px 0 0 #000}
  #rpop.show{animation:rpop 1.1s ease-out}
+ #rpop.l.show{animation:rpopl 1.1s ease-out}
  @keyframes rpop{0%{opacity:0;transform:skewX(-11deg) translateX(38px) scale(1.5)}
       16%{opacity:1;transform:skewX(-11deg) translateX(0) scale(1)}
       66%{opacity:1;transform:skewX(-11deg) translateX(0) scale(1)}
       to{opacity:0;transform:skewX(-11deg) translateX(-10px) scale(.95)}}
+ @keyframes rpopl{0%{opacity:0;transform:skewX(-11deg) translateX(-38px) scale(1.5)}
+      16%{opacity:1;transform:skewX(-11deg) translateX(0) scale(1)}
+      66%{opacity:1;transform:skewX(-11deg) translateX(0) scale(1)}
+      to{opacity:0;transform:skewX(-11deg) translateX(10px) scale(.95)}}
 
  /* medidor de combo de escritorio */
  #cmeter{width:var(--w);height:18px;flex:none;position:relative;overflow:hidden;color:#4cf;
@@ -87,7 +109,34 @@
  #cbar{display:block;height:100%;width:0;background:currentColor;opacity:.5;
       box-shadow:0 0 14px currentColor;transition:width .1s linear}
  #clab{position:absolute;inset:0;display:grid;place-items:center;font-style:normal;
-      font-size:10px;letter-spacing:2px;color:#eff;text-shadow:0 0 4px #000,0 0 4px #000}
+      font-size:11px;font-weight:700;letter-spacing:2px;color:#eff;text-shadow:0 0 4px #000,0 0 4px #000}
+
+ /* ---- extra vibes: qué late ------------------------------------------------
+    --bop va de 0 a 1 en cada bombo del mp3 y lo publica el JS en <html>.  Antes
+    lo leían tres cosas (el título, el resplandor del canvas y el medidor); ahora
+    lo lee toda la pantalla, pero SIEMPRE sobre propiedades que el compositor
+    resuelve solo —transform, opacity, filter— o sobre sombras de cajas chicas:
+    nada que obligue a rehacer el layout 60 veces por segundo.  La clase .vibes la
+    pone el botón; sin ella estas reglas ni se evalúan y el juego queda idéntico. */
+ .vibes body{background:
+      radial-gradient(125% 85% at 50% 0%,rgba(0,180,255,calc(.045 + var(--bop,0)*.075)),#0000 62%),
+      #08080c}
+ .vibes h2{filter:drop-shadow(0 0 calc(var(--bop,0)*12px) #0ffa)}
+ .vibes #sub{opacity:calc(.5 + var(--bop,0)*.35)}
+ .vibes #log{border-color:rgba(70,225,255,calc(.22 + var(--bop,0)*.6));
+      box-shadow:0 0 calc(4px + var(--bop,0)*18px) #0ff4}
+ .vibes #log span{opacity:calc(.78 + var(--bop,0)*.22)}
+ .vibes #cmeter{box-shadow:0 0 calc(6px + var(--bop,0)*22px) currentColor}
+ .vibes #cbar{opacity:calc(.5 + var(--bop,0)*.5)}
+ .vibes #board{transform:scale(calc(1 + var(--bop,0)*.007))}
+ .vibes #tut{box-shadow:0 0 calc(8px + var(--bop,0)*24px) #0f93}
+ .vibes #tbar i{box-shadow:0 0 calc(4px + var(--bop,0)*14px) #6f9}
+ .vibes #btns button{border-color:rgba(60,220,255,calc(.35 + var(--bop,0)*.6))}
+ .vibes #bar{box-shadow:0 0 calc(8px + var(--bop,0)*26px) #0ff3,inset 0 1px 0 #9ef3}
+ .vibes #bcombo{box-shadow:inset 0 0 22px -8px var(--rc,#4cf),
+      inset 0 0 calc(var(--bop,0)*30px) calc(var(--bop,0)*-6px) var(--rc,#4cf)}
+ .vibes #bx{text-shadow:0 0 calc(6px + var(--bop,0)*16px) currentColor}
+ .vibes #burger{opacity:calc(.7 + var(--bop,0)*.3)}
 
  /* ---- tutorial guiado ------------------------------------------------------
     Reemplaza al cartel de onboarding: vive debajo del tablero (en los dos
@@ -181,7 +230,7 @@
  .lite #bc{font-size:11px;letter-spacing:2px;color:#f88;overflow:hidden;
       white-space:nowrap;text-overflow:clip}
  .lite #bcombo{display:flex;align-items:center;gap:7px;flex:none;padding:0 11px 0 8px;
-      border-left:1px solid #1ff4;background:linear-gradient(90deg,#0000,var(--rc,#4cf)22)}
+      border-left:1px solid #1ff4;box-shadow:inset 0 0 22px -8px var(--rc,#4cf)}
  .lite #brank{font-size:29px;transform:skewX(-11deg);transform-origin:50% 60%;
       min-width:34px;text-align:center}
  .lite #brank.up{animation:rankup .5s ease-out}
@@ -233,6 +282,8 @@
   <div id=btns><button id=tec>&#9000; TECLADO</button><button id=fs>&#9633; PANTALLA COMPLETA</button><button id=nvl>&#9638; NIVELES</button><button id=mus>&#9835; MUSICA</button><button id=vibe>&#9889; EXTRA VIBES</button><button id=how>? TUTORIAL</button><button id=rst>&#10227; REINICIAR</button></div>
   <p class=help>En el teléfono: tocá el laberinto o <b>TECLADO</b> para abrir el teclado y escribí las letras.</p>
   <p class=help>Letra = avanzar &middot; QTE al chocar con enemigo &middot; <span class=k>acierto</span> <span class=b>error</span> <span class=l>tarde</span> <span class=q>qte</span></p>
+  <p class=help><b>DETERMINACIÓN</b>: cada 3 gatos vencidos ganás una letra <span class=v>violeta</span> que atraviesa un muro.<br>
+     <b>MAULLIDO</b>: con el combo al tope, ESPACIO o ENTER ahuyenta 2,5 s a los gatos cercanos (45 s de espera).</p>
 </div></div>
 <div id=lvl><div>
   <h3>&#9638; ELEGÍ NIVEL</h3>
@@ -265,7 +316,7 @@ const cv=$('cv'), x=cv.getContext('2d'),
       how=$('how'), vibe=$('vibe'), rpop=$('rpop'), nvl=$('nvl'),
       hudt=$('hudt'), hudx=$('hudx'), subt=$('subt'), babyEl=$('baby'),
       bar=$('bar'), bt=$('bt'), bc=$('bc'), bx=$('bx'), bfill=$('bfill'), brank=$('brank'),
-      burger=$('burger'), menu=$('menu'), mstats=$('mstats'), fsb=$('fs'),
+      bcombo=$('bcombo'), burger=$('burger'), menu=$('menu'), mstats=$('mstats'), fsb=$('fs'),
       lvl=$('lvl'), llist=$('llist'), ltag=$('ltag'), lname=$('lname'), ldesc=$('ldesc'),
       lpts=$('lpts'), lmeta=$('lmeta'), lgo=$('lgo'),
       tut=$('tut'), tmsg=$('tmsg'), tnum=$('tnum'), tfill=$('tfill'), tskip=$('tskip');
@@ -295,6 +346,15 @@ const pad=(n,w)=>String(n|0).padStart(w,'0');
 const fmt=ms=>{const t=Math.max(0,ms);                     // MM:SS:mmm
   return `${pad(t/60000,2)}:${pad(t/1000%60,2)}:${pad(t%1000,3)}`};
 const CLS={ok:'k',bad:'b',late:'l',qte:'q',qtebad:'b'};
+
+// Tipografía del tablero: la misma que la GUI, no el monoespaciado de antes.
+// CF es el condensado de sistema y se lleva todo lo que hay que LEER a las
+// apuradas (las letras de las salidas, la secuencia del QTE); DF es el display
+// del rango de combo y se queda sólo con los titulares, que es lo único que
+// tiene que gritar.  Nada de esto se descarga: son fuentes que ya están.
+const CF="'Arial Narrow','Roboto Condensed','Avenir Next Condensed','Liberation Sans Narrow',"
+        +"'Helvetica Neue',Helvetica,Arial,sans-serif";
+const DF="Impact,Haettenschweiler,'Franklin Gothic Heavy','Arial Black','Roboto Condensed',sans-serif";
 
 const PJ=new Image(), FOE=new Image();
 PJ.src='data:image/webp;base64,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'; FOE.src='data:image/webp;base64,UklGRpYEAABXRUJQVlA4WAoAAAAQAAAANwAANwAAQUxQSHwBAAABgFxbe9roV+RdmBtJGkhKGIYucOupIH0MdMFUADPzrC393yKsbwqICAZuGykqHDPMdr8gw2giEcm11zaO/qCKv6ONtXZORCIjgznSVHZx8wZDeLO5mB1zworU40cA6pxXAFDvnAJ4jOsiduSlVvLxK+CcYgjVOeA1zos1o1lk+gxIFCNRE+BsWmQUWYk6/VOjT3QisSO4vAPnMRa9w05Z7FA3z5FgbCY4b4od4sZ31yH03RgoY0rXXYfRdcmYAWe1+3AIRId9a03/sk7vdKjJjtg+T3QdUhM9Mqn8tfqQ8HqdT5nuOO6Ow45isWJM5cNrWKj/qBgTyTocAtNhXSKTflcNDdX3tJH57jj8aF5kG0l4JNiW4j00PBT3xVbXDLWW4BhwWNpmYfsUngGP0z/W4j/QqDTzABp5m/AOxPveeN8373/i/b+8esGrT7R6SKy/vHpPa1947Rmt/aS117x8QMsjtPxDy1u0fEfLk7T8SsvLrHz+P/oDtP6HAFZQOCD0AgAAsA4AnQEqOAA4AD45FohDIiEhGvxeZCADhLSACfAfuvRY+4gCvIucDJr8RmlZmk+TnUE20BAaE2ZFr/ndnSga5S9tSH/sHMkPi6YhVVLKyx7HMqjTQCngDUEvaNzy+0dJBdZ+ZH0EMnSYeQQhG+1Tp5h2HPZa7SuTc9Y9ch4AAP7/5Z5homF+D1fW9KVeMWmYL2HOqNqmeP+np2JuFkkyPbplwQeM3SP2JMPpCDi0NS76bjE34GcXyvzee1KoxxuNuj3If9USBgKa525/P97t3WuaQEHc+yNAGfdLNLWRzxTPfUgffzWOm9x/b5XPh7HUZffq/ubfLbULFNZzBn4BFcM+Mt3/Ihmu5rlUou9iM+KFDlMB6/kUBMCUPtb3/lctBK8aFQPI1SgkYHNPwJnfyGX0QPkCeWcZAsG9dWmSv6EjXc4u+xOoWj4f/DW2nuDwewkYu562fYxX5XWcC6i4M3+VnlDEcsgof9d3g8U7HyDvS+1RbqYgFn/KTids2o/ZWcxHgOLNZhP834uFVXXGtpmZoNvkMVhC6E6BQyc83TcfhtI6xHBKHk/XhaKQVW/NOQiLK+II30USy4ElF27Lf8aI/u1cw8fVI/6EMnpi6KHR749ikomZvNZfRHrre7wnFfP72m+rBw5zAZJtgZ1p9CeNVRZWcrhZsx+V24RjLzUSxxxE87DCQ6uMT3HYpM28zYheVM3GM0AlRdwtFn10SBb61xjWu1rhDBvk492v4T3NOR2pzTRAsPstV6BsyWqil7sWb59QMu2DL4P/CMQO7ZOp3qG1++tWYejhaoaFyQ5fm1y5ERM/o69YoXcy4d/q6zMawKhnmsux01aS1QvY7X3sWByoyt1jWecigrQ+aJXIjFIDglY1vXVxpK3Ax6NhEJQlgY1ADgG3rG9h3mAHXdyPSMuBZARUJDj1k7JIdhVTtW8xIntnmiJzEObZYck5xf02IJFDRp4juJjQYDDA9xkjIBRHisdozaB0ChOwf+KqAAAA';
@@ -348,6 +408,8 @@ let vibes=false, bop=0;
 const track=()=>vibes?VIBE:BGM;
 vibe.onclick=()=>{
   vibes=!vibes; vibe.className=vibes?'on':'';
+  // de acá cuelgan TODAS las reglas del latido: sin la clase el CSS ni las mira
+  document.documentElement.classList[vibes?'add':'remove']('vibes');
   if(vibes){ vibeSrc(); bakeBop() }          // recién acá se pagan el mp3 y la capa del latido
   const on=track(), off=vibes?BGM:VIBE, sonaba=!off.paused;
   off.pause();
@@ -405,8 +467,9 @@ function setLevel(id){
 
 let tutOn=false, tstep=0, tflag=0, tAt=0;    // estado del tutorial guiado
 let g,p,vis,coins,lamps,revealT,got,win,t0,tEnd,parts,
-    letters,shownAt,durBase,combo,maxCombo,hits,fails,pen,shake,flash,cpop,unlockT,
-    foes,prevFoe,foeTick,foeBeat,qte,log,trail,frozen,scareT,
+    letters,phase,shownAt,durBase,combo,maxCombo,hits,fails,pen,shake,flash,cpop,unlockT,
+    foes,prevFoe,foeTick,foeBeat,qte,log,trail,frozen,scareT,note,
+    graceT=0,qteWins=0,det=0,scareUntil=0,meowAt=-1e9,
     baby=0,paused=false,pauseAt=0,nextAsk=12;
 
 // ---- balance: detector de skill issue ----
@@ -425,6 +488,26 @@ const rankI=()=>{let i=0; while(i+1<RANKS.length&&combo>=RANKS[i+1].c) i++; retu
 const rankFill=()=>{const i=rankI(), a=RANKS[i].c, b=RANKS[i+1]&&RANKS[i+1].c;
   return b===undefined?1:Math.min(1,(combo-a)/(b-a))};
 const comboCol =()=>RANKS[rankI()].col;
+// ---- las dos habilidades ----------------------------------------------------
+// DETERMINACIÓN: cada 3 gatos vencidos en un QTE, una carga.  Con carga, los muros
+// de tu celda también muestran letra (en violeta) y teclearla te cruza el muro.
+// AHUYENTADOR: con el combo al tope, ESPACIO o ENTER sueltan un maullido que pone
+// a los gatos cercanos a correr para el otro lado.  El costo no es el combo (que
+// se sigue pidiendo al tope) sino el cooldown: 45 s desde el último maullido.
+const GRACE_MS=1500,                        // respiro sin reloj al ganar un QTE
+      DET_EVERY=3, DET_MAX=3,
+      MEOW_MS=2500, MEOW_CD=45000, MEOW_R=7;   // MEOW_R: "cercano" en celdas de laberinto
+const DV={n:[0,-1],e:[1,0],s:[0,1],w:[-1,0]};
+const meowCd  =T=>Math.max(0,MEOW_CD-(T-meowAt));
+const meowReady=T=>comboFill()>=1&&meowCd(T===undefined?now():T)<=0;
+// cómo se leen las dos habilidades: entero en escritorio y en el menú, en iconos
+// en la barra del teléfono, donde no hay renglón para una frase
+const habTxt=T=>(det?`  ·  DETERMINACIÓN ${'\u25C8'.repeat(det)}`:'')
+  +(meowCd(T)?`  ·  MAULLIDO EN ${Math.ceil(meowCd(T)/1000)}s`
+     :comboFill()>=1 ? '  ·  MAULLIDO LISTO [ESPACIO]'
+     :comboFill()>=.6? `  ·  MAULLIDO A x${COMBO_MAX}` : '');   // callado si falta mucho
+const habIco=T=>(det?'  '+'\u25C8'.repeat(det):'')+(meowReady(T)?'  \u266A':'');
+
 const exitOpen =()=>got>=LV.coins;          // única condición para escapar: las monedas
 const babyK=()=>1+.35*baby;                 // cada baby point = 35% más de tiempo
 const dur=()=>durBase*babyK();
@@ -441,6 +524,7 @@ function checkSkill(){
 function unpause(){
   const d=now()-pauseAt;
   if(t0){ t0+=d; shownAt+=d; foeTick+=d }   // sin primera tecla no hay reloj que correr
+  graceT+=d; scareUntil+=d; meowAt+=d;      // ni el respiro, ni el maullido, ni su cooldown
   paused=false;
 }
 function babyEnd(yes){
@@ -469,6 +553,7 @@ function gen(){
   qte=null; foeTick=0; foeBeat=0; log=[]; logEl.innerHTML=''; trail=[];
   frozen=false; clearTimeout(scareT); scare.style.display='none'; boom.style.display='none';
   paused=false; nextAsk=12; skill.style.display='none';   // el baby mode sí se conserva
+  graceT=0; qteWins=0; det=0; scareUntil=0; meowAt=-1e9; note=null;   // habilidades de cero
   coins=[]; lamps=[]; revealT=0;
   // en el tutorial las monedas y los gatos los va soltando cada paso, no el gen()
   if(!LV.tut){ spawn(coins,LV.coins); spawn(lamps,LV.lamps||0);
@@ -520,10 +605,18 @@ function flow(){
 }
 function moveFoes(){
   const d=flow(); foeBeat++;
+  const huyen=now()<scareUntil;                        // ahuyentador activo
   foes=foes.map((f,i)=>{
     const st=i<(LV.stalk||0);                          // acechador del sótano
-    if(st&&foeBeat%2) return f;                        // va a medio paso...
+    if(st&&!huyen&&foeBeat%2) return f;                // va a medio paso...
     let nb=open(f); if(!nb.length) return f;
+    // AHUYENTADOR: el mismo campo de flujo, leído al revés.  Sólo lo escuchan los
+    // que están cerca (el maullido no llega al otro lado del laberinto), pero al
+    // que lo escucha lo pone a correr aunque sea el acechador, que no despista nunca.
+    if(huyen&&d[f]>=0&&d[f]<=MEOW_R){
+      prevFoe[i]=f;
+      return nb.reduce((a,b)=>d[b]>d[a]?b:a);
+    }
     const fwd=nb.filter(n=>n!==prevFoe[i]);            // no se devuelve salvo callejón
     if(fwd.length) nb=fwd;
     const next=st||Math.random()<chaseP()              // ...pero nunca despista
@@ -532,7 +625,22 @@ function moveFoes(){
     prevFoe[i]=f;
     return next;
   });
-  if(foes.includes(p.y*C+p.x)) qteStart();
+  if(!huyen&&foes.includes(p.y*C+p.x)) qteStart();
+}
+
+// ---- el maullido -----------------------------------------------------------
+// Pide el combo AL TOPE siempre (no lo gasta: el precio es el cooldown de 45 s).
+// Devuelve true sólo si salió, para que quien lo llame sepa si hacer otra cosa.
+function meow(){
+  if(win||frozen||paused||qte||tutHold()) return false;
+  if(!meowReady()){ sfx(120,180,'sine',.035,80); return false }   // negado: un gruñido
+  meowAt=now(); scareUntil=meowAt+MEOW_MS;
+  // maullido de verdad: sube y después cae, no un beep
+  sfx(520,240,'sawtooth',.055,900);
+  setTimeout(()=>sfx(900,420,'sawtooth',.05,280),150);
+  shake=13; burst(p.x*S+S/2,p.y*S+S/2,'#9ff',34);
+  say('¡MAULLIDO!','LOS GATOS NEGROS SE ALEJAN','#9ff');
+  return true;
 }
 
 // ---- QTE ----
@@ -546,6 +654,14 @@ function qteEnd(okAll){
   const cell=p.y*C+p.x;
   if(okAll){
     pen-=500; combo++; maxCombo=Math.max(maxCombo,combo); tflag++;
+    // Salís del QTE con la pantalla llena de secuencia y sin saber para dónde
+    // estabas yendo: el reloj de la letra arranca recién 1.5 s después, y en ese
+    // rato los gatos tampoco dan un paso.  Es tiempo para MIRAR, no para correr.
+    graceT=now()+GRACE_MS;
+    if(++qteWins%DET_EVERY===0&&det<DET_MAX){          // tres gatos = una carga
+      det++; sfxUnlock();
+      say('DETERMINACIÓN','LA LETRA VIOLETA ATRAVIESA EL MURO','#c8f');
+    }
     burst(p.x*S+S/2,p.y*S+S/2,'#4cf',26);
     play(BANG).catch(()=>{});
     boom.src=''; boom.src=BOOM;                        // reinicia el gif
@@ -586,11 +702,17 @@ function push(k,kind){
   checkSkill();                              // se evalúa con cada tecla registrada
 }
 
-// letras nuevas para cada salida abierta de la celda actual
+// Letras nuevas para cada salida abierta de la celda actual.  Con una carga de
+// DETERMINACIÓN encima, los MUROS que dan a una celda del tablero también reciben
+// letra: quedan marcados en `phase` y son las únicas que se pueden atravesar.  Los
+// muros del borde no entran: la letra caería fuera del canvas y no lleva a ningún lado.
 function deal(){
-  const free=[...POOL].sort(()=>Math.random()-.5);
-  letters={};
-  ['n','e','s','w'].forEach(d=>{ if(!g[p.y*C+p.x][d]) letters[d]=free.pop() });
+  const free=[...POOL].sort(()=>Math.random()-.5), i=p.y*C+p.x;
+  letters={}; phase={};
+  ['n','e','s','w'].forEach(d=>{ if(!g[i][d]) letters[d]=free.pop() });
+  if(det>0) ['n','e','s','w'].forEach(d=>{
+    const nx=p.x+DV[d][0], ny=p.y+DV[d][1];
+    if(g[i][d]&&nx>=0&&ny>=0&&nx<C&&ny<R){ letters[d]=free.pop(); phase[d]=1 }});
   shownAt=now();
   durBase=Math.max(LV.durMin,LV.dur0-combo*70);   // más combo => menos tiempo para reaccionar
 }
@@ -610,6 +732,24 @@ function penalize(ms,col,kind,k){
   kind==='late'?sfxLate():sfxBad();
   push(k,kind); burst(p.x*S+S/2,p.y*S+S/2,col,10);
   stepBack(); deal();
+}
+
+// ---- carteles a media pantalla ---------------------------------------------
+// Los usa la salida desbloqueada y también los avisos de las dos habilidades.
+// say() deja uno pendiente; banner() lo pinta y se apaga solo a los 1.8 s.
+const NOTE_MS=1800;
+function say(a,b,col){ note={t:now(),a,b,col} }
+function banner(T,at,a,b,col,dy){
+  const k=Math.max(0,1-(T-at)/NOTE_MS), Y=cv.height/2+(dy||0);
+  x.globalAlpha=k;
+  x.fillStyle='rgba(2,6,12,.88)'; x.fillRect(0,Y-32,cv.width,58);
+  x.strokeStyle=col; x.lineWidth=1; x.shadowColor=col; x.shadowBlur=12*GLOW;
+  x.strokeRect(.5,Y-31.5,cv.width-1,57);
+  x.font='italic 900 23px '+DF; x.shadowBlur=20*GLOW; x.fillStyle=col;
+  x.fillText(a,cv.width/2,Y-13);
+  x.font='bold 13px '+CF;
+  x.fillText(b,cv.width/2,Y+9);
+  x.globalAlpha=1; x.shadowBlur=0;
 }
 
 const root=document.documentElement;
@@ -633,6 +773,27 @@ function bakeFog(){
   return c;
 }
 
+// El cartel del rango es lo más grande que se dibuja sobre el tablero, así que en
+// un laberinto chico —o con el gato pegado a un borde— le caía justo encima.  En
+// vez de fijarlo a una esquina se prueban las cuatro contra la celda del gato y se
+// usa la primera libre; el orden deja arriba-derecha como la de siempre.  Devuelve
+// 'l' o 'r' para que la entrada del cartel venga desde afuera del tablero.
+function rpopPlace(){
+  if(!p) return 'r';                         // antes del primer gen() no hay gato
+  const M=7, bw=cv.clientWidth||cv.width, bh=cv.clientHeight||cv.height,
+        k=bw/(cv.width||1),                  // el canvas se dibuja escalado por CSS
+        pw=rpop.offsetWidth||130, ph=rpop.offsetHeight||20,
+        px=p.x*S*k, py=p.y*S*k, ps=S*k,
+        pisa=(l,t)=>l<px+ps&&l+pw>px&&t<py+ps&&t+ph>py,
+        esq=[['r','t'],['l','t'],['r','b'],['l','b']],
+        [h,v]=esq.find(([a,b])=>!pisa(a==='r'?bw-M-pw:M, b==='t'?M:bh-M-ph))||esq[0];
+  rpop.style.left  = h==='l'?M+'px':'auto';
+  rpop.style.right = h==='r'?M+'px':'auto';
+  rpop.style.top   = v==='t'?M+'px':'auto';
+  rpop.style.bottom= v==='b'?M+'px':'auto';
+  return h;
+}
+
 // Un ascenso de rango tiene que VERSE: la letra crece de golpe, la barra
 // destella y el nombre del rango entra volando sobre el laberinto.
 function rankShow(i,up){
@@ -644,7 +805,8 @@ function rankShow(i,up){
   bar.className=''; void bar.offsetWidth; bar.className=up?'up':'';
   bfill.style.color=r.col; cmeter.style.color=r.col;
   if(up){ rpop.textContent=r.n+'!';
-          rpop.className='rank'; void rpop.offsetWidth; rpop.className='rank show' }
+          const base='rank'+(rpopPlace()==='l'?' l':'');
+          rpop.className=base; void rpop.offsetWidth; rpop.className=base+' show' }
 }
 
 // ---- capa de paredes horneada ---------------------------------------------
@@ -700,13 +862,18 @@ function frame(){
   if(PERF.fps&&RT-lastDraw<1000/PERF.fps) return;
   lastDraw=RT;
   const T=paused?pauseAt:RT, live=t0&&!win&&!frozen&&!paused;  // en pausa el reloj se congela
-  if(live&&tutHold()) shownAt=T;             // el 1er paso del tutorial va sin reloj
+  // Respiro post-QTE: durante GRACE_MS la ventana de la letra no corre y los gatos
+  // no dan un paso.  Es el único momento del juego en que se puede pensar.
+  const respiro=live&&!qte&&T<graceT;
+  if(live&&(tutHold()||respiro)) shownAt=T;  // el 1er paso del tutorial va sin reloj
+  if(respiro) foeTick=T;                     // ...y al salir del respiro no se cobran los pasos
   const left = qte ? (qte.until-T)/qte.ms : (live?1-(T-shownAt)/dur():1);
 
   if(tutOn) tutCheck();
   if(qte && T>qte.until) qteEnd(false);
   else if(live && !qte && left<=0) penalize(400,'#f70','late','-');
-  if(live && !qte && T-foeTick>foeMs()){ foeTick=T; moveFoes() }
+  // con el maullido encima los gatos se mueven más seguido, pero para el otro lado
+  if(live && !qte && !respiro && T-foeTick>foeMs()*(T<scareUntil?.55:1)){ foeTick=T; moveFoes() }
 
   bop = vibes&&!VIBE.paused ? bopAt(VIBE.currentTime) : 0;
   if(bop!==lastBop){ root.style.setProperty('--bop',bop.toFixed(3)); lastBop=bop }
@@ -734,7 +901,7 @@ function frame(){
   // salida: roja con el candado cerrado hasta juntar las 5 monedas, verde y latiendo después
   const ab=exitOpen(), ex=(C-1)*S+S/2, ey=(R-1)*S+S/2,
         pulse=ab?.5+.5*Math.sin(T/200):.25;
-  x.shadowColor=ab?'#0f9':'#f66'; x.shadowBlur=(6+18*pulse)*GLOW;
+  x.shadowColor=ab?'#0f9':'#f66'; x.shadowBlur=(6+18*pulse+bop*14)*GLOW;
   x.fillStyle=ab?`rgba(0,255,150,${.25+.6*pulse})`:`rgba(255,70,90,${.10+.12*pulse})`;
   x.fillRect((C-1)*S+8,(R-1)*S+8,S-16,S-16);
   x.strokeStyle=x.fillStyle=ab?'#0f9':'#f88'; x.lineWidth=2;
@@ -743,35 +910,64 @@ function frame(){
   x.arc(ab?ex-4:ex,ey-3,4,Math.PI,ab?Math.PI*1.85:0);
   x.stroke();
 
-  x.shadowColor='#fd0'; x.shadowBlur=14*GLOW; x.fillStyle='#fe4';
-  coins.forEach(i=>{const b=1+.25*Math.sin(T/150+i);
+  x.shadowColor='#fd0'; x.shadowBlur=(14+bop*16)*GLOW; x.fillStyle='#fe4';
+  coins.forEach(i=>{const b=1+.25*Math.sin(T/150+i)+bop*.3;
     x.beginPath();x.arc(i%C*S+S/2,(i/C|0)*S+S/2,4*b,0,7);x.fill()});
 
   // faroles: en el sótano son la única forma de ver el mapa completo
   if(lamps.length){
-    x.shadowColor='#fd8'; x.shadowBlur=17*GLOW; x.fillStyle='#fe9';
+    x.shadowColor='#fd8'; x.shadowBlur=(17+bop*14)*GLOW; x.fillStyle='#fe9';
     lamps.forEach(i=>{const X=i%C*S+S/2,Y=(i/C|0)*S+S/2,b=1+.22*Math.sin(T/220+i);
       x.beginPath(); x.moveTo(X,Y-7*b); x.lineTo(X+5*b,Y);
       x.lineTo(X,Y+7*b); x.lineTo(X-5*b,Y); x.closePath(); x.fill()});
   }
 
-  // enemigos (gato oscuro)
-  x.shadowColor='#f36'; x.shadowBlur=16*GLOW;
+  // enemigos (gato oscuro).  Con el maullido encima van pálidos y con el halo del
+  // maullido en vez del rojo: de un vistazo se ve que están huyendo, no cazando.
+  const asustados=T<scareUntil;
+  x.shadowColor=asustados?'#9ff':'#f36'; x.shadowBlur=(16+bop*14)*GLOW;
+  if(asustados) x.globalAlpha=.72;
   foes.forEach(f=>{const X=f%C*S+S/2,Y=(f/C|0)*S+S/2,s=S-8+2*Math.sin(T/150+f);
     if(ready(FOE)) x.drawImage(FOE,X-s/2,Y-s/2,s,s);
     else{x.fillStyle='#f57';x.fillRect(X-6,Y-6,12,12)}});
+  x.globalAlpha=1;
 
   // jugador (gato blanco)
-  x.shadowColor='#0ff'; x.shadowBlur=18*GLOW;
-  x.fillStyle='rgba(0,220,255,.18)'; x.fillRect(vis.x*S+4,vis.y*S+4,S-8,S-8);
+  x.shadowColor='#0ff'; x.shadowBlur=(18+bop*16)*GLOW;
+  x.fillStyle=`rgba(0,220,255,${(.18+bop*.16).toFixed(3)})`; x.fillRect(vis.x*S+4,vis.y*S+4,S-8,S-8);
   if(ready(PJ)) x.drawImage(PJ,vis.x*S+3,vis.y*S+3,S-6,S-6);
   else{x.fillStyle='#7ff'; x.fillRect(vis.x*S+9,vis.y*S+9,S-18,S-18)}
 
+  const PX=vis.x*S+S/2, PY=vis.y*S+S/2;
   if(!win&&!tutHold()){
-    x.strokeStyle=left>.5?'#0ff':left>.25?'#fd0':'#f45';
-    x.shadowColor=x.strokeStyle; x.lineWidth=3; x.beginPath();
-    x.arc(vis.x*S+S/2,vis.y*S+S/2,S*.62,-1.571,-1.571+6.283*Math.max(0,left));
-    x.stroke();
+    // durante el respiro el anillo queda lleno y en blanco: se ve que NO está corriendo
+    x.strokeStyle=respiro?'#dff':left>.5?'#0ff':left>.25?'#fd0':'#f45';
+    x.shadowColor=x.strokeStyle; x.shadowBlur=(respiro?16:0)*GLOW;
+    x.lineWidth=respiro?4:3; x.beginPath();
+    x.arc(PX,PY,S*.62,-1.571,-1.571+6.283*Math.max(0,left));
+    x.stroke(); x.shadowBlur=0;
+    if(respiro){                             // halo que respira dentro del anillo:
+      const q=.5+.5*Math.sin(T/300);         // "el reloj está quieto, mirá tranquilo"
+      x.globalAlpha=.10+.11*q; x.fillStyle='#dff';
+      x.beginPath(); x.arc(PX,PY,S*.62,0,6.283); x.fill();
+      x.globalAlpha=1;
+    }
+  }
+  // DETERMINACIÓN: una órbita violeta por fuera del anillo de reacción, con una
+  // pastilla por carga.  Va por fuera a propósito: el sprite del gato no se toca.
+  if(det>0&&!win){
+    const q=.5+.5*Math.sin(T/260), rr=S*.78;
+    x.strokeStyle='#c8f'; x.shadowColor='#c8f'; x.shadowBlur=(6+8*q)*GLOW;
+    x.lineWidth=1.2; x.setLineDash([3,6]); x.lineDashOffset=T/40;
+    x.beginPath(); x.arc(PX,PY,rr,0,6.283); x.stroke();
+    x.setLineDash([]); x.lineDashOffset=0;
+    x.fillStyle='#e2b4ff'; x.shadowBlur=(9+7*q)*GLOW;
+    for(let i=0;i<det;i++){
+      const a=T/900+i*6.283/det, X=PX+Math.cos(a)*rr, Y=PY+Math.sin(a)*rr;
+      x.beginPath(); x.moveTo(X,Y-3.4); x.lineTo(X+3.4,Y);
+      x.lineTo(X,Y+3.4); x.lineTo(X-3.4,Y); x.closePath(); x.fill();
+    }
+    x.shadowBlur=0;
   }
 
   // NIEBLA: un solo relleno con degradado radial encima de todo lo que es el
@@ -812,6 +1008,20 @@ function frame(){
     x.shadowBlur=0;
   }
 
+  // AHUYENTADOR: la onda del maullido saliendo del gato blanco.  Va después de la
+  // niebla a propósito: en el sótano el maullido se oye aunque no se vea nada.
+  if(T<scareUntil){
+    const k=1-(scareUntil-T)/MEOW_MS;        // 0 al maullar, 1 al apagarse
+    x.shadowColor='#9ff';
+    for(const o of [0,.22]){
+      const kk=k-o; if(kk<0||kk>1) continue;
+      x.globalAlpha=(1-kk)*.6; x.shadowBlur=16*GLOW;
+      x.strokeStyle='#9ff'; x.lineWidth=1+3*(1-kk);
+      x.beginPath(); x.arc(PX,PY,S*.6+kk*MEOW_R*S,0,6.283); x.stroke();
+    }
+    x.globalAlpha=1; x.shadowBlur=0;
+  }
+
   // una sombra difuminada por partícula (hasta 34) era el segundo gasto del cuadro:
   // en móvil el halo se finge con un cuadrado más grande y transparente
   if(MOBILE){
@@ -826,33 +1036,27 @@ function frame(){
 
   // letras de las salidas: SIEMPRE al final, encima de todo
   if(!win&&!qte){
-    const col=left>.5?'#9ff':left>.25?'#fe6':'#f88';
-    x.font='bold 18px ui-monospace,monospace';
+    const col=respiro?'#dff':left>.5?'#9ff':left>.25?'#fe6':'#f88';
+    x.font='bold 21px '+CF;
     for(const d in letters){
-      const [X,Y]=LP[d](p.x,p.y);
+      const [X,Y]=LP[d](p.x,p.y), ph=phase&&phase[d],   // ph: la letra que cruza el muro
+            c=ph?'#d8a6ff':col;
       x.shadowBlur=0;
       x.fillStyle='rgba(4,6,12,.95)';
       x.beginPath(); x.arc(X,Y,12,0,7); x.fill();
-      x.strokeStyle=col; x.lineWidth=1.5; x.stroke();
-      x.shadowColor=col; x.shadowBlur=14*GLOW; x.fillStyle=col;
+      x.strokeStyle=c; x.lineWidth=1.5;
+      if(ph) x.setLineDash([3,3]);            // punteada = todavía hay un muro ahí
+      x.stroke(); x.setLineDash([]);
+      x.shadowColor=c; x.shadowBlur=(14+bop*12)*GLOW; x.fillStyle=c;
       x.fillText(letters[d].toUpperCase(),X,Y);
     }
     x.shadowBlur=0;
   }
 
-  if(unlockT&&T-unlockT<1800){
-    const a=Math.max(0,1-(T-unlockT)/1800);
-    x.globalAlpha=a;
-    x.fillStyle='rgba(2,10,8,.88)'; x.fillRect(0,cv.height/2-32,cv.width,58);
-    x.strokeStyle='#0f9'; x.lineWidth=1; x.shadowColor='#0f9'; x.shadowBlur=12*GLOW;
-    x.strokeRect(.5,cv.height/2-31.5,cv.width-1,57);
-    x.font='bold 16px ui-monospace,monospace';
-    x.shadowColor='#0f9'; x.shadowBlur=20*GLOW; x.fillStyle='#0f9';
-    x.fillText('SALIDA DESBLOQUEADA',cv.width/2,cv.height/2-14);
-    x.font='bold 11px ui-monospace,monospace';
-    x.fillText('CORRÉ A LA CASILLA VERDE',cv.width/2,cv.height/2+8);
-    x.globalAlpha=1; x.shadowBlur=0;
-  }
+  const abrio=unlockT&&T-unlockT<NOTE_MS;
+  if(abrio) banner(T,unlockT,'SALIDA DESBLOQUEADA','CORRÉ A LA CASILLA VERDE','#0f9',0);
+  // si justo coinciden, el aviso de la habilidad se corre para abajo y no se pisan
+  if(note&&T-note.t<NOTE_MS) banner(T,note.t,note.a,note.b,note.col,abrio?66:0);
 
   // overlay del QTE
   if(qte){
@@ -861,11 +1065,11 @@ function frame(){
     const gr=Math.min(1,Math.max(0,1-left)), sz=70+gr*gr*(cv.width*1.5-70);
     if(ready(BIG)){ x.globalAlpha=.35+.5*gr;
       x.drawImage(BIG,cv.width/2-sz/2,cv.height/2-sz/2,sz,sz); x.globalAlpha=1 }
-    x.font='bold 13px ui-monospace,monospace';
+    x.font='italic 900 18px '+DF;
     x.shadowColor='#f57'; x.shadowBlur=12*GLOW; x.fillStyle='#f9a';
     x.fillText('! ENEMIGO — TECLEA LA SECUENCIA !',cv.width/2,cv.height/2-52);
     const n=qte.seq.length, step=Math.min(54,(cv.width-30)/n);
-    x.font=`bold ${Math.min(34,step*.62)|0}px ui-monospace,monospace`;
+    x.font=`bold ${Math.min(42,step*.8)|0}px `+CF;
     qte.seq.forEach((k,i)=>{
       const X=cv.width/2+(i-(n-1)/2)*step, done=i<qte.i;
       const col=done?'#6f9':i==qte.i?'#fff':'#89a';
@@ -880,8 +1084,13 @@ function frame(){
 
   if(flash>.01){x.fillStyle=`rgba(255,40,60,${flash*.28})`;x.fillRect(0,0,cv.width,cv.height)}
   if(PERF.scan){                             // en móvil las pinta el CSS (.lite #stage::after)
-    x.fillStyle='rgba(0,0,0,.22)';
+    x.fillStyle=`rgba(0,0,0,${(.22-bop*.09).toFixed(3)})`;   // el beat las aclara
     for(let y=0;y<cv.height;y+=3) x.fillRect(0,y,cv.width,1);
+  }
+  if(bop>.02){                               // y el borde del tablero también late
+    x.strokeStyle=`rgba(120,235,255,${(bop*.45).toFixed(3)})`;
+    x.lineWidth=1+bop*3; x.shadowColor='#0ff'; x.shadowBlur=bop*24*GLOW;
+    x.strokeRect(1,1,cv.width-2,cv.height-2); x.shadowBlur=0;
   }
   x.setTransform(1,0,0,1,0,0);
 
@@ -902,14 +1111,15 @@ function frame(){
       const line=fmt(tms);
       if(line!==lastT){ bt.textContent=line; lastT=line }
     }
-    const lock=win?'\u{1F3C1} GANASTE'
-                  :(falta?'\u{1F512}':'\u{1F513}')+'\u25CF'.repeat(got)+'\u25CB'.repeat(falta);
+    const lock=(win?'\u{1F3C1} GANASTE'
+                  :(falta?'\u{1F512}':'\u{1F513}')+'\u25CF'.repeat(got)+'\u25CB'.repeat(falta))
+               +habIco(T);
     if(lock!==lastEx){ bc.textContent=lock; bc.style.color=falta&&!win?'#f88':'#0f9'; lastEx=lock }
     const lab='x'+combo;
     if(lab!==lastLab){ bx.textContent=lab; lastLab=lab }
     const w=(rankFill()*100).toFixed(1)+'%';
     if(w!==lastW){ bfill.style.width=w; lastW=w }
-    const sc=(1+cpop*.45).toFixed(2);        // cada acierto le da un golpe a la letra
+    const sc=(1+cpop*.45+bop*.09).toFixed(2);  // cada acierto —y cada beat— golpea la letra
     if(sc!==lastSc){ brank.style.transform=`skewX(-11deg) scale(${sc})`; lastSc=sc }
     // lo secundario (precisión, penalización, récord) se lee en el menú
     if(menuOn){ const sb=stats(); if(sb!==lastSub){ mstats.textContent=sb; lastSub=sb } }
@@ -923,7 +1133,7 @@ function frame(){
     const lock=falta>0?`\u{1F512} SALIDA BLOQUEADA · faltan ${falta} ${falta==1?'moneda':'monedas'}`
                     :'\u{1F513} SALIDA ABIERTA';
     if(lock!==lastEx){ hudx.textContent=lock; hudx.style.color=falta?'#f88':'#0f9'; lastEx=lock }
-    const sb=`precision ${Math.round(acc()*100)}%  ·  pen +${fmt(pen)}  ·  teclas ${log.length}`;
+    const sb=`precision ${Math.round(acc()*100)}%  ·  pen +${fmt(pen)}  ·  teclas ${log.length}`+habTxt(T);
     if(sb!==lastSub){ subt.textContent=sb; lastSub=sb }
     const bb=baby?`  ·  BABY MODE ${baby}`:'';
     if(bb!==lastBaby){ babyEl.textContent=bb; lastBaby=bb }
@@ -956,6 +1166,7 @@ function key(k){
 
   const dir=Object.keys(letters).find(d=>letters[d]==k);
   if(!dir) return penalize(600,'#f45','bad',k);   // tecla equivocada: castigo fuerte
+  const thru=!!(phase&&phase[dir]);               // letra violeta: se cruza el muro
 
   const react=now()-shownAt;
   hits++; combo++; maxCombo=Math.max(maxCombo,combo); push(k,'ok'); cpop=1; sfxOk();
@@ -963,9 +1174,13 @@ function key(k){
     pen-=Math.min(300,100+combo*10);
     pen=Math.max(pen,-(now()-t0)*.25);         // el bono nunca baja del 75% del crudo
   }
-  const d={n:[0,-1],e:[1,0],s:[0,1],w:[-1,0]}[dir];
+  const d=DV[dir];
   trail.push(p.y*C+p.x);                     // migaja para el castigo
   p.x+=d[0]; p.y+=d[1];
+  if(thru){                                  // se gastó una carga de determinación
+    det--; shake=7; sfx(150,260,'sine',.055,620);
+    burst(p.x*S+S/2,p.y*S+S/2,'#c8f',26);
+  }
   const j=coins.indexOf(p.y*C+p.x);
   if(j>-1){coins.splice(j,1);got++;burst(p.x*S+S/2,p.y*S+S/2,'#fe4');sfxCoin();
            if(got==LV.mid) foes.push(far());     // un gato más a mitad de camino
@@ -987,13 +1202,22 @@ function key(k){
   deal();
 }
 
-// teclado físico
+// teclado físico.  ESPACIO y ENTER no son letras del laberinto: son el maullido.
+// Si el foco está en un botón del menú el Enter es de ese botón y no se le roba.
+const enUI=e=>{ const t=e&&e.target;
+  return !!(t&&t!==kb&&/^(BUTTON|INPUT|TEXTAREA|SELECT|A)$/.test(t.tagName||'')) };
 onkeydown=e=>{
-  if(e.key.length!==1||e.ctrlKey||e.metaKey||e.altKey) return;
+  if(e.ctrlKey||e.metaKey||e.altKey) return;
+  if(e.key===' '||e.key==='Spacebar'||e.key==='Enter'){
+    if(enUI(e)) return;
+    e.preventDefault(); meow(); return;
+  }
+  if(e.key.length!==1) return;
   e.preventDefault(); key(e.key.toLowerCase());
 };
 // teclado de teléfono: los soft keyboards no mandan e.key fiable, se lee lo que escriben
-kb.oninput=()=>{ const v=kb.value; kb.value=''; for(const c of v.toLowerCase()) key(c) };
+kb.oninput=()=>{ const v=kb.value; kb.value='';
+  for(const c of v.toLowerCase()) if(c===' '||c==='\n') meow(); else key(c) };
 
 // ---- pantalla completa -----------------------------------------------------
 // Es el único botón que le devuelve al juego el alto que se comen las barras del
@@ -1036,6 +1260,9 @@ function tap(){ kb.focus(); autoFS() }
 tec.onclick=()=>{ menuClose(); tap(); tec.blur() };
 cv.onclick=tap;
 bar.onclick=tap;
+// en el teléfono no hay barra espaciadora a mano: el bloque del rango es el botón
+// del maullido, y si todavía no está listo hace lo mismo que el resto de la barra
+bcombo.onclick=e=>{ if(e&&e.stopPropagation) e.stopPropagation(); if(!meow()) tap() };
 
 // ---- menú hamburguesa ------------------------------------------------------
 // Mismo markup que la fila de botones de escritorio; en el teléfono se abre como
@@ -1044,6 +1271,7 @@ bar.onclick=tap;
 let menuOn=false, menuPaused=false;
 const stats=()=>`precisión ${Math.round(acc()*100)}%  ·  pen +${fmt(pen)}  ·  teclas ${log.length}`
   +`  ·  combo x${combo} (récord x${maxCombo})`
+  +habTxt(now())
   +(baby?`  ·  BABY MODE ${baby}`:'')
   +(bests[LV.id]?`  ·  MEJOR ${fmt(bests[LV.id])}s`:'');
 function menuOpen(){
