@@ -239,12 +239,16 @@ frame();
 
 // 16) escritorio: el perfil lite NO se aplica, todo queda como estaba
 if(MOBILE) throw new Error('escritorio detectado como movil');
-if(PERF.bake||!PERF.scan||PERF.glow!==1||PERF.fps||PERF.hudMs||PERF.dust!==1)
+if(!PERF.scan||PERF.glow!==1||PERF.fps||PERF.hudMs||PERF.dust!==1)
   throw new Error('el perfil lite se colo en escritorio');
 if(document.documentElement.cls) throw new Error('escritorio no lleva la clase lite');
 if(BGM.preload!=='auto'||VIBE.preload!=='auto') throw new Error('escritorio sin preload de audio');
 if(!VIBE.src.startsWith('data:audio')) throw new Error('escritorio ya deberia tener el mp3 de vibes');
-if(mzc) throw new Error('escritorio no hornea la capa de paredes');
+// el horneado de paredes no depende del perfil
+if(!baked||!mz[0]) throw new Error('escritorio no horneo las paredes');
+if(BLUR[0]!==10||BLUR[1]!==26) throw new Error('las capas no cubren el rango del latido');
+if(mz[0].width!==cv.width+PAD*2) throw new Error('la capa horneada va con margen');
+if(!mz[1]) throw new Error('extra vibes deberia haber horneado la capa del latido');
 gen(); foes=[]; p={x:10,y:0}; vis={x:0,y:0};   // vis persigue a p: avanza una vez por cuadro
 lastDraw=0; frame(); const v1=vis.x; frame();
 if(!v1) throw new Error('el cuadro no dibujo');
@@ -257,21 +261,25 @@ console.log('OK 16/16 | partida completa:',teclas,'teclas, precision',prec+'%');
 // ---- 17) el mismo juego en un teléfono: perfil lite, gameplay intacto ----
 const mobile=`
 if(!MOBILE) throw new Error('no detecto el telefono');
-if(!PERF.bake||PERF.scan||!(PERF.glow<1)||!PERF.fps||!PERF.hudMs||!(PERF.dust<1))
+if(PERF.scan||!(PERF.glow<1)||!PERF.fps||!PERF.hudMs||!(PERF.dust<1))
   throw new Error('perfil lite incompleto');
 if(document.documentElement.cls!=='lite') throw new Error('falta la clase lite en <html>');
 
 // los dos mp3 de ~1MB no se tocan hasta que hagan falta
 if(BGM.preload!=='none'||VIBE.preload!=='none') throw new Error('movil precargando los mp3 grandes');
 if(VIBE.src) throw new Error('el mp3 de vibes no debe cargarse sin pedirlo');
+if(mz[1]) throw new Error('la capa del latido no se hornea hasta prender extra vibes');
 vibe.onclick();
+if(!mz[1]) throw new Error('extra vibes no horneo la capa del latido');
 if(!VIBE.src.startsWith('data:audio')) throw new Error('EXTRA VIBES no cargo la pista');
 if(!vibes||track()!==VIBE) throw new Error('no cambio a la pista de vibes en movil');
 vibe.onclick();
 if(vibes||track()!==BGM) throw new Error('no volvio a la pista normal en movil');
 
-// las paredes se hornean una vez por laberinto
-if(!mzc) throw new Error('no horneo la capa de paredes');
+// las paredes se hornean una vez por laberinto, igual que en escritorio
+if(!baked||!mz[0]) throw new Error('no horneo la capa de paredes');
+const capas=mz.slice(); gen();
+if(mz[0]!==capas[0]||mz[1]!==capas[1]) throw new Error('gen() no deberia crear canvas nuevos');
 
 // tope de cuadros: dos llamadas seguidas dibujan una sola vez
 gen(); foes=[]; p={x:10,y:0}; vis={x:0,y:0};

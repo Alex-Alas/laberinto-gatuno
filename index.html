@@ -151,11 +151,11 @@ const MOBILE=(()=>{ try{
   return typeof navigator!=='undefined'&&/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent||'');
 }catch(e){ return false }})();
 const PERF=MOBILE
-  //  bake: paredes cacheadas · glow: factor de shadowBlur · scan: scanlines en canvas
+  //  glow: factor de shadowBlur · scan: scanlines dibujadas en el canvas
   //  dust: cuántas partículas · hudMs: cada cuánto se reescribe el reloj
   //  fps: tope de cuadros (pantallas de 120Hz) · pre: preload de los mp3 grandes
-  ? {bake:1, glow:.5, scan:0, dust:.6, hudMs:66, fps:61, pre:'none', lazy:1}
-  : {bake:0, glow:1,  scan:1, dust:1,  hudMs:0,  fps:0,  pre:'auto', lazy:0};
+  ? {glow:.5, scan:0, dust:.6, hudMs:66, fps:61, pre:'none', lazy:1}
+  : {glow:1,  scan:1, dust:1,  hudMs:0,  fps:0,  pre:'auto', lazy:0};
 const GLOW=PERF.glow;
 if(MOBILE) document.documentElement.classList.add('lite');
 
@@ -217,7 +217,7 @@ let vibes=false, bop=0;
 const track=()=>vibes?VIBE:BGM;
 vibe.onclick=()=>{
   vibes=!vibes; vibe.className=vibes?'on':'';
-  if(vibes) vibeSrc();                       // recién acá se paga el mp3 en móvil
+  if(vibes){ vibeSrc(); bakeBop() }          // recién acá se pagan el mp3 y la capa del latido
   const on=track(), off=vibes?BGM:VIBE, sonaba=!off.paused;
   off.pause();
   if(sonaba) on.play().catch(()=>{});
@@ -414,11 +414,21 @@ const root=document.documentElement;
 let lastW,lastLab,lastSc,lastBop,            // el frame no reescribe estilos que no cambiaron
     lastT,lastEx,lastSub,lastBaby,hudAt=0,lastDraw=0;
 
-// ---- capa de paredes horneada (sólo móvil) --------------------------------
+// ---- capa de paredes horneada ---------------------------------------------
 // Las ~660 líneas del laberinto con shadowBlur eran, lejos, el dibujo más caro
-// del cuadro, y no cambian hasta el proximo gen().  Se pintan una vez a un
-// canvas aparte y despues es un solo drawImage.
-let mzc=null,mzx=null;
+// del cuadro, y no cambian hasta el próximo gen().  Se pintan una vez a un canvas
+// aparte y después el cuadro es un solo drawImage.  Va en los dos perfiles: es el
+// mismo dibujo cacheado, no una versión recortada.
+//
+// El latido de extra vibes abría el shadowBlur de 10 a 26, así que se hornean las
+// dos puntas y el cuadro mezcla entre ellas: los extremos salen exactos y el medio
+// es una interpolación de dos gaussianas en vez de una gaussiana intermedia.  La
+// segunda capa se hornea recién cuando alguien prende extra vibes.
+//
+// PAD: al temblar, la copia se corre y el borde se quedaba sin el resplandor que
+// entra desde afuera del tablero.  Se hornea con margen y se pega en -PAD.
+const BLUR=[10,26], PAD=32;                  // = 10+bop*16, los extremos del latido
+let mz=[null,null], baked=false;
 function walls(c){
   g.forEach((k,i)=>{const X=i%C*S,Y=(i/C|0)*S;
     if(k.n){c.moveTo(X,Y);c.lineTo(X+S,Y)}
@@ -426,19 +436,25 @@ function walls(c){
     if(k.e){c.moveTo(X+S,Y);c.lineTo(X+S,Y+S)}
     if(k.s){c.moveTo(X,Y+S);c.lineTo(X+S,Y+S)}});
 }
-function bakeMaze(){
-  if(!PERF.bake) return;
-  if(!mzc){
-    mzc=document.createElement('canvas');
-    mzc.width=cv.width; mzc.height=cv.height;
-    mzx=mzc.getContext('2d');
-    if(!mzx){ PERF.bake=0; return }          // sin 2d context se vuelve al camino normal
-  }
-  mzx.clearRect(0,0,cv.width,cv.height);
-  mzx.lineCap='round'; mzx.strokeStyle='#39f'; mzx.lineWidth=2;
-  mzx.shadowColor='#2af'; mzx.shadowBlur=10;
-  mzx.beginPath(); walls(mzx); mzx.stroke();
+function bakeLayer(i){
+  const c=mz[i]||document.createElement('canvas');
+  c.width=cv.width+PAD*2; c.height=cv.height+PAD*2;   // asignar width ya lo deja limpio
+  const k=c.getContext('2d');
+  if(!k) return null;                        // sin 2d context se dibuja como siempre
+  k.translate(PAD,PAD);                      // walls() sigue hablando en coords del tablero
+  k.lineCap='round'; k.strokeStyle='#39f'; k.lineWidth=2;
+  k.shadowColor='#2af'; k.shadowBlur=BLUR[i];
+  k.beginPath(); walls(k); k.stroke();
+  return c;
 }
+function bakeMaze(){
+  try{
+    mz[0]=bakeLayer(0);
+    if(mz[1]) mz[1]=bakeLayer(1);            // la del latido, sólo si ya se usó alguna vez
+    baked=!!mz[0];
+  }catch(e){ baked=false }
+}
+const bakeBop=()=>{ if(baked&&!mz[1]) try{ mz[1]=bakeLayer(1) }catch(e){} };
 
 // las letras van en la celda VECINA (12px pasando la abertura), nunca debajo del PJ
 const LP={n:(cx,cy)=>[cx*S+S/2,cy*S-12], s:(cx,cy)=>[cx*S+S/2,(cy+1)*S+12],
@@ -470,10 +486,11 @@ function frame(){
   x.fillStyle='#0b0b12'; x.fillRect(-20,-20,cv.width+40,cv.height+40);
   x.lineCap='round'; x.textAlign='center'; x.textBaseline='middle';
 
-  if(PERF.bake){                             // móvil: una copia, y el bop se suma encima
-    x.shadowBlur=0; x.drawImage(mzc,0,0);
-    if(bop>.02){ x.globalCompositeOperation='lighter'; x.globalAlpha=bop*.45;
-      x.drawImage(mzc,0,0); x.globalAlpha=1; x.globalCompositeOperation='source-over' }
+  if(baked){                                 // una copia, o la mezcla si está latiendo
+    x.shadowBlur=0;
+    if(bop>.002&&mz[1]){ x.globalAlpha=1-bop; x.drawImage(mz[0],-PAD,-PAD);
+                         x.globalAlpha=bop;   x.drawImage(mz[1],-PAD,-PAD); x.globalAlpha=1 }
+    else x.drawImage(mz[0],-PAD,-PAD);
   } else {
     x.shadowBlur=10+bop*16; x.shadowColor='#2af';
     x.strokeStyle='#39f'; x.lineWidth=2; x.beginPath(); walls(x); x.stroke();
