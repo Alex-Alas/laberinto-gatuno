@@ -24,8 +24,8 @@ nunca pregunta en qué nivel está, así que un nivel nuevo es un objeto más en
 | Tablero | 9x7 | 15x11 | 17x13 |
 | Monedas | 3 | 5 | 7 |
 | Gatos | 1 (guiado) | 2 (+1 a la 3ª moneda) | 3 (+1) y un acechador |
-| Ventana por letra | 2400 → 1400 ms | 1700 → 650 ms | 1500 → 600 ms |
-| Extras | tutorial paso a paso | — | niebla, faroles |
+| Ventana por letra | 2400 → 1400 ms | 1700 → 650 ms | 1700 → 650 ms |
+| Extras | tutorial paso a paso | — | niebla, faroles, radar |
 
 El **sótano** es el que suma mecánicas nuevas, pensadas para una partida larga:
 
@@ -39,6 +39,15 @@ El **sótano** es el que suma mecánicas nuevas, pensadas para una partida larga
   también se ve desde lejos.
 - **Acechador.** El primer gato del sótano nunca despista (persecución 100%, no el 70-95%
   del resto), pero se mueve a medio paso. No lo perdés: lo administrás.
+- **Radar.** A oscuras el maullido vuelve con algo más que gatos asustados: durante 4,5 s
+  quedan flotando unos anillos flojos —amarillos las monedas que faltan, rosados los
+  gatos que **había** cuando maullaste—. No enciende nada: la niebla se dibuja antes y
+  queda igual, no se ve una pared de más. Y las marcas están corridas hasta media celda a
+  propósito: es una pista, no un mapa. Para cuando el eco se apaga los gatos ya se
+  movieron, que es justo la gracia.
+
+La ventana por letra del sótano era más corta que la del clásico (1500 → 600 ms) y con la
+niebla encima no había forma: ahora los dos niveles comparten el mismo reloj de letra.
 
 El selector también lista los **modos de juego** que todavía no existen
 (CONTRARRELOJ, SUPERVIVENCIA) en gris: el día que se implementen sólo hay que sacarles
@@ -51,15 +60,16 @@ el `soon`.
   encabezado dice cuántas faltan. Al juntarlas se pone verde, el candado se abre y salta
   un cartel `SALIDA DESBLOQUEADA` con su arpegio. Era la regla que más gente no entendía.
 - El anillo alrededor del jugador es tu ventana de reacción: en el clásico arranca en
-  1.7 s y se encoge 70 ms por cada punto de combo. Si se agota: +0.4 s de penalización y
-  combo a cero.
-- Letra equivocada: +0.6 s y combo a cero. Cualquier error te devuelve **un paso**
-  por el camino que recorriste.
+  1.7 s y se encoge 70 ms por cada punto de combo. Si se agota: +0.4 s de penalización,
+  combo a cero y −2 de estilo.
+- Letra equivocada: +0.6 s, combo a cero y −2 de estilo. Cualquier error te devuelve
+  **un paso** por el camino que recorriste.
 - Responder en menos de 350 ms descuenta tiempo, topado para que el neto nunca baje
   del 75% del tiempo real.
 - Los gatos oscuros te persiguen. Al alcanzarte se abre un QTE: tecleás la secuencia
-  completa antes de que se acabe la barra. Fallarlo cuesta +2 s y **3 pasos atrás**.
-- **Respiro:** ganar un QTE congela **1,5 s** la ventana de reacción *y* el paso de los
+  completa antes de que se acabe la barra. Fallarlo cuesta +2 s, **3 pasos atrás** y
+  **−8 de estilo**: perder contra un gato es lo único que se lleva el medidor puesto.
+- **Respiro:** ganar un QTE congela **2 s** la ventana de reacción *y* el paso de los
   gatos. Salís del QTE con la pantalla llena de secuencia y sin saber para dónde ibas:
   ese rato es para mirar el laberinto de nuevo, no para correr. El anillo se dibuja lleno,
   en blanco y con un halo que respira, para que se vea que el reloj está quieto.
@@ -67,20 +77,29 @@ el `soon`.
 ## Habilidades
 
 Las dos se ganan jugando bien, no se compran ni se eligen; el HUD muestra el estado de
-cada una y en el teléfono van en iconos (`◈` por carga, `♪` cuando el maullido está listo).
+cada una: la determinación en iconos (`◈` por carga) y el maullido en el `♪` de la barra,
+que está en los dos perfiles.
 
 - **DETERMINACIÓN.** Cada **3 gatos vencidos** en un QTE te da una carga (hasta 3). Con
   carga encima, los **muros** de tu celda también muestran letra: van en violeta y con el
   círculo punteado, y teclear una te **atraviesa el muro** y gasta la carga. Sólo entran
   los muros que dan a una celda del tablero — los del borde no llevan a ningún lado. El
   gato lleva una órbita violeta con una pastilla por carga.
-- **AHUYENTADOR.** Con el **combo al tope** (`COMBO_MAX`, x15), **ESPACIO** o **ENTER**
-  sueltan un maullido: los gatos a **7 celdas o menos** dan media vuelta y corren para el
-  otro lado durante **2,5 s** —hasta el acechador del sótano, que no despista nunca— y
-  mientras huyen no abren QTE. Es el mismo campo de flujo del BFS, leído al revés. No
-  gasta el combo: el precio es un **cooldown de 45 s**, y el combo al tope se pide
-  **siempre**, también para el segundo maullido. En el teléfono no hay barra espaciadora
-  a mano, así que el botón es el bloque del rango de combo de la barra.
+- **AHUYENTADOR.** Se **arma** la primera vez que llenás el combo (`COMBO_MAX`, x15) y de
+  ahí en más lo único que lo frena es el **cooldown de 45 s**. Antes se pedía el combo al
+  tope *en el momento de maullar*, y eso lo volvía inservible: cuando un gato te alcanza
+  es justo cuando el combo se está por romper, así que la habilidad nunca estaba
+  disponible cuando hacía falta. **ESPACIO** o **ENTER** sueltan el maullido: los gatos a
+  **7 celdas o menos** dan media vuelta y corren para el otro lado durante **2,5 s**
+  —hasta el acechador del sótano, que no despista nunca— y mientras huyen no abren QTE. Es
+  el mismo campo de flujo del BFS, leído al revés. En el sótano, además, deja el **radar**
+  (arriba). En el teléfono no hay barra espaciadora a mano: el botón es el `♪` y también
+  el bloque del rango de combo.
+
+  El estado se lee en el `♪` de la barra, sin texto: apagado = todavía no cargaste el
+  combo ni una vez; con la barrita llenándose = esperando los 45 s; prendido y latiendo =
+  listo. En escritorio la línea de la barra lo dice además con palabras
+  (`MAULLIDO EN 27s`, `MAULLIDO LISTO [ESPACIO]`).
 
 ## Dificultad
 
@@ -96,18 +115,35 @@ clásico (5 monedas) da exactamente los números de siempre:
 El QTE siempre da 700 ms por letra, así que crece en largo, no en presión por tecla.
 A mitad de camino aparece un gato más.
 
-## Combo, rango y sonido
+## Combo, estilo, rango y sonido
 
-La racha dejó de ser un número: es un **rango con nombre**, al estilo Devil May Cry.
-`RANKS` va de **D — DORMIDO** a **SSS — SIN PIEDAD** (D, C, B, A, S, SS, SSS), y el color
-del rango manda sobre toda la GUI vía la variable CSS `--rc`. La dificultad sigue topando
-en `COMBO_MAX` (15, donde la ventana de reacción toca su piso de 650 ms); SS y SSS son
-puro flex, para que siempre quede algo arriba que perseguir.
+Son **dos medidores distintos**, y ésa es la regla que más se nota al jugar:
 
-El medidor del teléfono muestra lo que falta para el rango **siguiente**: se vacía y
-vuelve a llenarse en cada ascenso, que es lo que hace que la racha se sienta. Al subir,
-la letra crece de golpe, la barra destella y el nombre del rango entra volando sobre el
-laberinto. En cada acierto la letra rebota con `cpop` (decae al 88% por cuadro).
+| | qué es | lo sube | lo baja |
+|---|---|---|---|
+| **COMBO** (`combo`) | la racha de aciertos seguidos | +1 por letra y por QTE ganado | **cualquier error lo borra entero** |
+| **ESTILO** (`stl`) | el grado, lo que se ve como rango | +1 por letra, +2 por QTE ganado | −2 un error, **−8 perder contra un gato** |
+
+Antes eran la misma variable: una tecla mal tirada te bajaba de SSS a D de una, y con ella
+se iba el maullido, el color de la GUI y las ganas. Ahora la **racha** se pierde de una
+—para eso es una racha— y el **estilo** se gasta de a poco; lo único que se lo lleva
+puesto es perder un QTE. El combo sigue mandando la dificultad (la ventana de reacción se
+encoge 70 ms por punto, hasta el piso en `COMBO_MAX`), el tono del blip y el armado del
+maullido; el estilo manda el rango. El estilo topa en `STYLE_MAX` (26): sin tope, media
+partida buena lo dejaba tan arriba que ningún castigo se notaba.
+
+El rango es el estilo con nombre, al estilo Devil May Cry. `RANKS` va de **D — DORMIDO** a
+**SSS — SIN PIEDAD** (D, C, B, A, S, SS, SSS), y el color del rango manda sobre toda la
+GUI vía la variable CSS `--rc`. SS y SSS son puro flex, para que siempre quede algo arriba
+que perseguir.
+
+**En la barra se ven separados**, que era el punto: el llenado ancho de abajo (`#bfill`,
+del color del rango) es el **estilo** —lo que falta para el rango siguiente: se vacía y
+vuelve a llenarse en cada ascenso—, y la barrita blanca al lado de la `x` (`#bcbar`) es el
+**combo**, que se llena hasta `COMBO_MAX` y ahí destella: ese destello es también el aviso
+de que el maullido quedó armado. Al subir de rango la letra crece de golpe, la barra
+destella y el nombre entra volando sobre el laberinto. En cada acierto la letra rebota con
+`cpop` (decae al 88% por cuadro).
 
 El Artifact es un solo archivo sin imports, así que no hay `@font-face`: la tipografía
 del rango es una pila de fuentes pesadas (`Impact`, `Franklin Gothic Heavy`, `Arial
@@ -165,6 +201,26 @@ pausa —el cronómetro también— y ofrece más tiempo de reacción a cambio d
 Cada punto suma 35% a la ventana y a la duración del QTE. Cualquiera sea la respuesta,
 no vuelve a preguntar hasta 25 teclas después, para no spamear.
 
+## Pantalla de resultados
+
+Terminar un nivel dejaba el tablero quieto con un `GANASTE!` chiquito en la barra, y el
+**nivel 1 era peor**: al ganar se abría el selector encima del final, así que el jugador
+no llegaba a ver ni su tiempo. Ahora todo nivel termina en su resumen (`#res`), que entra
+`RES_MS` (1,2 s) después de pisar la salida —primero se ve el escape y su chispazo—:
+
+- el **tiempo neto** grande, y abajo el crudo y la penalización (o el bonus, si el neto
+  quedó por debajo del crudo);
+- el **rango máximo** de la partida con su nombre —el máximo, no el que quedó: ahora que
+  el estilo no se reinicia de un error, un mal final igual lo baja—, el récord de combo,
+  la precisión, las monedas, las teclas y, si hubo, los gatos vencidos y los baby points;
+- la **mejor marca**, o `¡NUEVA MEJOR MARCA!` si la partida la rompió (el tutorial no
+  guarda marca);
+- y las tres salidas: **el nivel siguiente** (que en el último no se muestra),
+  **reintentar** el mismo y **niveles**.
+
+Saltar el tutorial con **SALTAR** sigue llevando derecho al selector: ahí no hay partida
+que resumir. `tutEnd()` sólo abre el selector si el tutorial **no** terminó ganando.
+
 ## GUI del teléfono
 
 La pantalla útil es la que **deja el teclado**, así que todo va alineado arriba
@@ -172,9 +228,10 @@ La pantalla útil es la que **deja el teclado**, así que todo va alineado arrib
 abajo, donde el teclado lo va a tapar igual.
 
 - Una sola **barra de info**, fija arriba del laberinto y en el flujo: nunca lo tapa ni
-  se muda de borde. A la izquierda el reloj y las monedas; a la derecha el rango de combo
-  con su medidor. Es **la misma barra que usa el escritorio** (ver abajo): el CSS común
-  son estos valores, los del teléfono, y el escritorio sólo agrega lo que allá no entra.
+  se muda de borde. A la izquierda el reloj y las monedas; a la derecha el rango con sus
+  dos medidores (estilo abajo, combo al lado de la `x`) y, al final, el `♪` del maullido.
+  Es **la misma barra que usa el escritorio** (ver abajo): el CSS común son estos valores,
+  los del teléfono, y el escritorio sólo agrega lo que allá no entra.
 - El resto de los botones vive en el **menú hamburguesa**, que congela el reloj mientras
   está abierto (igual que el selector de nivel y el diálogo de baby mode).
 - El alto lo resuelve el CSS: `--ar` (la proporción `C/R` del nivel) y `--vh` (el alto
@@ -226,7 +283,10 @@ entra:
 - **Dos renglones** en el centro: reloj y candado + monedas arriba; precisión,
   penalización, teclas y el estado de **DETERMINACIÓN** y **MAULLIDO** abajo — lo que
   antes vivía en `#sub`, y lo que en el teléfono se lee en el menú.
-- **El récord de combo** debajo del `x` del rango (`#bmax`).
+- **El récord de combo** debajo del `x` del rango y de su medidor (`#bmax`).
+
+El `♪` del maullido y el medidor de combo **no** son de escritorio: viven en el CSS común,
+o sea que están en los dos perfiles. Acá sólo crecen.
 
 El layout es una consola de dos columnas: la barra cruza las dos, el tablero manda a la
 izquierda, y a la derecha van el log de teclas —estirado al alto del tablero— y los
@@ -352,35 +412,48 @@ QTE (éxito y fallo), baby mode y su cooldown, ruta del teclado móvil, que el l
 desborde, que los chips de letra nunca queden bajo el jugador, 25 laberintos donde el
 gato debe llegar por el camino mínimo, y una partida completa jugada por un bot.
 
-Del 11 al 16 va el combo, las vibes, el tutorial y los niveles: que el medidor llene y
-sature en `COMBO_MAX`, que los rangos suban y el medidor se vacíe en cada ascenso, que
-los `sfx()` sean no-op sin WebAudio, que extra vibes cambie de pista sin tocar ni una
-variable de gameplay y que `bopAt()` pique justo en el bombo medido (0.174 s), que cada
-paso del tutorial se cierre sólo cuando el jugador usó lo que explica y termine en el
-selector, que el selector pause el reloj y no deje jugar un modo que no existe, que el
-sótano conserve niebla, faroles y acechador (y se pueda terminar), y que la salida sólo
-abra con todas las monedas del nivel.
+Del 11 al 16 van los dos medidores, las vibes, el tutorial y los niveles: que el de combo
+llene y sature en `COMBO_MAX`, que los rangos suban por el **estilo** y el medidor se
+vacíe en cada ascenso, que un error borre el combo entero pero al estilo sólo le saque
+`STYLE_ERR` (y perder un QTE, `STYLE_LOSS`, que es mucho más), que el estilo tope y no
+baje de cero, que los `sfx()` sean no-op sin WebAudio, que extra vibes cambie de pista sin
+tocar ni una variable de gameplay y que `bopAt()` pique justo en el bombo medido
+(0.174 s), que cada paso del tutorial se cierre sólo cuando el jugador usó lo que explica,
+que el selector pause el reloj y no deje jugar un modo que no existe, que el sótano
+conserve niebla, faroles y acechador (y se pueda terminar), que su ventana por letra sea
+**la misma** que la del clásico, y que la salida sólo abra con todas las monedas del
+nivel.
 
-Del 16b al 16e van las dos habilidades y el cartel del rango: que ganar un QTE congele
-1,5 s la ventana **y** el paso de los gatos (y perderlo no dé respiro), que la carga de
-determinación llegue recién al tercer gato y tope en `DET_MAX`, que las letras de muro
+Del 16b al 16f van las dos habilidades, el radar y el cartel del rango: que ganar un QTE
+congele 2 s la ventana **y** el paso de los gatos (y perderlo no dé respiro), que la carga
+de determinación llegue recién al tercer gato y tope en `DET_MAX`, que las letras de muro
 nunca caigan fuera del canvas ni pisen una salida abierta, que teclearlas atraviese el
-muro y gaste la carga, que el maullido pida el combo al tope **siempre** y respete los
-45 s, que los gatos cercanos se alejen y los lejanos ni se enteren, que ESPACIO y ENTER
-lo disparen sin robarle el Enter a un botón del menú, y que el cartel del rango no tape
-al gato en ninguna de las cuatro esquinas.
+muro y gaste la carga, que el maullido **se arme** al llenar el combo por primera vez y de
+ahí sólo dependa de los 45 s (y siga disponible con el combo roto, que es la razón del
+cambio), que los gatos cercanos se alejen y los lejanos ni se enteren, que ESPACIO y ENTER
+lo disparen sin robarle el Enter a un botón del menú, que en el sótano —y sólo ahí— deje
+un radar con una marca por moneda y por gato, corrida pero nunca más de `RADAR_J` celdas y
+sin encender la niebla, y que el cartel del rango no tape al gato en ninguna de las cuatro
+esquinas.
+
+El 26 es la pantalla de resultados: que ganar la deje en camino y no entre hasta `RES_MS`,
+que el tutorial termine en ella y **no** en el selector, y que sus tres salidas lleven al
+nivel siguiente, al mismo de nuevo y al selector (con el `SIGUIENTE` escondido en el
+último nivel).
 
 El 17 y el 18 son el perfil de rendimiento: corren el mismo `index.html` en dos contextos
 —uno con `pointer:fine` y otro con `pointer:coarse`— y verifican que el lite prenda sólo
 en el segundo, que ahí los mp3 grandes no se precarguen, que el tope de cuadros saltee el
 cuadro repetido, y que la foto de la dificultad (`snap()`: `foeMs`, `chaseP`, `qteLen`,
-`durBase` y `babyK` en todo su rango) dé exactamente igual en los dos. También chequean
+`durBase`, `babyK`, el rango entero del medidor de estilo y las constantes de las dos
+habilidades) dé exactamente igual en los dos. También chequean
 lo que **no** es del perfil: que las dos plataformas horneen las paredes con su margen y
 que la capa del latido aparezca recién al prender extra vibes.
 
 Del 19 al 22 va la GUI del teléfono: que la barra no se mude de borde, que el ascenso de
-rango se festeje (y bajar no), que el bloque del rango sea el botón del maullido, que el
-menú devuelva el tiempo pausado, que la pantalla completa automática sea de **una sola
+rango se festeje (y bajar no), que los dos medidores se dibujen por separado y el `♪`
+pase por sus tres estados (apagado, cooldown a media asta, listo), que el bloque del rango
+y el `♪` sean los dos botones del maullido, que el menú devuelva el tiempo pausado, que la pantalla completa automática sea de **una sola
 vez**, y —leyendo el `<style>` directo— que el perfil móvil quede alineado arriba, que la
 barra siga estando antes del tablero en el markup y que las cuatro capas que impiden que
 el laberinto se esconda sigan puestas: `interactive-widget` en el viewport, el `<body>`
@@ -399,6 +472,11 @@ ayuda estén en la columna lateral y los botones en una fila que cruza las dos, 
 tablet ancha se llevaría el layout de escritorio con el teclado del teléfono encima—.
 Además, en el contexto de escritorio (17) se chequea en caliente que la barra muestre el
 nivel y que el medidor del rango se dibuje.
+
+El 26 y el 27 del segundo archivo leen el CSS y el markup de lo nuevo: que la barra traiga
+el medidor de combo y el `♪` con sus estados `.ready` y `.cd`, que el cuadro los escriba,
+y que la pantalla de resultados exista entera —sus nodos, su `.open`, sus botones con el
+estilo del resto— y en el teléfono arranque alineada arriba como los demás paneles.
 
 > Los `grep` sobre el `<script>` van contra `code`, que es el `src` con los `data:` URI
 > afuera: los assets van embebidos en base64 y ahí cualquier palabra corta aparece por
