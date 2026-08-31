@@ -6,19 +6,32 @@ const src=fs.readFileSync(path.join(__dirname,'index.html'),'utf8').match(/<scri
 const noop=new Proxy(function(){},{get:()=>noop,apply:()=>noop,set:()=>true});
 const el=()=>({getContext:()=>noop,style:{},value:'',set textContent(v){},set innerHTML(v){},
   set src(v){this._s=v},get src(){return this._s},insertAdjacentHTML(){},blur(){},focus(){},width:0,height:0});
-const ctx={console,Int16Array,performance:{now:()=>Date.now()},requestAnimationFrame:()=>0,
-  setTimeout:()=>0,clearTimeout:()=>0,addEventListener:()=>0,innerWidth:375,
-  visualViewport:{width:375,addEventListener:()=>0},
-  Image:function(){this.complete=false;this.naturalWidth=0;this.decode=()=>Promise.resolve()},
-  Audio:function(s){this.src=s;this.paused=true;this.muted=false;
-                    this.play=()=>{this.paused=false;return Promise.resolve()};
-                    this.pause=()=>{this.paused=true}},
-  css:{},
-  document:{getElementById:el,documentElement:{style:{setProperty(k,v){ctx.css[k]=v}}}}};
-ctx.window=ctx;
 
-const harness=`
-if(!BGM.paused) throw new Error('la musica no debe autoarrancar');
+// El mismo index.html se corre en dos contextos: uno "escritorio" (pointer:fine)
+// y uno "teléfono" (pointer:coarse).  Así se verifica que el perfil lite prenda
+// sólo en el segundo y que ninguno de los dos toque el gameplay.
+const mkctx=coarse=>{
+  const root={style:{setProperty(k,v){ctx.css[k]=v}},cls:'',
+              classList:{add(c){root.cls=c},remove(c){root.cls=''}}};
+  const ctx={console,Int16Array,performance:{now:()=>Date.now()},requestAnimationFrame:()=>0,
+    setTimeout:()=>0,clearTimeout:()=>0,addEventListener:()=>0,innerWidth:375,
+    visualViewport:{width:375,addEventListener:()=>0},
+    matchMedia:q=>({matches:coarse&&/coarse/.test(q)}),
+    navigator:{userAgent:coarse?'Mozilla/5.0 (Linux; Android 14) Mobile'
+                               :'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'},
+    Image:function(){this.complete=false;this.naturalWidth=0;this.decode=()=>Promise.resolve()},
+    Audio:function(s){this.src=s;this.paused=true;this.muted=false;
+                      this.play=()=>{this.paused=false;return Promise.resolve()};
+                      this.pause=()=>{this.paused=true}},
+    css:{},
+    document:{getElementById:el,createElement:el,documentElement:root}};
+  ctx.window=ctx;
+  return ctx;
+};
+const ctx=mkctx(false);
+
+// helpers compartidos por los dos contextos
+const common=`
 const press=k=>onkeydown({key:k,preventDefault(){}});
 const wrong=()=>press([...POOL].find(c=>!Object.values(letters).includes(c)));
 const cell=()=>p.y*C+p.x;
@@ -28,6 +41,36 @@ function path(from,to){const prev={},q=[from],seen=new Set([from]);
    const nx=cx+dx,ny=cy+dy,n=ny*C+nx;
    if(nx>=0&&ny>=0&&nx<C&&ny<R&&!g[c][w]&&!seen.has(n)){seen.add(n);prev[n]=[c,w];q.push(n)}})}
  const out=[];for(let n=to;n!==from;){const [pv,w]=prev[n];out.unshift(w);n=pv}return out}
+// una partida entera jugada por un bot: junta las 5 monedas y sale
+function botGame(){
+  gen(); foes=[]; baby=0;
+  // se puede ganar antes de tachar la lista: yendo por una moneda se pisan otras
+  // y, con las 5 juntas, cruzar la casilla de salida ya termina la partida
+  for(const t of [...coins,C*R-1]){ let guard=0;
+    while(!win && cell()!==t && guard++<400){
+      if(paused){ babyEnd(false); continue }
+      if(qte){ qte.seq.slice().forEach(k=>press(k)); continue }
+      press(letters[path(cell(),t)[0]]);
+    }
+    if(guard>=400) throw new Error('el bot se atoro');
+    if(win) break;
+  }
+  if(!win) throw new Error('no gano');
+}
+// foto de TODO lo que define la dificultad: tiene que dar igual en los dos perfiles
+function snap(){
+  const q=[], b0=baby, g0=got, c0=combo;
+  for(let n=0;n<=5;n++){ got=n; q.push(foeMs(),chaseP(),qteLen()) }
+  for(let c=0;c<=20;c++){ combo=c; deal(); q.push(durBase,comboFill(),comboCol()) }
+  for(let b=0;b<=3;b++){ baby=b; q.push(babyK(),dur()) }
+  baby=b0; got=g0; combo=c0; deal();
+  return JSON.stringify([C,R,S,POOL,COMBO_MAX,MS_LETRA,BEAT,VIBE_OFF,q,
+                         [0,.1,.174,.25,.5].map(bopAt)]);
+}
+`;
+
+const harness=`
+if(!BGM.paused) throw new Error('la musica no debe autoarrancar');
 
 // 1) timer MM:SS:mmm
 if(fmt(83456)!=='01:23:456'||fmt(0)!=='00:00:000') throw new Error('formato del timer');
@@ -133,16 +176,7 @@ for(let round=0;round<25;round++){
 Math.random=rnd;
 
 // 10) partida completa
-gen(); foes=[]; baby=0;
-for(const t of [...coins,C*R-1]){ let guard=0;
-  while(cell()!==t && guard++<400){
-    if(paused){ babyEnd(false); continue }
-    if(qte){ qte.seq.slice().forEach(k=>press(k)); continue }
-    press(letters[path(cell(),t)[0]]);
-  }
-  if(guard>=400) throw new Error('el bot se atoro');
-}
-if(!win) throw new Error('no gano');
+botGame();
 if(!unlockT) throw new Error('no aviso al desbloquear la salida');
 if(tEnd+pen<0) throw new Error('tiempo neto negativo');
 if(log.length!==hits+fails) throw new Error('log descuadrado');
@@ -202,7 +236,60 @@ got=5; unlockT=now();     frame();              // ni la abierta con el cartel e
 got=0; unlockT=0;
 
 frame();
-console.log('OK 15/15 | partida completa:',teclas,'teclas, precision',prec+'%');
+
+// 16) escritorio: el perfil lite NO se aplica, todo queda como estaba
+if(MOBILE) throw new Error('escritorio detectado como movil');
+if(PERF.bake||!PERF.scan||PERF.glow!==1||PERF.fps||PERF.hudMs||PERF.dust!==1)
+  throw new Error('el perfil lite se colo en escritorio');
+if(document.documentElement.cls) throw new Error('escritorio no lleva la clase lite');
+if(BGM.preload!=='auto'||VIBE.preload!=='auto') throw new Error('escritorio sin preload de audio');
+if(!VIBE.src.startsWith('data:audio')) throw new Error('escritorio ya deberia tener el mp3 de vibes');
+if(mzc) throw new Error('escritorio no hornea la capa de paredes');
+gen(); foes=[]; p={x:10,y:0}; vis={x:0,y:0};   // vis persigue a p: avanza una vez por cuadro
+lastDraw=0; frame(); const v1=vis.x; frame();
+if(!v1) throw new Error('el cuadro no dibujo');
+if(vis.x===v1) throw new Error('escritorio no deberia saltear cuadros');
+SNAP=snap();
+
+console.log('OK 16/16 | partida completa:',teclas,'teclas, precision',prec+'%');
 `;
 
-vm.runInNewContext(src+harness,ctx);
+// ---- 17) el mismo juego en un teléfono: perfil lite, gameplay intacto ----
+const mobile=`
+if(!MOBILE) throw new Error('no detecto el telefono');
+if(!PERF.bake||PERF.scan||!(PERF.glow<1)||!PERF.fps||!PERF.hudMs||!(PERF.dust<1))
+  throw new Error('perfil lite incompleto');
+if(document.documentElement.cls!=='lite') throw new Error('falta la clase lite en <html>');
+
+// los dos mp3 de ~1MB no se tocan hasta que hagan falta
+if(BGM.preload!=='none'||VIBE.preload!=='none') throw new Error('movil precargando los mp3 grandes');
+if(VIBE.src) throw new Error('el mp3 de vibes no debe cargarse sin pedirlo');
+vibe.onclick();
+if(!VIBE.src.startsWith('data:audio')) throw new Error('EXTRA VIBES no cargo la pista');
+if(!vibes||track()!==VIBE) throw new Error('no cambio a la pista de vibes en movil');
+vibe.onclick();
+if(vibes||track()!==BGM) throw new Error('no volvio a la pista normal en movil');
+
+// las paredes se hornean una vez por laberinto
+if(!mzc) throw new Error('no horneo la capa de paredes');
+
+// tope de cuadros: dos llamadas seguidas dibujan una sola vez
+gen(); foes=[]; p={x:10,y:0}; vis={x:0,y:0};
+lastDraw=0; frame(); const v1=vis.x;
+if(!v1) throw new Error('el primer cuadro no dibujo');
+frame();
+if(vis.x!==v1) throw new Error('el tope de fps no salteo el cuadro repetido');
+
+// y el juego se juega igual: partida completa y dificultad identica
+botGame();
+lastDraw=0; frame();
+if(log.length!==hits+fails) throw new Error('log descuadrado en movil');
+SNAP=snap();
+`;
+
+vm.runInNewContext(src+common+harness,ctx);
+const mctx=mkctx(true);
+vm.runInNewContext(src+common+mobile,mctx);
+if(!ctx.SNAP||ctx.SNAP!==mctx.SNAP)
+  throw new Error('el perfil movil movio algo del gameplay');
+console.log('OK 17/17 | el perfil lite prende solo en pointer:coarse y no toca la dificultad');
