@@ -75,29 +75,36 @@ pausa —el cronómetro también— y ofrece más tiempo de reacción a cambio d
 Cada punto suma 35% a la ventana y a la duración del QTE. Cualquiera sea la respuesta,
 no vuelve a preguntar hasta 25 teclas después, para no spamear.
 
-## Rendimiento en móvil
+## Rendimiento
 
-Todo lo que degrada algo visible vive detrás de un solo flag, `MOBILE`
-(`matchMedia('(pointer:coarse)')`, con el user-agent de respaldo), que arma el objeto
-`PERF`. En escritorio `PERF` deja los valores viejos y el canvas sale **pixel por pixel
-igual que antes** — hay un test que lo compara. Los números de dificultad no los toca
-ningún perfil.
+Hay dos capas de optimización, y conviene no mezclarlas.
+
+**Lo que va en los dos lados** son cambios que dan el mismo dibujo, sólo que más barato:
+el horneado de paredes, el HUD sin `innerHTML`, el BFS del campo de flujo sin arrays
+intermedios, el log acotado en el DOM y el temblor que no ensucia el transform cuando ya
+no se ve.
+
+**Lo que va sólo en el teléfono** son los recortes que sí se notan si los mirás de cerca.
+Viven detrás de un único flag `MOBILE` (`matchMedia('(pointer:coarse)')`, con el
+user-agent de respaldo) que arma el objeto `PERF`:
 
 | | escritorio | teléfono |
 |---|---|---|
-| `bake` — paredes cacheadas | no | sí |
 | `glow` — factor de `shadowBlur` | 1 | 0.5 |
-| `scan` — scanlines en el canvas | sí | las pinta el CSS |
+| `scan` — scanlines dibujadas en el canvas | sí | las pinta el CSS |
 | `dust` — partículas por chispazo | 100% | 60% |
 | `hudMs` — refresco del reloj | cada cuadro | cada 66 ms |
 | `fps` — tope de cuadros | libre | 61 |
 | `pre` — preload de los mp3 grandes | `auto` | `none` |
 
-Lo que más costaba, en orden:
+Los números de dificultad no los toca ningún perfil, y hay un test que compara la foto
+entera de la dificultad entre los dos.
 
-- **`shadowBlur` en las ~660 líneas del laberinto**, redibujadas en cada cuadro. Ahora se
-  hornean una vez por laberinto a un canvas aparte (`bakeMaze()`) y el cuadro es un
-  `drawImage`. El latido de extra vibes se suma encima con un segundo blit en `lighter`.
+### Lo que costaba, en orden
+
+- **`shadowBlur` en las ~660 líneas del laberinto**, redibujadas en cada cuadro y sin
+  cambiar hasta el próximo `gen()`. Ahora se hornean a un canvas aparte y el cuadro es un
+  `drawImage` (ver abajo).
 - **Una sombra difuminada por partícula** (hasta 34). En el teléfono el halo se finge con
   un cuadrado más grande y transparente, sin blur.
 - **Dos `innerHTML` por cuadro en el encabezado**: el navegador reparseaba HTML y
@@ -112,14 +119,35 @@ Lo que más costaba, en orden:
   la página entera. Dentro del iframe del Artifact la etiqueta es inerte; abriendo el
   archivo directo, cambia todo.
 
-Medido con Chromium en emulación de Pixel 5, con extra vibes prendido:
+### El horneado de paredes
+
+`bakeMaze()` pinta el laberinto una vez por `gen()` y el cuadro lo pega con un
+`drawImage`. Dos detalles que costaron:
+
+- **El latido.** Extra vibes abría el `shadowBlur` de las paredes de 10 a 26, y una sola
+  copia no puede hacer eso. Se hornean las **dos puntas** (`BLUR=[10,26]`) y el cuadro
+  mezcla linealmente entre ellas: los dos extremos salen exactos y el medio queda como
+  interpolación de dos gaussianas en vez de una gaussiana intermedia. La segunda capa se
+  hornea recién cuando alguien prende extra vibes.
+- **El margen (`PAD`).** Al temblar, la copia se corre unos píxeles y el borde del tablero
+  se quedaba sin el resplandor que entra desde afuera, porque el horneado ya lo había
+  recortado. Se hornea con 32px de margen y se pega en `-PAD`.
+
+Contra la versión anterior, con el laberinto quieto el canvas sale idéntico (delta máximo
+de 1 sobre 255, que es redondeo); durante el latido el promedio se va a ~3 de 255 en la
+mitad de la rampa y vuelve a cero en los dos extremos.
+
+### Medido
+
+Chromium, emulación de Pixel 5 y escritorio de 1280px, con extra vibes prendido:
 
 | | antes | después |
 |---|---|---|
-| Dibujo de un cuadro (con flush de GPU) | 2.5 ms | 0.47 ms |
-| fps con CPU a 6× de throttle | 43 | 60 |
-| Tiempo de main thread en 4 s | 3.97 s | 1.89 s |
-| Layouts en 4 s | 173 | 90 |
+| Dibujo de un cuadro, teléfono (con flush de GPU) | 2.5 ms | 0.47 ms |
+| Dibujo de un cuadro, escritorio | 2.5 ms | 0.92 ms |
+| fps del teléfono con CPU a 6× de throttle | 43 | 60 |
+| Main thread del teléfono en 4 s | 3.99 s | 2.09 s |
+| Layouts del teléfono en 4 s | 176 | 94 |
 
 ## Notas de implementación
 
@@ -154,4 +182,6 @@ El 16 y el 17 son el perfil de rendimiento: corren el mismo `index.html` en dos 
 —uno con `pointer:fine` y otro con `pointer:coarse`— y verifican que el lite prenda sólo
 en el segundo, que ahí los mp3 grandes no se precarguen, que el tope de cuadros saltee el
 cuadro repetido, y que la foto de la dificultad (`snap()`: `foeMs`, `chaseP`, `qteLen`,
-`durBase` y `babyK` en todo su rango) dé exactamente igual en los dos.
+`durBase` y `babyK` en todo su rango) dé exactamente igual en los dos. También chequean
+lo que **no** es del perfil: que las dos plataformas horneen las paredes con su margen y
+que la capa del latido aparezca recién al prender extra vibes.
