@@ -514,6 +514,9 @@ if(!mz[1]) throw new Error('extra vibes deberia haber horneado la capa del latid
 gen(); foes=[]; p={x:10,y:0}; vis={x:0,y:0};   // vis persigue a p: avanza una vez por cuadro
 lastDraw=0; frame(); const v1=vis.x; frame();
 if(!v1) throw new Error('el cuadro no dibujo');
+// el escritorio usa LA MISMA barra que el telefono (ver 25), no el h2+p de antes
+if(bname.style.color!==LV.col) throw new Error('la barra de escritorio no trae el nivel');
+if(!bfill.style.width) throw new Error('el medidor del rango no llego al escritorio');
 if(vis.x===v1) throw new Error('escritorio no deberia saltear cuadros');
 SNAP=snap();
 
@@ -665,9 +668,13 @@ if(!/interactive-widget=resizes-content/.test(vp))
 if(!/function unscroll\(/.test(src)) throw new Error('falta el rescate de scroll');
 if(!/preventScroll/.test(src)) throw new Error('el focus del teclado desplaza la pagina');
 if(/kb\.focus\(\)/.test(src)) throw new Error('quedo un kb.focus() sin preventScroll');
-const lbar=bloque('.lite #bar');
-if(/position:(fixed|absolute)/.test(lbar)) throw new Error('la barra no deberia flotar sobre el laberinto');
-if(!/flex:none/.test(lbar)) throw new Error('la barra tiene que conservar su alto');
+// la barra es la MISMA pieza en los dos perfiles (ver 25): lo comun vive en #bar y
+// en .lite queda solo el alto fijo del que cuelga el ancho del tablero
+const barr=bloque('#bar');
+if(/position:(fixed|absolute)/.test(barr)) throw new Error('la barra no deberia flotar sobre el laberinto');
+if(!/flex:none/.test(barr)) throw new Error('la barra tiene que conservar su alto');
+if(!/height:var\(--barh\)/.test(bloque('.lite #bar')))
+  throw new Error('la barra del telefono perdio el alto fijo que le reserva el tablero');
 if(/#bar\.low/.test(style)) throw new Error('quedo la regla de la barra que se mudaba de borde');
 for(const sel of ['.lite #menu','.lite #lvl','.lite #skill'])
   if(!/align-items:start/.test(bloque(sel))) throw new Error(sel+' no esta alineado arriba');
@@ -692,11 +699,48 @@ for(const m of src.match(/x\.font=[^;]+;/g)||[])
 const vibSel=[...style.matchAll(/\.vibes\s+([#.\w]+)/g)].map(m=>m[1]);
 if(new Set(vibSel).size<10)
   throw new Error('el latido llega a muy pocos elementos: '+new Set(vibSel).size);
-for(const sel of ['#log','#cmeter','#tut','#board','#btns','#bar'])
+for(const sel of ['#log','#tut','#board','#btns','#bar','#bcombo','#bfill'])
   if(vibSel.indexOf(sel)<0) throw new Error('extra vibes no llega a '+sel);
 if(!/classList\[vibes\?'add':'remove'\]\('vibes'\)/.test(src))
   throw new Error('el boton no enciende la clase .vibes');
 if(!/@keyframes rpopl/.test(style)) throw new Error('falta la entrada espejada del cartel del rango');
 if(/var\(--rc,#4cf\)22/.test(style)) throw new Error('quedo el degradado con el hex roto de 5 digitos');
 
-console.log('OK 26/26 | el perfil lite prende solo en pointer:coarse y no toca la dificultad');
+// ---- 25) la GUI del telefono llego al escritorio ----
+// El escritorio no tenia identidad propia: un h2 + un p de texto centrado y una
+// barrita de combo con la etiqueta adentro.  Ahora usa LA MISMA barra que el
+// telefono y gasta el ancho de mas en lo que alla no entraba.
+// los assets van embebidos en base64: cualquier palabra corta aparece ahi por azar,
+// asi que estos grep miran el codigo con los data: URI afuera
+const code=src.replace(/'data:[^']*'/g,"'#'");
+if(/#cmeter|#cbar|#clab/.test(style)||/cmeter|cbar|clab/.test(code))
+  throw new Error('quedo el medidor de combo viejo del escritorio');
+if(/id=hud|id=sub[>\s]/.test(html.slice(0,html.indexOf('<script>')))||/hudt|hudx|subt|babyEl/.test(code))
+  throw new Error('quedo el HUD suelto viejo (h2 + p) del escritorio');
+const oculto=style.match(/^.*#mstats.*$/m)[0];
+if(/#bar/.test(oculto)) throw new Error('el escritorio sigue escondiendo la barra');
+// la barra va entera en una linea: ahi tienen que estar las zonas de escritorio
+const barm=html.match(/<div id=bar>.*<\/div>/)[0];
+for(const id of ['bmeta','bname','bpb','bstat','bmax'])
+  if(barm.indexOf('id='+id)<0) throw new Error('la barra no trae la zona de escritorio '+id);
+for(const sel of [':root:not(.lite) #bmeta',':root:not(.lite) #bstat',':root:not(.lite) #bmax'])
+  if(!/display:(flex|block)/.test(bloque(sel))) throw new Error(sel+' no se muestra en escritorio');
+if(!/bstat\.textContent/.test(code)||!/bname\.textContent/.test(code)||!/bmax\.textContent/.test(code))
+  throw new Error('el HUD de escritorio no escribe en la barra');
+// y el tablero deja de estar solo en el medio: log y ayuda pasan a la columna de al lado
+const dsk=bloque(':root:not(.lite) body');
+if(!/display:grid/.test(dsk)) throw new Error('el escritorio no arma las dos columnas');
+for(const sel of [':root:not(.lite) #log',':root:not(.lite) p.help'])
+  if(!/grid-column:2/.test(bloque(sel))) throw new Error(sel+' no fue a la columna lateral');
+if(!/grid-column:1\/-1/.test(bloque(':root:not(.lite) #btns')))
+  throw new Error('los botones de escritorio dejaron de ser una fila');
+if(style.indexOf('@media (min-width:860px)')<0)
+  throw new Error('sin la consulta de ancho, una ventana angosta se queda sin respaldo');
+// las dos columnas NO pueden pisar al telefono: una tablet tactil ancha entra igual
+// en la consulta de ancho y ahi manda el perfil lite
+const mq=style.slice(style.indexOf('@media (min-width:860px)'));
+for(const sel of mq.slice(mq.indexOf('{')+1,mq.indexOf('\n }')).match(/^[^{\n]+\{/gm)||[])
+  if(!/:root:not\(\.lite\)/.test(sel))
+    throw new Error('la grilla de escritorio pisa al telefono: '+sel.trim());
+
+console.log('OK 27/27 | el perfil lite prende solo en pointer:coarse y no toca la dificultad');
