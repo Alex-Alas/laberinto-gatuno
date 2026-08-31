@@ -21,11 +21,12 @@
  #log span{text-shadow:0 0 6px currentColor}
  canvas{background:#0b0b12;border:1px solid #1ff4;border-radius:4px;
       box-shadow:0 0 calc(24px + var(--bop,0)*34px) #0ff3,inset 0 0 40px #0ff1;
-      display:block;width:100%;height:auto}
+      display:block;width:100%;height:auto;flex:1}
  p.help{opacity:.45;margin:0;font-size:12px;text-align:center;max-width:var(--w)}
  .k{color:#6f9}.b{color:#f55}.l{color:#fa0}.q{color:#4cf}
  #stage{position:relative;width:var(--w)}
  #boom{position:absolute;display:none;pointer-events:none;z-index:2}
+ .lite #boom{top:40px;left:0}
  #scare{position:fixed;inset:0;display:none;z-index:99;background:#000 center/cover no-repeat}
  #btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-width:var(--w)}
  #btns button,#skill button,#intro button{font:inherit;font-size:12px;letter-spacing:2px;color:#9ef;cursor:pointer;
@@ -91,7 +92,7 @@
     Nada de esto se aplica en escritorio.  Lo caro en el teléfono no era el
     juego sino el compositor: un box-shadow gigante recalculado en cada beat
     y 125 fillRect de scanlines por cuadro dentro del canvas. */
- .lite canvas{box-shadow:0 0 24px #0ff3,inset 0 0 40px #0ff1}   /* fijo, sin --bop */
+ .lite canvas{box-shadow:0 0 24px #0ff3,inset 0 0 40px #0ff1;flex:1}   /* fijo, sin --bop */
  .lite #btns button{padding:12px 10px}                         /* blanco de dedo más grande */
  .lite #stage::after{content:'';position:absolute;inset:0;z-index:1;
       pointer-events:none;border-radius:4px;
@@ -100,23 +101,23 @@
  /* ---- GUI del teléfono -----------------------------------------------------
     La pantalla útil es la que deja el teclado, así que el tablero se la lleva
     entera y el resto de la interfaz deja de ocupar alto:
-      · todo el HUD vital (reloj, monedas, combo) es UNA barra flotante sobre el
-        laberinto, que se corre al borde opuesto cuando el gato pasa por debajo;
+      · todo el HUD vital (reloj, monedas, combo) es UNA barra fija sobre el
+        laberinto, siempre visible en la parte superior;
       · los botones secundarios viven en el menú hamburguesa;
       · el log de teclas y los textos de ayuda quedan sólo en escritorio.
     El alto lo resuelve el CSS: el tablero es 15x11, así que el alto de pantalla
     ya fija un ancho máximo y el laberinto entra entero sin que el JS adivine nada. */
  .lite body{height:100dvh;min-height:0;overflow:hidden;padding:4px;gap:4px}
- .lite #stage{width:min(var(--w),calc((100dvh - 8px)*15/11));max-width:100%}
+ .lite #stage{width:min(var(--w),calc((100dvh - 8px)*15/11));max-width:100%;display:flex;flex-direction:column}
  .lite h2,.lite #sub,.lite #cmeter,.lite #log,.lite p.help{display:none}
  .lite #menu p.help{display:block;max-width:none;font-size:11px;margin-top:12px;opacity:.5}
 
- .lite #bar{display:inline-flex;align-items:center;gap:7px;position:absolute;
-      left:50%;top:-40px;transform:translateX(-50%);z-index:3;height:34px;max-width:calc(100% - 12px);
+ .lite #bar{display:inline-flex;align-items:center;gap:7px;position:relative;
+      left:0;top:0;transform:none;z-index:3;height:34px;max-width:calc(100% - 12px);
       padding-right:9px;overflow:hidden;white-space:nowrap;
       border:1px solid #1ff5;border-radius:8px;background:#04060cec;
-      box-shadow:0 0 12px #0ff3;font-size:12px}
- .lite #bar.low{top:calc(100% + 6px);transform:translateX(-50%) translateY(-100%)}
+      box-shadow:0 0 12px #0ff3;font-size:12px;margin-bottom:4px}
+ .lite #bar.low{top:0;transform:none}
  .lite #bt,.lite #bc,.lite #bx{min-width:0;overflow:hidden}   /* que recorte el texto... */
  .lite #bt{color:#cef}
  .lite #bc{color:#f88;letter-spacing:1px}
@@ -145,7 +146,7 @@
 <p id=sub><span id=subt>-</span><span id=baby></span></p>
 <div id=cmeter><i id=cbar></i><b id=clab>-</b></div>
 <div id=log></div>
-<div id=stage><canvas id=cv></canvas><div id=bar><button id=burger aria-label="Men&uacute;">&#9776;</button><span id=bt>00:00:000</span><span id=bc>-</span><span id=bx>x0</span><i id=bfill></i></div><img id=boom alt=""></div>
+<div id=stage><div id=bar><button id=burger aria-label="Men&uacute;">&#9776;</button><span id=bt>00:00:000</span><span id=bc>-</span><span id=bx>x0</span><i id=bfill></i></div><canvas id=cv></canvas><img id=boom alt=""></div>
 <div id=scare></div>
 <input id=kb inputmode=text enterkeyhint=done autocomplete=off autocorrect=off autocapitalize=off spellcheck=false aria-label="Teclado del juego">
 <div id=menu><div>
@@ -409,8 +410,7 @@ function qteEnd(okAll){
     burst(p.x*S+S/2,p.y*S+S/2,'#4cf',26);
     play(BANG).catch(()=>{});
     boom.src=''; boom.src=BOOM;                        // reinicia el gif
-    boom.style.cssText=`position:absolute;display:block;pointer-events:none;z-index:2;`  // en % para que escale en móvil
-      +`left:${(p.x*S-25)/cv.width*100}%;top:${(p.y*S-25)/cv.height*100}%;width:${84/cv.width*100}%`;
+    boom.style.cssText=`position:absolute;display:block;pointer-events:none;z-index:2;top:${40+(p.y*S-25)/cv.height*100}%;left:${(p.x*S-25)/cv.width*100}%;width:${84/cv.width*100}%`;  // en % para que escale en móvil
     setTimeout(()=>boom.style.display='none',900);
   } else {
     pen+=2000; combo=0; flash=1; shake=14; sfxBad();
