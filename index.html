@@ -33,9 +33,6 @@
       display:flex;flex-direction:column;align-items:center;justify-content:center;
       min-height:100dvh;margin:0;padding:10px 8px;gap:6px;text-shadow:0 0 8px #0ff8;
       touch-action:manipulation;-webkit-user-select:none;user-select:none}
- h2{margin:0;letter-spacing:2px;font-size:17px;font-weight:700;text-align:center;line-height:1.5;
-      transform:scale(calc(1 + var(--bop,0)*.085))}
- #sub{opacity:.6;font-size:12px;margin:0;letter-spacing:1px;text-align:center}
  /* El input real vive ARRIBA, no abajo.  Al enfocarlo el navegador lo trae a la
     vista, y pegado al borde inferior ese gesto empujaba la pagina entera hacia
     abajo hasta esconder el laberinto: el usuario terminaba arrastrando para
@@ -58,8 +55,10 @@
  #boom{position:absolute;display:none;pointer-events:none;z-index:2}
  #scare{position:fixed;inset:0;display:none;z-index:99;background:#000 center/cover no-repeat}
  #btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-width:var(--w)}
+ /* los mismos botones del menú del teléfono: blanco más grande y esquina redonda,
+    que en escritorio ahora van en fila abajo de la consola */
  #btns button,#skill button,#lvl button,#tut button{font:inherit;font-size:12px;letter-spacing:2px;
-      color:#9ef;cursor:pointer;background:#0b0b12;border:1px solid #1ff6;border-radius:4px;padding:5px 14px}
+      color:#9ef;cursor:pointer;background:#0b0b12;border:1px solid #1ff6;border-radius:6px;padding:9px 15px}
  #btns button:hover,#btns button:focus-visible,
  #skill button:hover,#skill button:focus-visible,
  #lvl button:hover,#lvl button:focus-visible,
@@ -78,7 +77,7 @@
     contenedores son display:contents y queda la fila de botones de siempre;
     en el teléfono el mismo bloque se vuelve un panel a pantalla completa. */
  #menu,#menu>div{display:contents}
- #menu h3,#mstats,#bar,#burger{display:none}
+ #menu h3,#mstats,#burger{display:none}
 
  /* ---- rango de combo (estilo Devil May Cry) --------------------------------
     La letra del rango es lo que tiene que gritar: itálica pesada, inclinada,
@@ -111,13 +110,114 @@
       66%{opacity:1;transform:skewX(-11deg) translateX(0) scale(1)}
       to{opacity:0;transform:skewX(-11deg) translateX(10px) scale(.95)}}
 
- /* medidor de combo de escritorio */
- #cmeter{width:var(--w);height:18px;flex:none;position:relative;overflow:hidden;color:#4cf;
-      border:1px solid #1ff3;border-radius:9px;background:#0b0b1288}
- #cbar{display:block;height:100%;width:0;background:currentColor;opacity:.5;
-      box-shadow:0 0 14px currentColor;transition:width .1s linear}
- #clab{position:absolute;inset:0;display:grid;place-items:center;font-style:normal;
-      font-size:11px;font-weight:700;letter-spacing:2px;color:#eff;text-shadow:0 0 4px #000,0 0 4px #000}
+ /* ---- barra de partida ------------------------------------------------------
+    LA MISMA pieza en los dos perfiles —barra redondeada con degradado, halo cian,
+    rango de combo con degradado metálico y el llenado hacia el rango siguiente
+    pegado abajo—, porque la identidad del juego no puede cambiar según la pantalla.
+    Lo que cambia es cuánto entra: en el teléfono sólo reloj, monedas y rango; en
+    escritorio, donde sobra ancho, también el nivel, la mejor marca, la precisión y
+    el estado de las dos habilidades.  Es el único lugar donde se leen los datos de
+    la partida: el h2 + p de texto suelto centrado del escritorio ya no existe.
+    Los valores de acá son los del teléfono, que es donde el espacio aprieta; lo que
+    agrega el escritorio va en su propio bloque, abajo. */
+ #bar{display:flex;align-items:stretch;position:relative;z-index:3;flex:none;
+      min-height:var(--barh);overflow:hidden;margin-bottom:6px;
+      border:1px solid #1ff5;border-radius:11px;
+      background:linear-gradient(180deg,#0c1524f2,#05070ef2);
+      box-shadow:0 0 14px #0ff2,inset 0 1px 0 #9ef3}
+ /* placa del nivel: sólo escritorio, que es donde hay ancho para nombrarlo */
+ #bmeta{display:none;flex-direction:column;justify-content:center;gap:3px;flex:none;
+      max-width:30%;padding:0 14px;border-right:1px solid #1ff4}
+ #bname{font-size:13px;letter-spacing:2px;color:#cff;white-space:nowrap;
+      overflow:hidden;text-overflow:ellipsis;text-shadow:0 0 10px currentColor}
+ #bpb{font-size:10px;letter-spacing:1px;opacity:.5;white-space:nowrap}
+ #binfo{display:flex;flex-direction:column;justify-content:center;gap:3px;
+      flex:1;min-width:0;padding:0 9px;overflow:hidden}
+ #bt{font-size:15px;letter-spacing:1px;color:#eff;font-variant-numeric:tabular-nums;
+      text-shadow:0 0 10px #0ff6}
+ #bc{font-size:11px;letter-spacing:2px;color:#f88;overflow:hidden;
+      white-space:nowrap;text-overflow:clip}
+ /* precisión, penalización, teclas y habilidades: en el teléfono no hay renglón y
+    se leen en el menú; en escritorio van acá y #sub deja de hacer falta */
+ #bstat{display:none;font-size:11px;letter-spacing:1px;opacity:.6;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ #bcombo{display:flex;align-items:center;gap:7px;flex:none;padding:0 11px 0 8px;
+      border-left:1px solid #1ff4;box-shadow:inset 0 0 22px -8px var(--rc,#4cf)}
+ #brank{font-size:29px;transform:skewX(-11deg);transform-origin:50% 60%;
+      min-width:34px;text-align:center}
+ #brank.up{animation:rankup .5s ease-out}
+ #bx{font-size:15px;font-weight:bold;letter-spacing:0;color:var(--rc,#4cf);
+      text-shadow:0 0 10px currentColor}
+ #bmax{display:none;font-size:9.5px;letter-spacing:1px;opacity:.5;white-space:nowrap}
+ /* el llenado es el progreso HACIA EL RANGO SIGUIENTE: se vacía y vuelve a subir
+    en cada ascenso, que es lo que hace que la racha se sienta */
+ #bfill{position:absolute;left:0;bottom:0;height:4px;width:0;color:var(--rc,#4cf);
+      background:currentColor;box-shadow:0 0 10px currentColor,0 0 22px currentColor;
+      opacity:calc(.55 + var(--bop,0)*.45);transition:width .12s linear}
+ #bar.up{animation:barup .45s ease-out}
+ @keyframes barup{0%{background:#fff;box-shadow:0 0 34px #fff}
+      to{background:linear-gradient(180deg,#0c1524f2,#05070ef2)}}
+
+ /* ---- escritorio: la misma barra, con lo que en el teléfono no entra ---------
+    Sin teclado virtual encima sobra ancho, así que la barra crece y suma la placa
+    del nivel (nombre + mejor marca), la línea de precisión / penalización /
+    habilidades y el récord de combo al lado del rango.  Nada de esto cambia el
+    lenguaje visual: son las mismas cajas, el mismo degradado y el mismo halo. */
+ :root:not(.lite) #bar{min-height:66px;margin-bottom:9px}
+ :root:not(.lite) #binfo{padding:0 14px}
+ :root:not(.lite) #bt{font-size:19px}
+ :root:not(.lite) #bc{font-size:11.5px;letter-spacing:1px}
+ :root:not(.lite) #bstat{display:block}
+ /* el rango es una letra italica y con halo: se sale de su caja, asi que la
+    columna del récord respira un poco mas que en el teléfono */
+ :root:not(.lite) #bcombo{display:grid;grid-template-columns:auto auto;
+      align-items:center;column-gap:15px;padding:0 16px 0 14px}
+ :root:not(.lite) #brank{grid-row:1/3;font-size:36px;min-width:44px}
+ :root:not(.lite) #bx{font-size:17px}
+ :root:not(.lite) #bmax{display:block}
+ :root:not(.lite) #bfill{height:5px}
+
+ /* ---- escritorio: dos columnas ----------------------------------------------
+    El tablero manda y a la derecha va la columna de servicio —log de teclas y
+    ayuda—, que antes se apilaba abajo y dejaba al laberinto chico en el medio con
+    mucho aire alrededor.  Los botones siguen en fila, cruzando las dos columnas:
+    en escritorio no hace falta esconderlos en una hamburguesa.  El :not(.lite) no
+    sobra: una tablet táctil ancha entra igual en el ancho de esta consulta y ahí
+    manda el perfil del teléfono. */
+ @media (min-width:860px){
+  /* la columna del tablero mide EXACTAMENTE --w: con 'auto' la fila de botones,
+     que cruza las dos columnas, estiraba la del tablero con su ancho maximo y
+     empujaba la columna lateral lejos del laberinto */
+  :root:not(.lite) body{display:grid;justify-content:center;align-content:center;
+       align-items:start;                         /* el flex de arriba centraba todo */
+       grid-template-columns:var(--w) minmax(196px,248px);gap:9px 16px;padding:14px 10px}
+  /* #stage se disuelve (display:contents) para que la barra pueda cruzar LAS DOS
+     columnas: es el ancho de mas del escritorio el que hace que entren el nivel,
+     la mejor marca y la linea de precision.  Sus hijos pasan a ser celdas de la
+     grilla; en el telefono #stage sigue siendo la caja que le mide el alto al
+     laberinto, asi que esto vive solo aca. */
+  :root:not(.lite) #stage{display:contents}
+  :root:not(.lite) #bar{grid-column:1/-1;grid-row:1;margin-bottom:0}
+  /* con la barra cruzando las dos columnas por fin entra todo en un renglon: el
+     reloj y el candado arriba, la linea de precision abajo.  En una ventana
+     angosta —el iframe del Artifact puede serlo— esto no aplica y las tres cosas
+     se apilan como en el telefono, que es lo unico que ahi entra sin recortarse */
+  :root:not(.lite) #bmeta{display:flex}
+  :root:not(.lite) #binfo{display:grid;grid-template-columns:auto minmax(0,1fr);
+       align-items:baseline;column-gap:14px;row-gap:3px}
+  :root:not(.lite) #bt{grid-row:1}
+  :root:not(.lite) #bc{grid-row:1;padding-right:4px}
+  :root:not(.lite) #bstat{grid-column:1/-1}
+  :root:not(.lite) #board{grid-column:1;grid-row:2}
+  /* el cartel del tutorial cruza las dos columnas: además de leerse mejor ancho,
+     deja libre la fila para que los textos de ayuda sigan apilados sin huecos */
+  :root:not(.lite) #tut{grid-column:1/-1;grid-row:3;margin-top:0}
+  :root:not(.lite) #log{grid-column:2;grid-row:2;align-self:stretch;
+       width:auto;max-height:none;text-align:left}
+  :root:not(.lite) p.help{grid-column:2;max-width:none;text-align:left}
+  :root:not(.lite) #hkb{display:none}      /* instrucciones de teléfono, no de acá */
+  :root:not(.lite) #btns{grid-column:1/-1;grid-row:7;max-width:none;justify-content:flex-start}
+ }
 
  /* ---- extra vibes: qué late ------------------------------------------------
     --bop va de 0 a 1 en cada bombo del mp3 y lo publica el JS en <html>.  Antes
@@ -129,13 +229,15 @@
  .vibes body{background:
       radial-gradient(125% 85% at 50% 0%,rgba(0,180,255,calc(.045 + var(--bop,0)*.075)),#0000 62%),
       #08080c}
- .vibes h2{filter:drop-shadow(0 0 calc(var(--bop,0)*12px) #0ffa)}
- .vibes #sub{opacity:calc(.5 + var(--bop,0)*.35)}
  .vibes #log{border-color:rgba(70,225,255,calc(.22 + var(--bop,0)*.6));
       box-shadow:0 0 calc(4px + var(--bop,0)*18px) #0ff4}
  .vibes #log span{opacity:calc(.78 + var(--bop,0)*.22)}
- .vibes #cmeter{box-shadow:0 0 calc(6px + var(--bop,0)*22px) currentColor}
- .vibes #cbar{opacity:calc(.5 + var(--bop,0)*.5)}
+ .vibes #bt{text-shadow:0 0 calc(6px + var(--bop,0)*18px) #0ff9}
+ .vibes #bstat{opacity:calc(.5 + var(--bop,0)*.3)}
+ .vibes #bmeta{border-color:rgba(60,220,255,calc(.25 + var(--bop,0)*.55))}
+ .vibes #bfill{box-shadow:0 0 calc(9px + var(--bop,0)*16px) currentColor,
+      0 0 calc(20px + var(--bop,0)*22px) currentColor}
+ .vibes p.help{opacity:calc(.4 + var(--bop,0)*.2)}
  .vibes #board{transform:scale(calc(1 + var(--bop,0)*.007))}
  .vibes #tut{box-shadow:0 0 calc(8px + var(--bop,0)*24px) #0f93}
  .vibes #tbar i{box-shadow:0 0 calc(4px + var(--bop,0)*14px) #6f9}
@@ -227,41 +329,16 @@
  .lite #stage{width:min(var(--w),
       calc((min(var(--vh,100dvh),100dvh) - 20px - var(--barh) - var(--tuth,0px))*var(--ar)));
       max-width:100%;display:flex;flex-direction:column;flex:none}
- .lite h2,.lite #sub,.lite #cmeter,.lite #log,.lite p.help{display:none}
+ .lite #log,.lite p.help{display:none}
  .lite #menu p.help{display:block;max-width:none;font-size:11px;margin-top:12px;opacity:.5}
  .lite #tut{font-size:11.5px;padding:7px 9px;margin-top:5px}
 
- /* barra de info: SIEMPRE arriba del laberinto, en el flujo, dos zonas.
-    Izquierda los datos de la partida, derecha el rango de combo bien grande. */
- .lite #bar{display:flex;align-items:stretch;gap:0;position:relative;z-index:3;flex:none;
-      height:var(--barh);overflow:hidden;margin-bottom:6px;
-      border:1px solid #1ff5;border-radius:11px;
-      background:linear-gradient(180deg,#0c1524f2,#05070ef2);
-      box-shadow:0 0 14px #0ff2,inset 0 1px 0 #9ef3}
+ /* La barra es la de arriba, la misma que el escritorio.  Acá sólo se le clava el
+    alto: de ese número sale, en .lite #stage, el ancho que le queda al laberinto. */
+ .lite #bar{height:var(--barh)}
  .lite #burger{display:block;flex:none;font:inherit;font-size:17px;color:#9ef;
       background:none;border:0;border-right:1px solid #1ff4;padding:0 12px;
       cursor:pointer;-webkit-tap-highlight-color:transparent}
- .lite #binfo{display:flex;flex-direction:column;justify-content:center;gap:3px;
-      flex:1;min-width:0;padding:0 9px;overflow:hidden}
- .lite #bt{font-size:15px;letter-spacing:1px;color:#eff;font-variant-numeric:tabular-nums;
-      text-shadow:0 0 10px #0ff6}
- .lite #bc{font-size:11px;letter-spacing:2px;color:#f88;overflow:hidden;
-      white-space:nowrap;text-overflow:clip}
- .lite #bcombo{display:flex;align-items:center;gap:7px;flex:none;padding:0 11px 0 8px;
-      border-left:1px solid #1ff4;box-shadow:inset 0 0 22px -8px var(--rc,#4cf)}
- .lite #brank{font-size:29px;transform:skewX(-11deg);transform-origin:50% 60%;
-      min-width:34px;text-align:center}
- .lite #brank.up{animation:rankup .5s ease-out}
- .lite #bx{font-size:15px;font-weight:bold;letter-spacing:0;color:var(--rc,#4cf);
-      text-shadow:0 0 10px currentColor}
- /* el llenado es el progreso HACIA EL RANGO SIGUIENTE: se vacía y vuelve a subir
-    en cada ascenso, que es lo que hace que la racha se sienta */
- .lite #bfill{position:absolute;left:0;bottom:0;height:4px;width:0;color:var(--rc,#4cf);
-      background:currentColor;box-shadow:0 0 10px currentColor,0 0 22px currentColor;
-      opacity:calc(.55 + var(--bop,0)*.45);transition:width .12s linear}
- .lite #bar.up{animation:barup .45s ease-out}
- @keyframes barup{0%{background:#fff;box-shadow:0 0 34px #fff}
-      to{background:linear-gradient(180deg,#0c1524f2,#05070ef2)}}
 
  /* con el teclado abierto la mitad de abajo no existe: los paneles arrancan arriba */
  .lite #menu{display:none;position:fixed;inset:0;z-index:55;background:#000d;
@@ -283,22 +360,19 @@
  .lite #ldet{padding:11px}
  .lite #lname{font-size:22px}
 </style>
-<h2 id=hud><span id=hudt>-</span><br><span id=hudx></span></h2>
-<p id=sub><span id=subt>-</span><span id=baby></span></p>
-<div id=cmeter><i id=cbar></i><b id=clab>-</b></div>
-<div id=log></div>
 <div id=stage>
- <div id=bar><button id=burger aria-label="Menú">&#9776;</button><div id=binfo><span id=bt>00:00:000</span><span id=bc>-</span></div><div id=bcombo><b id=brank class=rank>D</b><span id=bx>x0</span></div><i id=bfill></i></div>
+ <div id=bar><button id=burger aria-label="Menú">&#9776;</button><div id=bmeta><span id=bname>-</span><span id=bpb></span></div><div id=binfo><span id=bt>00:00:000</span><span id=bc>-</span><span id=bstat></span></div><div id=bcombo><b id=brank class=rank>D</b><span id=bx>x0</span><span id=bmax></span></div><i id=bfill></i></div>
  <div id=board><canvas id=cv></canvas><img id=boom alt=""><b id=rpop class=rank></b></div>
  <div id=tut><p id=tmsg>-</p><div class=trow><span id=tnum>1/6</span><span id=tbar><i id=tfill></i></span><button id=tskip>SALTAR &#9654;</button></div></div>
 </div>
+<div id=log></div>
 <div id=scare></div>
 <input id=kb inputmode=text enterkeyhint=done autocomplete=off autocorrect=off autocapitalize=off spellcheck=false aria-label="Teclado del juego">
 <div id=menu><div>
   <h3>&#9776; MENÚ</h3>
   <div id=mstats>-</div>
   <div id=btns><button id=tec>&#9000; TECLADO</button><button id=fs>&#9633; PANTALLA COMPLETA</button><button id=nvl>&#9638; NIVELES</button><button id=mus>&#9835; MUSICA</button><button id=vibe>&#9889; EXTRA VIBES</button><button id=how>? TUTORIAL</button><button id=rst>&#10227; REINICIAR</button></div>
-  <p class=help>En el teléfono: tocá el laberinto o <b>TECLADO</b> para abrir el teclado y escribí las letras.</p>
+  <p class=help id=hkb>En el teléfono: tocá el laberinto o <b>TECLADO</b> para abrir el teclado y escribí las letras.</p>
   <p class=help>Letra = avanzar &middot; QTE al chocar con enemigo &middot; <span class=k>acierto</span> <span class=b>error</span> <span class=l>tarde</span> <span class=q>qte</span></p>
   <p class=help><b>DETERMINACIÓN</b>: cada 3 gatos vencidos ganás una letra <span class=v>violeta</span> que atraviesa un muro.<br>
      <b>MAULLIDO</b>: con el combo al tope, ESPACIO o ENTER ahuyenta 2,5 s a los gatos cercanos (45 s de espera).</p>
@@ -330,9 +404,9 @@ const $=i=>document.getElementById(i);
 const cv=$('cv'), x=cv.getContext('2d'),
       logEl=$('log'), boom=$('boom'), scare=$('scare'), rst=$('rst'), mus=$('mus'),
       skill=$('skill'), sacc=$('sacc'), byes=$('byes'), bno=$('bno'), sgif=$('sgif'),
-      kb=$('kb'), tec=$('tec'), cmeter=$('cmeter'), cbar=$('cbar'), clab=$('clab'),
+      kb=$('kb'), tec=$('tec'),
       how=$('how'), vibe=$('vibe'), rpop=$('rpop'), nvl=$('nvl'),
-      hudt=$('hudt'), hudx=$('hudx'), subt=$('subt'), babyEl=$('baby'),
+      bname=$('bname'), bpb=$('bpb'), bstat=$('bstat'), bmax=$('bmax'),
       bar=$('bar'), bt=$('bt'), bc=$('bc'), bx=$('bx'), bfill=$('bfill'), brank=$('brank'),
       bcombo=$('bcombo'), burger=$('burger'), menu=$('menu'), mstats=$('mstats'), fsb=$('fs'),
       lvl=$('lvl'), llist=$('llist'), ltag=$('ltag'), lname=$('lname'), ldesc=$('ldesc'),
@@ -772,7 +846,7 @@ function banner(T,at,a,b,col,dy){
 
 const root=document.documentElement;
 let lastW,lastLab,lastSc,lastBop,            // el frame no reescribe estilos que no cambiaron
-    lastT,lastEx,lastSub,lastBaby,lastRank=0,hudAt=0,lastDraw=0;
+    lastT,lastEx,lastSub,lastMeta,lastRank=0,hudAt=0,lastDraw=0;
 const REVEAL_MS=5000;                        // lo que dura encendido un farol
 // ---- niebla horneada -------------------------------------------------------
 // Evaluar un degradado radial sobre el tablero entero costaba más que TODO el
@@ -821,7 +895,7 @@ function rankShow(i,up){
   brank.className='rank'; void brank.offsetWidth;   // reiniciar la animación
   brank.className=up?'rank up':'rank';
   bar.className=''; void bar.offsetWidth; bar.className=up?'up':'';
-  bfill.style.color=r.col; cmeter.style.color=r.col;
+  bfill.style.color=r.col;
   if(up){ rpop.textContent=r.n+'!';
           const base='rank'+(rpopPlace()==='l'?' l':'');
           rpop.className=base; void rpop.offsetWidth; rpop.className=base+' show' }
@@ -1117,53 +1191,49 @@ function frame(){
   // nodos y recalculaba estilo y layout del encabezado 60 veces por segundo.
   // Ahora cada dato tiene su <span> fijo y sólo se escribe el que cambió; en móvil
   // el reloj además se refresca cada PERF.hudMs (los milisegundos igual no se leen).
+  //
+  // La barra es LA MISMA en los dos perfiles —reloj y monedas a la izquierda, rango
+  // de combo a la derecha, llenado hacia el rango siguiente abajo—: lo único que
+  // cambia es cuánto texto entra.  En el teléfono el ancho da para el dato y nada
+  // más (las habilidades van en iconos y lo secundario se lee en el menú); en
+  // escritorio hay lugar para la frase entera, el nivel, la mejor marca, la
+  // precisión y el récord de combo.
   const falta=LV.coins-got, tms=(win?tEnd:(t0?T-t0:0))+pen, pb=bests[LV.id];
   const ri=rankI();                          // el rango manda el color de toda la GUI
   if(ri!==lastRank){ rankShow(ri,ri>lastRank); lastRank=ri }
+  if(!PERF.hudMs||T-hudAt>=PERF.hudMs||win){
+    hudAt=T;
+    const line=fmt(tms);
+    if(line!==lastT){ bt.textContent=line; lastT=line }
+  }
+  const mon='\u25CF'.repeat(got)+'\u25CB'.repeat(falta),
+        lock=win?'\u{1F3C1} GANASTE!  '+mon
+            :MOBILE?(falta?'\u{1F512}':'\u{1F513}')+mon+habIco(T)
+            :(falta?`\u{1F512} SALIDA BLOQUEADA · faltan ${falta} ${falta==1?'moneda':'monedas'}`
+                   :'\u{1F513} SALIDA ABIERTA')+'  '+mon;
+  if(lock!==lastEx){ bc.textContent=lock; bc.style.color=falta&&!win?'#f88':'#0f9'; lastEx=lock }
+  const lab='x'+combo;
+  if(lab!==lastLab){ bx.textContent=lab; lastLab=lab }
+  const w=(rankFill()*100).toFixed(1)+'%';
+  if(w!==lastW){ bfill.style.width=w; lastW=w }
+  const sc=(1+cpop*.45+bop*.09).toFixed(2);  // cada acierto —y cada beat— golpea la letra
+  if(sc!==lastSc){ brank.style.transform=`skewX(-11deg) scale(${sc})`; lastSc=sc }
   if(MOBILE){
-    // Teléfono: UNA barra fija arriba del laberinto (nunca lo tapa ni se muda de
-    // borde).  A la izquierda el reloj y las monedas; a la derecha el rango de
-    // combo bien grande, con su medidor hacia el rango siguiente.
-    if(T-hudAt>=PERF.hudMs||win){
-      hudAt=T;
-      const line=fmt(tms);
-      if(line!==lastT){ bt.textContent=line; lastT=line }
-    }
-    const lock=(win?'\u{1F3C1} GANASTE'
-                  :(falta?'\u{1F512}':'\u{1F513}')+'\u25CF'.repeat(got)+'\u25CB'.repeat(falta))
-               +habIco(T);
-    if(lock!==lastEx){ bc.textContent=lock; bc.style.color=falta&&!win?'#f88':'#0f9'; lastEx=lock }
-    const lab='x'+combo;
-    if(lab!==lastLab){ bx.textContent=lab; lastLab=lab }
-    const w=(rankFill()*100).toFixed(1)+'%';
-    if(w!==lastW){ bfill.style.width=w; lastW=w }
-    const sc=(1+cpop*.45+bop*.09).toFixed(2);  // cada acierto —y cada beat— golpea la letra
-    if(sc!==lastSc){ brank.style.transform=`skewX(-11deg) scale(${sc})`; lastSc=sc }
     // lo secundario (precisión, penalización, récord) se lee en el menú
     if(menuOn){ const sb=stats(); if(sb!==lastSub){ mstats.textContent=sb; lastSub=sb } }
   } else {
-    if(!PERF.hudMs||T-hudAt>=PERF.hudMs||win){
-      hudAt=T;
-      const line=`${LV.name}  ${fmt(tms)}s  ${'*'.repeat(got)}${'.'.repeat(falta)}`
-                 +(pb?`  PB ${fmt(pb)}s`:'')+(win?'  GANASTE!':'');
-      if(line!==lastT){ hudt.textContent=line; lastT=line }
+    const sb=`precisión ${Math.round(acc()*100)}%  ·  pen +${fmt(pen)}  ·  teclas ${log.length}`
+             +habTxt(T)+(baby?`  ·  BABY MODE ${baby}`:'');
+    if(sb!==lastSub){ bstat.textContent=sb; lastSub=sb }
+    // la placa del nivel y el récord de combo cambian de a poco: una sola clave
+    // los cubre a los tres y así el cuadro no toca tres nodos al pedo
+    const meta=`${LV.id}|${pb||0}|${maxCombo}`;
+    if(meta!==lastMeta){
+      bname.textContent=LV.name; bname.style.color=LV.col;
+      bpb.textContent=pb?`MEJOR ${fmt(pb)}s`:'sin marca todavía';
+      bmax.textContent=`RÉCORD x${maxCombo}`;
+      lastMeta=meta;
     }
-    const lock=falta>0?`\u{1F512} SALIDA BLOQUEADA · faltan ${falta} ${falta==1?'moneda':'monedas'}`
-                    :'\u{1F513} SALIDA ABIERTA';
-    if(lock!==lastEx){ hudx.textContent=lock; hudx.style.color=falta?'#f88':'#0f9'; lastEx=lock }
-    const sb=`precision ${Math.round(acc()*100)}%  ·  pen +${fmt(pen)}  ·  teclas ${log.length}`+habTxt(T);
-    if(sb!==lastSub){ subt.textContent=sb; lastSub=sb }
-    const bb=baby?`  ·  BABY MODE ${baby}`:'';
-    if(bb!==lastBaby){ babyEl.textContent=bb; lastBaby=bb }
-
-    // medidor de combo: sólo se escribe cuando algo cambió
-    const w=(comboFill()*100).toFixed(1)+'%';
-    if(w!==lastW){ cbar.style.width=w; lastW=w }
-    const rk=RANKS[ri];
-    const lab=`${rk.k} · ${rk.n}  ·  COMBO x${combo}  ·  RECORD x${maxCombo}`;
-    if(lab!==lastLab){ clab.textContent=lab; lastLab=lab }
-    const sc=(1+bop*.06+cpop*.12).toFixed(3);
-    if(sc!==lastSc){ cmeter.style.transform=`scale(${sc})`; lastSc=sc }
   }
 }
 

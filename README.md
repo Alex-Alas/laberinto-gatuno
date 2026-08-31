@@ -173,7 +173,8 @@ abajo, donde el teclado lo va a tapar igual.
 
 - Una sola **barra de info**, fija arriba del laberinto y en el flujo: nunca lo tapa ni
   se muda de borde. A la izquierda el reloj y las monedas; a la derecha el rango de combo
-  con su medidor.
+  con su medidor. Es **la misma barra que usa el escritorio** (ver abajo): el CSS común
+  son estos valores, los del teléfono, y el escritorio sólo agrega lo que allá no entra.
 - El resto de los botones vive en el **menú hamburguesa**, que congela el reloj mientras
   está abierto (igual que el selector de nivel y el diálogo de baby mode).
 - El alto lo resuelve el CSS: `--ar` (la proporción `C/R` del nivel) y `--vh` (el alto
@@ -210,6 +211,44 @@ cierran:
 
 `fit()` ignora `visualViewport` si hay pinch-zoom (`scale>1.02`): ahí el viewport visual
 se achica por el zoom y la página se plegaría sola.
+
+## GUI del escritorio
+
+El escritorio tenía otra cosa: un `h2` y un `p` de texto centrado con los datos de la
+partida, una barrita de combo con la etiqueta adentro, y el log y la ayuda apilados
+abajo, que dejaban al laberinto chico en el medio de mucho aire. Ahora usa **la misma
+barra** —mismo degradado, mismo halo, mismo rango con degradado metálico y `skewX`, mismo
+llenado hacia el rango siguiente— y gasta el ancho de más en lo que en el teléfono no
+entra:
+
+- **La placa del nivel** a la izquierda, con el nombre en el color del nivel y la mejor
+  marca (`#bmeta`).
+- **Dos renglones** en el centro: reloj y candado + monedas arriba; precisión,
+  penalización, teclas y el estado de **DETERMINACIÓN** y **MAULLIDO** abajo — lo que
+  antes vivía en `#sub`, y lo que en el teléfono se lee en el menú.
+- **El récord de combo** debajo del `x` del rango (`#bmax`).
+
+El layout es una consola de dos columnas: la barra cruza las dos, el tablero manda a la
+izquierda, y a la derecha van el log de teclas —estirado al alto del tablero— y los
+textos de ayuda. Los botones siguen en **fila** abajo, cruzando las dos columnas: en
+escritorio no hace falta esconderlos en una hamburguesa. El cartel del tutorial también
+cruza las dos, así los textos de ayuda quedan apilados sin huecos.
+
+Detalles que no se ven pero mandan:
+
+- Las reglas van con `:root:not(.lite)`, no con "todo lo que no sea móvil": una tablet
+  táctil ancha entra igual en la consulta de ancho y ahí manda el perfil del teléfono.
+- La grilla vive dentro de `@media (min-width:860px)`. Debajo de eso —el iframe del
+  Artifact puede ser angosto— la barra apila sus tres renglones como en el teléfono, que
+  es lo único que entra ahí sin recortarse, y todo vuelve a la columna centrada.
+- La columna del tablero mide **exactamente `--w`**: con `auto`, la fila de botones (que
+  cruza las dos columnas) estiraba la columna del tablero con su ancho máximo y empujaba
+  la columna lateral lejos del laberinto.
+- `#stage` se disuelve con `display:contents` sólo acá, para que la barra pueda cruzar
+  las dos columnas. En el teléfono sigue siendo la caja que le mide el alto al laberinto.
+- El latido de extra vibes se mudó con la GUI: donde antes latían el `h2`, el `#sub` y el
+  medidor viejo, ahora laten el reloj, la línea de precisión, la placa del nivel y el
+  llenado del rango.
 
 ## Rendimiento
 
@@ -349,8 +388,21 @@ limitado a `--vh`, el `#kb` anclado arriba y `unscroll()` + `preventScroll` en e
 
 El 23 y el 24 leen el archivo: que no quede monoespaciado suelto (ni en el CSS ni en
 ningún `x.font=` del canvas), que el `body` use `--ui`, y que el latido de extra vibes
-llegue por lo menos a diez selectores —`#log`, `#cmeter`, `#tut`, `#board`, `#btns` y
-`#bar` entre ellos— y se encienda con la clase `.vibes`.
+llegue por lo menos a diez selectores —`#log`, `#tut`, `#board`, `#btns`, `#bar`,
+`#bcombo` y `#bfill` entre ellos— y se encienda con la clase `.vibes`.
+
+El 25 es la GUI del escritorio: que no queden ni el medidor de combo viejo ni el `h2`+`p`
+sueltos (ni en el CSS ni en el JS), que el escritorio ya no esconda `#bar`, que la barra
+traiga sus zonas de escritorio en el markup y que el JS las escriba, que el log y la
+ayuda estén en la columna lateral y los botones en una fila que cruza las dos, y que
+**ninguna** regla de la grilla se escape del `:root:not(.lite)` —si una se escapara, una
+tablet ancha se llevaría el layout de escritorio con el teclado del teléfono encima—.
+Además, en el contexto de escritorio (17) se chequea en caliente que la barra muestre el
+nivel y que el medidor del rango se dibuje.
+
+> Los `grep` sobre el `<script>` van contra `code`, que es el `src` con los `data:` URI
+> afuera: los assets van embebidos en base64 y ahí cualquier palabra corta aparece por
+> azar (`subt`, `clab`, lo que sea).
 
 > Ojo al escribir tests: los harness se pasan como *template literals*, así que ahí adentro
 > una barra invertida no sobrevive (`\b` es un backspace, `\s` es una "s"). Nada de regex
