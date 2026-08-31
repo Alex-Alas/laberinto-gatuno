@@ -20,8 +20,10 @@ const mkctx=coarse=>{
     addEventListener(k,f){ if(k==='fullscreenchange') fsl.push(f) },
     fullscreenEnabled:true, fullscreenElement:null,
     exitFullscreen(){ doc.fullscreenElement=null; fire(); return Promise.resolve() }};
-  const root={style:{setProperty(k,v){ctx.css[k]=v}},cls:'',
-              classList:{add(c){root.cls=c},remove(c){root.cls=''}},
+  const cls=new Set();
+  const root={style:{setProperty(k,v){ctx.css[k]=v}},
+              get cls(){ return [...cls].join(' ') },
+              classList:{add:c=>cls.add(c),remove:c=>cls.delete(c),contains:c=>cls.has(c)},
               requestFullscreen(){ doc.fullscreenElement=root; fire();
                                    return Promise.resolve() }};
   doc.documentElement=root;
@@ -48,6 +50,7 @@ const press=k=>onkeydown({key:k,preventDefault(){}});
 const step=()=>press(letters[Object.keys(letters)[0]]);   // una letra válida cualquiera
 const wrong=()=>press([...POOL].find(c=>!Object.values(letters).includes(c)));
 const cell=()=>p.y*C+p.x;
+const has=(e,c)=>String(e.className||'').split(' ').indexOf(c)>=0;
 const juega=id=>{ setLevel(id); gen(); foes=[] };          // nivel limpio y sin gatos
 function path(from,to){const prev={},q=[from],seen=new Set([from]);
  while(q.length){const c=q.shift(); if(c===to)break; const cx=c%C,cy=c/C|0;
@@ -264,12 +267,16 @@ if(bopAt(KICK+BEAT/2)>.4) throw new Error('el bop no decae entre beats');
 if(bopAt(KICK+BEAT*.9)>.1) throw new Error('el bop llega alto al beat siguiente');
 BGM.paused=false; vibe.onclick();
 if(!vibes||track()!==VIBE) throw new Error('no cambio a la pista de vibes');
+if(!document.documentElement.classList.contains('vibes'))
+  throw new Error('extra vibes no marco <html>: el CSS del latido no se enciende');
 if(!BGM.paused||VIBE.paused) throw new Error('las dos pistas suenan a la vez');
 if(cell()!==posA||got!==gotA||dur()!==durA||foeMs()!==foeA||qteLen()!==qA)
   throw new Error('extra vibes toco el gameplay');
 mus.onclick(); if(!VIBE.muted) throw new Error('el mute no llega a la pista de vibes'); mus.onclick();
 vibe.onclick();
 if(vibes||track()!==BGM||!VIBE.paused) throw new Error('no volvio a la pista normal');
+if(document.documentElement.classList.contains('vibes'))
+  throw new Error('apagar extra vibes no saco la clase de <html>');
 
 // 14) tutorial guiado: cada paso enciende un sistema y no avanza hasta usarlo
 juega('tutorial');
@@ -362,6 +369,136 @@ got=0; unlockT=0;
 
 frame();
 
+// 16b) RESPIRO: vencer a un gato congela 1.5s el reloj de la letra y a los gatos
+juega('clasico'); gen(); foes=[];
+if(GRACE_MS!==1500) throw new Error('el respiro tiene que durar 1.5s');
+step();                                          // arranca el reloj
+qteStart(); qte.seq.slice().forEach(k=>press(k));
+if(!(graceT>now())) throw new Error('ganar el QTE no congelo el reloj de la letra');
+if(graceT-now()>GRACE_MS+60) throw new Error('el respiro dura mas de lo pactado');
+foes=[far()]; prevFoe=[];
+const fA=foes[0]; shownAt=now()-1e6; foeTick=now()-1e6;
+lastDraw=0; frame();
+if(now()-shownAt>60) throw new Error('el respiro no congelo la ventana de la letra');
+if(foes[0]!==fA) throw new Error('los gatos dieron un paso durante el respiro');
+if(fails) throw new Error('el respiro dejo pasar una penalizacion por tarde');
+// y al terminarse vuelve todo a correr
+graceT=0; shownAt=now()-1e6; foeTick=now()-1e6; lastDraw=0; frame();
+if(foes[0]===fA) throw new Error('los gatos no volvieron a moverse al terminar el respiro');
+// fallar el QTE no regala respiro: para eso ya esta el jumpscare
+gen(); foes=[]; step(); graceT=0;
+qteStart(); press([...POOL].find(c=>c!==qte.seq[0])); scareHide();
+if(graceT>now()) throw new Error('perder el QTE no deberia dar respiro');
+
+// 16c) DETERMINACION: cada 3 gatos vencidos, una letra que atraviesa un muro
+juega('clasico'); gen(); foes=[]; det=0; qteWins=0;
+if(DET_EVERY!==3) throw new Error('la determinacion tiene que pedir 3 gatos');
+for(let i=0;i<2;i++){ qteStart(); qte.seq.slice().forEach(k=>press(k)) }
+if(det!==0) throw new Error('la carga llego antes de los 3 gatos');
+qteStart(); qte.seq.slice().forEach(k=>press(k));
+if(det!==1) throw new Error('3 gatos vencidos no dieron la carga');
+// parada en una celda que TENGA un muro interior (en una esquina pueden ser todos del borde)
+let ci=-1;
+for(let i=0;i<C*R&&ci<0;i++){ const cx=i%C, cy=i/C|0;
+  if(['n','e','s','w'].some(d=>g[i][d]&&cx+DV[d][0]>=0&&cy+DV[d][1]>=0
+                                      &&cx+DV[d][0]<C&&cy+DV[d][1]<R)) ci=i }
+p={x:ci%C,y:ci/C|0}; trail=[]; deal();
+const muros=Object.keys(phase);
+if(!muros.length) throw new Error('con carga los muros deberian tener letra');
+if(muros.some(d=>!g[cell()][d])) throw new Error('marco como muro una salida abierta');
+if(new Set(Object.values(letters)).size!==Object.keys(letters).length)
+  throw new Error('dos direcciones con la misma letra');
+for(const d of muros){ const [X,Y]=LP[d](p.x,p.y);
+  if(X-12<0||Y-12<0||X+12>C*S||Y+12>R*S) throw new Error('letra de muro fuera del canvas') }
+const antesD=cell(), dm=muros[0], destD=antesD+{n:-C,e:1,s:C,w:-1}[dm];
+press(letters[dm]);
+if(cell()!==destD) throw new Error('la letra violeta no atraveso el muro');
+if(det!==0) throw new Error('atravesar no gasto la carga');
+if(Object.keys(phase).length) throw new Error('sin carga siguen apareciendo letras de muro');
+if(Object.keys(letters).some(d=>g[cell()][d])) throw new Error('sin carga hay letra sobre un muro');
+wrong(); if(cell()!==antesD) throw new Error('el retroceso no volvio atravesando el muro');
+// las cargas se acumulan hasta el tope y gen() las borra
+det=0; qteWins=0;
+for(let i=0;i<DET_EVERY*(DET_MAX+1);i++){ qteStart(); qte.seq.slice().forEach(k=>press(k)) }
+if(det!==DET_MAX) throw new Error('las cargas no toparon en DET_MAX');
+gen(); if(det||qteWins) throw new Error('la partida nueva arranco con determinacion');
+
+// 16d) AHUYENTADOR: maullido con el combo al tope, 2.5s de huida y 45s de espera
+juega('clasico'); gen(); foes=[]; combo=0; meowAt=-1e9; scareUntil=0;
+if(MEOW_CD!==45000||MEOW_MS!==2500) throw new Error('el maullido cambio de numeros');
+step();
+if(meow()) throw new Error('maullo sin el combo al tope');
+combo=COMBO_MAX;
+if(!meowReady()) throw new Error('con el combo al tope deberia estar listo');
+if(!meow()) throw new Error('no maullo con el combo al tope');
+if(combo!==COMBO_MAX) throw new Error('el maullido no deberia gastar el combo');
+if(!(scareUntil>now())||scareUntil-now()>MEOW_MS+60) throw new Error('el susto no dura 2.5s');
+if(meow()) throw new Error('maullo dos veces sin esperar el cooldown');
+meowAt=now()-MEOW_CD+1000;
+if(meowReady()) throw new Error('el cooldown de 45s se corto antes');
+meowAt=now()-MEOW_CD-1;
+if(!meowReady()) throw new Error('el cooldown no se cumplio');
+// sin combo al tope no hay maullido por mas que el cooldown este listo
+combo=0;
+if(meowReady()||meow()) throw new Error('el maullido tiene que pedir SIEMPRE el combo al tope');
+// los gatos cercanos se ALEJAN y mientras huyen no abren QTE
+gen(); foes=[]; combo=COMBO_MAX; meowAt=-1e9; scareUntil=0;
+const dn=flow(); let cerca=-1, lejos=-1;
+for(let i=0;i<C*R;i++){
+  if(cerca<0&&dn[i]>=2&&dn[i]<=MEOW_R&&open(i).length>1) cerca=i;
+  if(lejos<0&&dn[i]>MEOW_R) lejos=i;
+}
+if(cerca<0||lejos<0) throw new Error('el tablero no da para probar el alcance del maullido');
+foes=[cerca]; prevFoe=[]; meow();
+const dC=flow()[foes[0]]; moveFoes();
+if(flow()[foes[0]]<=dC) throw new Error('el gato cercano no se alejo con el maullido');
+if(qte) throw new Error('un gato huyendo no deberia abrir un QTE');
+// el de lejos ni se entera: el maullido no cruza el laberinto entero
+foes=[lejos]; prevFoe=[]; Math.random=()=>0;
+const dL=flow()[lejos]; moveFoes(); qte=null;
+if(flow()[foes[0]]>=dL) throw new Error('el maullido no deberia llegar tan lejos');
+Math.random=rnd; scareUntil=0;
+// ESPACIO y ENTER son las teclas; el Enter de un boton del menu no se toca
+combo=COMBO_MAX; meowAt=-1e9; scareUntil=0;
+onkeydown({key:' ',preventDefault(){}});
+if(!(scareUntil>now())) throw new Error('ESPACIO no maullo');
+meowAt=-1e9; scareUntil=0;
+onkeydown({key:'Enter',preventDefault(){}});
+if(!(scareUntil>now())) throw new Error('ENTER no maullo');
+meowAt=-1e9; scareUntil=0;
+onkeydown({key:'Enter',preventDefault(){},target:{tagName:'BUTTON'}});
+if(scareUntil>now()) throw new Error('le robo el Enter a un boton del menu');
+// y el espacio del teclado del telefono, que no cuenta como letra
+meowAt=-1e9; scareUntil=0; const nEsp=log.length;
+kb.value=' '; kb.oninput();
+if(!(scareUntil>now())) throw new Error('el espacio del teclado del telefono no maullo');
+if(log.length!==nEsp) throw new Error('el espacio se conto como letra del laberinto');
+gen(); if(scareUntil||meowAt>-1e8) throw new Error('la partida nueva arranco con el maullido usado');
+combo=0;
+
+// 16e) el cartel del rango esquiva al gato en cualquier esquina
+juega('clasico');
+cv.clientWidth=cv.width; cv.clientHeight=cv.height;
+rpop.offsetWidth=150; rpop.offsetHeight=20;
+for(const q of [[0,0],[C-1,0],[0,R-1],[C-1,R-1],[(C/2)|0,0],[(C/2)|0,R-1]]){
+  p={x:q[0],y:q[1]};
+  rpopPlace();
+  const M=7,
+        L=rpop.style.left!=='auto'?parseInt(rpop.style.left):cv.width-M-150,
+        U=rpop.style.top !=='auto'?parseInt(rpop.style.top ):cv.height-M-20;
+  if(L<p.x*S+S&&L+150>p.x*S&&U<p.y*S+S&&U+20>p.y*S)
+    throw new Error('el cartel del rango tapa al gato en '+q);
+}
+// con el gato arriba a la derecha el cartel se va a la izquierda, y entra desde ahi
+p={x:C-1,y:0}; vis={x:C-1,y:0}; combo=0; lastRank=0; lastDraw=0; frame();
+combo=RANKS[RANKS.length-1].c; lastDraw=0; frame();
+if(!has(rpop,'l')) throw new Error('el cartel no se corrio del gato');
+if(!has(rpop,'show')) throw new Error('el cartel corrido no se animo');
+p={x:0,y:0}; vis={x:0,y:0}; combo=0; lastRank=0; lastDraw=0; frame();
+combo=RANKS[RANKS.length-1].c; lastDraw=0; frame();
+if(has(rpop,'l')) throw new Error('sin estorbo el cartel deberia quedarse a la derecha');
+combo=0; lastRank=0; juega('clasico');
+
 // 17) escritorio: el perfil lite NO se aplica, todo queda como estaba
 if(MOBILE) throw new Error('escritorio detectado como movil');
 if(!PERF.scan||PERF.glow!==1||PERF.fps||PERF.hudMs||PERF.dust!==1)
@@ -391,7 +528,7 @@ if(document.fullscreenElement) throw new Error('el boton no salio de pantalla co
 if(fsb.className) throw new Error('el boton quedo marcado al salir');
 if(fsb.style.display==='none') throw new Error('con API disponible el boton tiene que verse');
 
-console.log('OK 18/18 | partida completa:',teclas,'teclas, precision',prec+'%');
+console.log('OK 22/22 | partida completa:',teclas,'teclas, precision',prec+'%');
 `;
 
 // ---- 19) el mismo juego en un teléfono: perfil lite, gameplay intacto ----
@@ -442,9 +579,8 @@ combo=0; lastRank=0; lastDraw=0; frame();
 combo=RANKS[RANKS.length-1].c; lastDraw=0; frame();
 if(lastRank!==RANKS.length-1) throw new Error('la barra no siguio al rango');
 if(brank.className!=='rank up') throw new Error('el ascenso de rango no se festejo');
-if(rpop.className!=='rank show') throw new Error('no aparecio el nombre del rango');
+if(!has(rpop,'rank')||!has(rpop,'show')) throw new Error('no aparecio el nombre del rango');
 if(css['--rc']!==RANKS[RANKS.length-1].col) throw new Error('la GUI no tomo el color del rango');
-const antes=brank.className;
 combo=0; lastDraw=0; frame();
 if(lastRank!==0) throw new Error('no volvio a bajar de rango');
 if(brank.className==='rank up') throw new Error('bajar de rango no se festeja');
@@ -466,6 +602,15 @@ if(menuOn||paused) throw new Error('REINICIAR no cerro el menu');
 // sin primera tecla no hay reloj: cerrar el menú no puede inventarlo
 gen(); menuOpen(); pauseAt-=400; menuClose();
 if(t0) throw new Error('el menu arranco el reloj sin jugar');
+
+// ---- 20b) el maullido en el teléfono: no hay barra espaciadora a mano ----
+juega('clasico'); combo=COMBO_MAX; meowAt=-1e9; scareUntil=0;
+if(typeof bcombo.onclick!=='function') throw new Error('el rango de combo no es el boton del maullido');
+bcombo.onclick({stopPropagation(){}});
+if(!(scareUntil>now())) throw new Error('tocar el rango de combo no maullo');
+scareUntil=0; combo=0; meowAt=-1e9;
+bcombo.onclick({stopPropagation(){}});          // sin combo al tope: no maulla y no rompe
+if(scareUntil>now()) throw new Error('maullo sin el combo al tope desde el telefono');
 
 // ---- 21) pantalla completa automática: SOLO la primera vez ----
 fsAuto=true; document.exitFullscreen();
@@ -515,4 +660,25 @@ const lstage=bloque('.lite #stage');
 if(!/--tuth/.test(lstage)) throw new Error('el tablero no le reserva alto al tutorial');
 if(!/--vh/.test(lstage)) throw new Error('el tablero no se achica con el alto visible');
 
-console.log('OK 22/22 | el perfil lite prende solo en pointer:coarse y no toca la dificultad');
+// ---- 23) tipografía: una sola familia para la GUI y el tablero ----
+if(!/--ui:/.test(style)) throw new Error('falta la pila de fuentes --ui');
+if(!/Arial Narrow/.test(style)) throw new Error('la pila condensada no llego al CSS');
+if(!/var\(--ui\)/.test(bloque('body'))) throw new Error('el body no usa --ui');
+if(/ui-monospace/.test(style)||/ui-monospace/.test(src))
+  throw new Error('quedo monoespaciado suelto: la GUI y el tablero van con la misma familia');
+if(!/const CF=/.test(src)||!/const DF=/.test(src)) throw new Error('el canvas no tiene su pila de fuentes');
+for(const m of src.match(/x\.font=[^;]+;/g)||[])
+  if(!/CF|DF/.test(m)) throw new Error('un texto del tablero quedo fuera de la familia: '+m);
+
+// ---- 24) extra vibes: el latido llega a mucho mas que el canvas y la barra ----
+const vibSel=[...style.matchAll(/\.vibes\s+([#.\w]+)/g)].map(m=>m[1]);
+if(new Set(vibSel).size<10)
+  throw new Error('el latido llega a muy pocos elementos: '+new Set(vibSel).size);
+for(const sel of ['#log','#cmeter','#tut','#board','#btns','#bar'])
+  if(vibSel.indexOf(sel)<0) throw new Error('extra vibes no llega a '+sel);
+if(!/classList\[vibes\?'add':'remove'\]\('vibes'\)/.test(src))
+  throw new Error('el boton no enciende la clase .vibes');
+if(!/@keyframes rpopl/.test(style)) throw new Error('falta la entrada espejada del cartel del rango');
+if(/var\(--rc,#4cf\)22/.test(style)) throw new Error('quedo el degradado con el hex roto de 5 digitos');
+
+console.log('OK 26/26 | el perfil lite prende solo en pointer:coarse y no toca la dificultad');

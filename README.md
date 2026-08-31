@@ -59,6 +59,28 @@ el `soon`.
   del 75% del tiempo real.
 - Los gatos oscuros te persiguen. Al alcanzarte se abre un QTE: tecleás la secuencia
   completa antes de que se acabe la barra. Fallarlo cuesta +2 s y **3 pasos atrás**.
+- **Respiro:** ganar un QTE congela **1,5 s** la ventana de reacción *y* el paso de los
+  gatos. Salís del QTE con la pantalla llena de secuencia y sin saber para dónde ibas:
+  ese rato es para mirar el laberinto de nuevo, no para correr. El anillo se dibuja lleno,
+  en blanco y con un halo que respira, para que se vea que el reloj está quieto.
+
+## Habilidades
+
+Las dos se ganan jugando bien, no se compran ni se eligen; el HUD muestra el estado de
+cada una y en el teléfono van en iconos (`◈` por carga, `♪` cuando el maullido está listo).
+
+- **DETERMINACIÓN.** Cada **3 gatos vencidos** en un QTE te da una carga (hasta 3). Con
+  carga encima, los **muros** de tu celda también muestran letra: van en violeta y con el
+  círculo punteado, y teclear una te **atraviesa el muro** y gasta la carga. Sólo entran
+  los muros que dan a una celda del tablero — los del borde no llevan a ningún lado. El
+  gato lleva una órbita violeta con una pastilla por carga.
+- **AHUYENTADOR.** Con el **combo al tope** (`COMBO_MAX`, x15), **ESPACIO** o **ENTER**
+  sueltan un maullido: los gatos a **7 celdas o menos** dan media vuelta y corren para el
+  otro lado durante **2,5 s** —hasta el acechador del sótano, que no despista nunca— y
+  mientras huyen no abren QTE. Es el mismo campo de flujo del BFS, leído al revés. No
+  gasta el combo: el precio es un **cooldown de 45 s**, y el combo al tope se pide
+  **siempre**, también para el segundo maullido. En el teléfono no hay barra espaciadora
+  a mano, así que el botón es el bloque del rango de combo de la barra.
 
 ## Dificultad
 
@@ -92,6 +114,20 @@ del rango es una pila de fuentes pesadas (`Impact`, `Franklin Gothic Heavy`, `Ar
 Black`, `Roboto Condensed`) más itálica, `skewX(-11deg)`, degradado metálico con
 `background-clip:text` y un halo con `drop-shadow`.
 
+**El resto de la GUI habla la misma lengua.** Impact es un grotesco condensado, así que la
+interfaz dejó el monoespaciado y usa los condensados que ya trae el sistema (`--ui`:
+Arial Narrow en Windows y macOS, Roboto Condensed en Android, Avenir Next Condensed en iOS,
+Liberation Sans Narrow en Linux, con `font-stretch:87.5%` para las variables), y cae en
+Helvetica/Arial donde no haya ninguno. El tablero usa las dos: `CF` (el condensado) para
+todo lo que hay que **leer** a las apuradas —las letras de las salidas, la secuencia del
+QTE— y `DF` (el display del rango) sólo para los titulares. Nada se descarga: son fuentes
+que ya están.
+
+El cartel del nombre del rango **no tiene esquina fija**. En un tablero chico —o con el
+gato pegado a un borde— le caía encima: ahora `rpopPlace()` prueba las cuatro esquinas
+contra la celda del jugador y se queda en la primera libre (arriba-derecha primero, como
+siempre), y la entrada se espeja para que el cartel siempre venga desde afuera del tablero.
+
 Los efectos son osciladores de WebAudio, no más mp3 embebidos: el acierto es un blip de
 55 ms que **sube un semitono por punto de combo** (tope a los 12, para que no se vuelva
 chillón), el error un buzz descendente de sawtooth, el "tarde" uno más suave, la moneda
@@ -101,9 +137,17 @@ que no canse. El botón **MUSICA** silencia también los efectos. Sin WebAudio d
 
 ## Extra vibes
 
-Botón que cambia la música por `Before_the_Iron_Bell` (120 BPM) y pone a latir parte de
-la interfaz: el encabezado, el medidor de combo, el resplandor del canvas y el de las
-paredes. Es **sólo visual** — no toca la dificultad, ni el reloj, ni la IA.
+Botón que cambia la música por `Before_the_Iron_Bell` (120 BPM) y pone a latir **toda** la
+interfaz, no sólo el canvas: el encabezado y el subtítulo, el log de teclas, el medidor de
+combo y su barra, el panel del tutorial, los botones del menú, la barra del teléfono con su
+rango, el tablero entero (que escala 0,7%), su borde, las paredes, las monedas, los faroles,
+la salida, el aura del jugador, los chips de letra, las scanlines y un degradado de fondo
+detrás de todo. Es **sólo visual** — no toca la dificultad, ni el reloj, ni la IA.
+
+El botón pone la clase `.vibes` en `<html>` y de ahí cuelgan todas las reglas del latido:
+sin la clase el CSS ni las mira. Todo lo que pulsa lo hace sobre `transform`, `opacity`,
+`filter` o sombras de cajas chicas — nada que obligue a rehacer el layout 60 veces por
+segundo.
 
 La fase sale de `VIBE.currentTime`, no de un timer aparte, así que la imagen no se puede
 desincronizar del audio (ni siquiera al loopear). `bopAt()` es `(1 - fase)^1.8`: golpe
@@ -251,6 +295,15 @@ selector, que el selector pause el reloj y no deje jugar un modo que no existe, 
 sótano conserve niebla, faroles y acechador (y se pueda terminar), y que la salida sólo
 abra con todas las monedas del nivel.
 
+Del 16b al 16e van las dos habilidades y el cartel del rango: que ganar un QTE congele
+1,5 s la ventana **y** el paso de los gatos (y perderlo no dé respiro), que la carga de
+determinación llegue recién al tercer gato y tope en `DET_MAX`, que las letras de muro
+nunca caigan fuera del canvas ni pisen una salida abierta, que teclearlas atraviese el
+muro y gaste la carga, que el maullido pida el combo al tope **siempre** y respete los
+45 s, que los gatos cercanos se alejen y los lejanos ni se enteren, que ESPACIO y ENTER
+lo disparen sin robarle el Enter a un botón del menú, y que el cartel del rango no tape
+al gato en ninguna de las cuatro esquinas.
+
 El 17 y el 18 son el perfil de rendimiento: corren el mismo `index.html` en dos contextos
 —uno con `pointer:fine` y otro con `pointer:coarse`— y verifican que el lite prenda sólo
 en el segundo, que ahí los mp3 grandes no se precarguen, que el tope de cuadros saltee el
@@ -260,7 +313,16 @@ lo que **no** es del perfil: que las dos plataformas horneen las paredes con su 
 que la capa del latido aparezca recién al prender extra vibes.
 
 Del 19 al 22 va la GUI del teléfono: que la barra no se mude de borde, que el ascenso de
-rango se festeje (y bajar no), que el menú devuelva el tiempo pausado, que la pantalla
-completa automática sea de **una sola vez**, y —leyendo el `<style>` directo— que el
-perfil móvil quede alineado arriba y la barra siga estando antes del tablero en el
-markup.
+rango se festeje (y bajar no), que el bloque del rango sea el botón del maullido, que el
+menú devuelva el tiempo pausado, que la pantalla completa automática sea de **una sola
+vez**, y —leyendo el `<style>` directo— que el perfil móvil quede alineado arriba y la
+barra siga estando antes del tablero en el markup.
+
+El 23 y el 24 leen el archivo: que no quede monoespaciado suelto (ni en el CSS ni en
+ningún `x.font=` del canvas), que el `body` use `--ui`, y que el latido de extra vibes
+llegue por lo menos a diez selectores —`#log`, `#cmeter`, `#tut`, `#board`, `#btns` y
+`#bar` entre ellos— y se encienda con la clase `.vibes`.
+
+> Ojo al escribir tests: los harness se pasan como *template literals*, así que ahí adentro
+> una barra invertida no sobrevive (`\b` es un backspace, `\s` es una "s"). Nada de regex
+> dentro del harness — para eso está el helper `has(el,clase)`.
