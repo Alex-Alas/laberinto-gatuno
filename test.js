@@ -1,7 +1,8 @@
 // Tests del juego sin navegador: se extrae el <script> de index.html y se corre
 // en un vm con stubs mínimos de DOM/Audio/Image.  node test.js
 const fs=require('fs'), vm=require('vm'), path=require('path');
-const src=fs.readFileSync(path.join(__dirname,'index.html'),'utf8').match(/<script>([\s\S]*)<\/script>/)[1];
+const html=fs.readFileSync(path.join(__dirname,'index.html'),'utf8');
+const src=html.match(/<script>([\s\S]*)<\/script>/)[1];
 
 const noop=new Proxy(function(){},{get:()=>noop,apply:()=>noop,set:()=>true});
 const el=()=>({getContext:()=>noop,style:{},value:'',className:'',
@@ -26,7 +27,7 @@ const mkctx=coarse=>{
   doc.documentElement=root;
   const ctx={console,Int16Array,performance:{now:()=>Date.now()},requestAnimationFrame:()=>0,
     setTimeout:()=>0,clearTimeout:()=>0,addEventListener:()=>0,innerWidth:375,
-    visualViewport:{width:375,addEventListener:()=>0},
+    visualViewport:{width:375,height:700,addEventListener:()=>0},
     matchMedia:q=>({matches:coarse&&/coarse/.test(q)}),
     navigator:{userAgent:coarse?'Mozilla/5.0 (Linux; Android 14) Mobile'
                                :'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'},
@@ -44,19 +45,23 @@ const ctx=mkctx(false);
 // helpers compartidos por los dos contextos
 const common=`
 const press=k=>onkeydown({key:k,preventDefault(){}});
+const step=()=>press(letters[Object.keys(letters)[0]]);   // una letra válida cualquiera
 const wrong=()=>press([...POOL].find(c=>!Object.values(letters).includes(c)));
 const cell=()=>p.y*C+p.x;
+const juega=id=>{ setLevel(id); gen(); foes=[] };          // nivel limpio y sin gatos
 function path(from,to){const prev={},q=[from],seen=new Set([from]);
  while(q.length){const c=q.shift(); if(c===to)break; const cx=c%C,cy=c/C|0;
   [[0,-1,'n'],[1,0,'e'],[0,1,'s'],[-1,0,'w']].forEach(([dx,dy,w])=>{
    const nx=cx+dx,ny=cy+dy,n=ny*C+nx;
    if(nx>=0&&ny>=0&&nx<C&&ny<R&&!g[c][w]&&!seen.has(n)){seen.add(n);prev[n]=[c,w];q.push(n)}})}
  const out=[];for(let n=to;n!==from;){const [pv,w]=prev[n];out.unshift(w);n=pv}return out}
-// una partida entera jugada por un bot: junta las 5 monedas y sale
-function botGame(){
+// una partida entera jugada por un bot: junta las monedas del nivel y sale
+function botGame(id){
+  if(id) setLevel(id);
   gen(); foes=[]; baby=0;
+  if(!coins.length) spawn(coins,LV.coins);   // en el tutorial las suelta un paso, no gen()
   // se puede ganar antes de tachar la lista: yendo por una moneda se pisan otras
-  // y, con las 5 juntas, cruzar la casilla de salida ya termina la partida
+  // y, con todas juntas, cruzar la casilla de salida ya termina la partida
   for(const t of [...coins,C*R-1]){ let guard=0;
     while(!win && cell()!==t && guard++<400){
       if(paused){ babyEnd(false); continue }
@@ -70,18 +75,29 @@ function botGame(){
 }
 // foto de TODO lo que define la dificultad: tiene que dar igual en los dos perfiles
 function snap(){
+  juega('clasico');                          // la foto se saca siempre del mismo nivel
   const q=[], b0=baby, g0=got, c0=combo;
   for(let n=0;n<=5;n++){ got=n; q.push(foeMs(),chaseP(),qteLen()) }
-  for(let c=0;c<=20;c++){ combo=c; deal(); q.push(durBase,comboFill(),comboCol()) }
+  for(let c=0;c<=20;c++){ combo=c; deal(); q.push(durBase,comboFill(),comboCol(),rankFill()) }
   for(let b=0;b<=3;b++){ baby=b; q.push(babyK(),dur()) }
   baby=b0; got=g0; combo=c0; deal();
   return JSON.stringify([C,R,S,POOL,COMBO_MAX,MS_LETRA,BEAT,VIBE_OFF,q,
+                         LEVELS.map(l=>[l.id,l.C,l.R,l.coins,l.foes,l.dur0,l.durMin,l.foe0,l.foeMin]),
+                         RANKS.map(r=>[r.c,r.k]),
                          [0,.1,.174,.25,.5].map(bopAt)]);
 }
 `;
 
 const harness=`
 if(!BGM.paused) throw new Error('la musica no debe autoarrancar');
+
+// 0) el juego arranca en el tutorial guiado, no en un cartel de onboarding
+if(LV.id!=='tutorial'||!tutOn||tstep!==0) throw new Error('no arranco en el tutorial');
+if(tut.className!=='on') throw new Error('el cartel del tutorial no se ve');
+if(css['--tuth']!=='112px') throw new Error('el tablero no le dejo alto al tutorial');
+if(css['--ar']!==(LV.C/LV.R).toFixed(4)) throw new Error('el CSS no tiene la proporcion del nivel');
+
+juega('clasico');
 
 // 1) timer MM:SS:mmm
 if(fmt(83456)!=='01:23:456'||fmt(0)!=='00:00:000') throw new Error('formato del timer');
@@ -92,16 +108,18 @@ if(!log.length) throw new Error("'r' deberia jugarse como letra");
 if(typeof rst.onclick!=='function') throw new Error('boton reinicio sin handler');
 
 // 3) UI: los chips de letra nunca caen sobre la celda del PJ ni fuera del canvas
-for(let i=0;i<C*R;i++){const cx=i%C,cy=i/C|0;
- for(const d of ['n','e','s','w']){ if(g[i][d]) continue;
-  const [X,Y]=LP[d](cx,cy), r=12;
-  if(X+r>cx*S&&X-r<(cx+1)*S&&Y+r>cy*S&&Y-r<(cy+1)*S) throw new Error('letra sobre el PJ');
-  if(X-r<0||Y-r<0||X+r>C*S||Y+r>R*S) throw new Error('letra fuera del canvas');
- }}
+for(const id of LEVELS.map(l=>l.id)){ juega(id);
+ for(let i=0;i<C*R;i++){const cx=i%C,cy=i/C|0;
+  for(const d of ['n','e','s','w']){ if(g[i][d]) continue;
+   const [X,Y]=LP[d](cx,cy), r=12;
+   if(X+r>cx*S&&X-r<(cx+1)*S&&Y+r>cy*S&&Y-r<(cy+1)*S) throw new Error('letra sobre el PJ');
+   if(X-r<0||Y-r<0||X+r>C*S||Y+r>R*S) throw new Error('letra fuera del canvas');
+  }}}
+juega('clasico');
 
 // 4) retroceso: 3 avances + 3 errores => de vuelta al inicio
 gen(); foes=[]; const start=cell(), seen=[start];
-for(let i=0;i<3;i++){ press(letters[Object.keys(letters)[0]]); seen.push(cell()) }
+for(let i=0;i<3;i++){ step(); seen.push(cell()) }
 for(let i=0;i<3;i++){ wrong(); if(cell()!==seen[2-i]) throw new Error('retroceso mal') }
 if(cell()!==start) throw new Error('no volvio al inicio');
 
@@ -109,13 +127,19 @@ if(cell()!==start) throw new Error('no volvio al inicio');
 gen(); const d0=[foeMs(),chaseP(),qteLen()];
 got=5; const d5=[foeMs(),chaseP(),qteLen()];
 if(!(d5[0]<d0[0]&&d5[1]>d0[1]&&d5[2]===8)) throw new Error('la dificultad no escala');
+// el clásico tiene que seguir dando los mismos numeros de siempre
+if(d0[0]!==750||d5[0]!==300||d0[1]!==.7||d5[2]!==8) throw new Error('el clasico cambio de balance');
+got=0; deal(); if(durBase!==1700) throw new Error('la ventana por letra del clasico cambio');
+combo=COMBO_MAX; deal(); if(durBase!==650) throw new Error('el minimo de la ventana cambio');
+combo=0; deal();
 got=0; qteStart(); const m0=qte.ms/qte.seq.length; qte=null;
 got=5; qteStart(); const m5=qte.ms/qte.seq.length; qte=null;
 if(m0!==m5||m0!==MS_LETRA) throw new Error('margen por letra no constante');
+got=0;
 
 // 6) QTE fallido: 3 pasos atras + congelado; exitoso: sin retroceso
 gen(); foes=[]; const camino=[cell()];
-for(let i=0;i<4;i++){ press(letters[Object.keys(letters)[0]]); camino.push(cell()) }
+for(let i=0;i<4;i++){ step(); camino.push(cell()) }
 qteStart(); press([...POOL].find(c=>c!==qte.seq[0]));
 if(qte||cell()!==camino[1]) throw new Error('el fallo no retrocedio 3');
 if(!frozen) throw new Error('no congelo con el jumpscare');
@@ -127,7 +151,7 @@ if(qte||cell()!==cOK) throw new Error('qte exitoso mal');
 
 // 7) skill issue: pausa, baby mode, reloj congelado y cooldown
 gen(); foes=[]; baby=0; nextAsk=12;
-for(let i=0;i<12;i++) i%4===0?press(letters[Object.keys(letters)[0]]):wrong();
+for(let i=0;i<12;i++) i%4===0?step():wrong();
 if(!paused||skill.style.display!=='grid') throw new Error('no aparecio el dialogo');
 const nl=log.length; press('a');
 if(log.length!==nl) throw new Error('acepta teclas en pausa');
@@ -143,6 +167,10 @@ while(hits+fails<ask) wrong();
 if(!paused) throw new Error('no volvio a preguntar tras el cooldown');
 babyEnd(false);
 if(baby!==1||nextAsk<=ask) throw new Error('el "no" mal');
+// pero el tutorial no se interrumpe con el dialogo
+juega('tutorial'); nextAsk=0; hits=20; fails=20; checkSkill();
+if(paused) throw new Error('el dialogo interrumpio el tutorial');
+juega('clasico'); baby=0;
 
 // 8) assets embebidos + preload
 if(!PJ.src.startsWith('data:image/webp')||!FOE.src.startsWith('data:image/webp')) throw new Error('sprites');
@@ -167,7 +195,10 @@ fit();
 if(parseInt(css['--w'])>visualViewport.width-16) throw new Error('el layout desborda: '+css['--w']);
 visualViewport.width=1200; fit();
 if(parseInt(css['--w'])!==510) throw new Error('no respeta el maximo de 510px');
-visualViewport.width=375; fit();
+setLevel('sotano');                          // un tablero mas ancho pide mas ancho
+if(parseInt(css['--w'])!==LV.C*S) throw new Error('el nivel grande no se dibuja entero');
+if(css['--vh']!=='700px') throw new Error('fit() no publico el alto visible: '+css['--vh']);
+juega('clasico'); visualViewport.width=375; fit();
 
 // 9c) IA: con el campo de flujo el gato SIEMPRE alcanza al PJ por el camino mas corto
 const rnd=Math.random;
@@ -187,11 +218,13 @@ for(let round=0;round<25;round++){
 Math.random=rnd;
 
 // 10) partida completa
-botGame();
+botGame('clasico');
 if(!unlockT) throw new Error('no aviso al desbloquear la salida');
 if(tEnd+pen<0) throw new Error('tiempo neto negativo');
 if(log.length!==hits+fails) throw new Error('log descuadrado');
+if(bests.clasico===undefined) throw new Error('no guardo el record del nivel');
 const teclas=log.length, prec=Math.round(acc()*100);   // la partida completa, antes de los resets
+
 // 11) medidor de combo: llena, satura y cambia de tramo
 gen(); foes=[]; combo=0;
 if(comboFill()!==0) throw new Error('el medidor no arranca vacio');
@@ -201,6 +234,17 @@ combo=COMBO_MAX*3;
 if(comboFill()!==1) throw new Error('el medidor se pasa de 1');
 const tramos=new Set([0,5,10,COMBO_MAX].map(c=>{combo=c;return comboCol()}));
 if(tramos.size!==4) throw new Error('los tramos del combo no cambian de color');
+combo=0;
+
+// 11b) rangos estilo DMC: letra, nombre, color y medidor hacia el rango siguiente
+if(RANKS[0].k!=='D'||RANKS[RANKS.length-1].k!=='SSS') throw new Error('faltan los rangos D..SSS');
+if(RANKS.some((r,i)=>i&&r.c<=RANKS[i-1].c)) throw new Error('los rangos no suben');
+combo=0; if(rankI()!==0||rankFill()!==0) throw new Error('el rango no arranca en D vacio');
+combo=RANKS[1].c; if(rankI()!==1||rankFill()!==0) throw new Error('el medidor no se vacia al subir');
+combo=RANKS[1].c+1;
+if(!(rankFill()>0&&rankFill()<1)) throw new Error('el medidor no llena hacia el rango siguiente');
+combo=999; if(rankI()!==RANKS.length-1||rankFill()!==1) throw new Error('el tope del rango');
+if(comboCol()!==RANKS[RANKS.length-1].col) throw new Error('el color no sale del rango');
 combo=0;
 
 // 12) SFX: sin WebAudio en el stub tienen que ser no-op, no reventar la partida
@@ -227,20 +271,90 @@ mus.onclick(); if(!VIBE.muted) throw new Error('el mute no llega a la pista de v
 vibe.onclick();
 if(vibes||track()!==BGM||!VIBE.paused) throw new Error('no volvio a la pista normal');
 
-// 14) onboarding: se ve al cargar, reusa los sprites y se va con la 1a tecla
-if(!dpj.src.startsWith('data:image/webp')||!dfoe.src.startsWith('data:image/webp'))
-  throw new Error('el onboarding no reusa los sprites embebidos');
-introShow(); if(intro.style.display!=='grid') throw new Error('no abrio el onboarding');
-gen(); foes=[]; press(letters[Object.keys(letters)[0]]);
-if(intro.style.display!=='none') throw new Error('la 1a tecla no cerro el onboarding');
-if(typeof how.onclick!=='function'||typeof igo.onclick!=='function')
-  throw new Error('faltan los botones del onboarding');
+// 14) tutorial guiado: cada paso enciende un sistema y no avanza hasta usarlo
+juega('tutorial');
+if(!tutOn||tstep!==0) throw new Error('el tutorial no arranco');
+if(!tutHold()) throw new Error('el primer paso deberia ir sin reloj');
+lastDraw=0; frame();
+if(tstep!==0) throw new Error('el paso 1 se cerro sin teclear nada');
+for(let i=0;i<4;i++) step(); tutCheck();
+if(tstep!==1) throw new Error('el paso 1 no se cerro con las 4 letras');
+if(tutHold()) throw new Error('el paso 2 tiene que encender el reloj');
+for(let i=0;i<5;i++) step(); tutCheck();
+if(tstep!==2||combo!==0) throw new Error('el paso 3 no reinicio el combo');
+for(let i=0;i<4;i++) step(); tutCheck();
+if(tstep!==3) throw new Error('el paso del combo no se cerro');
+if(!foes.length) throw new Error('el paso del QTE no solto el gato');
+// un jugador rapido se le escapa al gato: el paso tiene que destrabarse solo
+tAt-=TUT_PUSH+1; tutCheck();
+if(!qte) throw new Error('el paso del QTE se quedo trabado esperando al gato');
+if(tstep!==3) throw new Error('el empujon no deberia saltear el paso');
+qte.seq.slice().forEach(k=>press(k)); tutCheck();
+if(tstep!==4) throw new Error('el QTE limpio no cerro el paso');
+if(coins.length!==LV.coins) throw new Error('el paso de las monedas no las solto');
+got=LV.coins; coins=[]; tutCheck();
+if(tstep!==5||!exitOpen()) throw new Error('el paso de la salida no arranco');
+win=true; tutCheck();
+if(tutOn||tut.className) throw new Error('el tutorial no termino');
+if(!lvlOn||lvl.className!=='open') throw new Error('al terminar no abrio el selector de nivel');
+if(css['--tuth']!=='0px') throw new Error('el tutorial no le devolvio el alto al tablero');
+lvlHide();
+// saltarlo lleva al mismo lugar
+juega('tutorial'); tskip.onclick();
+if(tutOn||!lvlOn) throw new Error('SALTAR no llevo al selector');
+lvlHide();
+// y el tutorial no ensucia los records
+botGame('tutorial');
+if(bests.tutorial!==undefined) throw new Error('el tutorial no deberia guardar record');
+if(typeof how.onclick!=='function') throw new Error('falta el boton de repetir el tutorial');
+how.onclick(); if(LV.id!=='tutorial'||!tutOn) throw new Error('el boton no repitio el tutorial');
 
-// 15) salida: la unica condicion es juntar las 5 monedas
+// 15) selector de nivel: lista, ficha, pausa y arranque
+juega('clasico'); press(letters[Object.keys(letters)[0]]);
+if(typeof nvl.onclick!=='function'||typeof lgo.onclick!=='function') throw new Error('faltan botones del selector');
+lvlShow();
+if(!lvlOn||!paused||lvl.className!=='open') throw new Error('el selector no abrio');
+const nlv=log.length; press('a');
+if(log.length!==nlv) throw new Error('acepta teclas con el selector abierto');
+lvlPick('sotano');
+if(pick!=='sotano'||lgo.disabled) throw new Error('no marco el nivel elegido');
+lvlPick('contra');
+if(!lgo.disabled) throw new Error('un modo PROXIMAMENTE no se deberia poder jugar');
+lvlPlay();
+if(!lvlOn) throw new Error('un modo sin implementar no deberia arrancar');
+lvlPick('sotano'); pauseAt-=300; lvlPlay();
+if(lvlOn||paused) throw new Error('el selector no cerro al jugar');
+if(LV.id!=='sotano'||C!==17||R!==13) throw new Error('no arranco el nivel elegido');
+if(cv.width!==C*S||cv.height!==R*S) throw new Error('el canvas no siguio al nivel');
+if(css['--ar']!==(C/R).toFixed(4)) throw new Error('el CSS no siguio la proporcion');
+if(LEVELS.length!==3||MODES.length<2) throw new Error('faltan niveles o modos en el selector');
+if(ALL.some(l=>!l.name||!l.desc||!l.pts.length)) throw new Error('un nivel sin ficha para mostrar');
+
+// 15b) el sótano: niebla, faroles y acechador
+if(!LV.fog||!LV.lamps||!LV.stalk) throw new Error('el sotano perdio sus mecanicas');
+if(lamps.length!==LV.lamps) throw new Error('no salieron los faroles');
+if(coins.some(c=>lamps.includes(c))) throw new Error('un farol quedo encima de una moneda');
+gen(); foes=[];
+const dir=Object.keys(letters)[0], dest=cell()+{n:-C,e:1,s:C,w:-1}[dir];
+lamps=[dest]; revealT=0; press(letters[dir]);
+if(!revealT||lamps.length) throw new Error('el farol no abrio la niebla');
+// el acechador va a medio paso pero no despista NUNCA
+gen(); Math.random=()=>.99;                  // cualquier gato normal se iria de paseo
+foes=[far()]; prevFoe=[]; foeBeat=0;
+const s0=foes[0]; moveFoes(); qte=null;
+if(foes[0]!==s0) throw new Error('el acechador no va a medio paso');
+const dA=flow()[foes[0]]; moveFoes(); qte=null;
+if(flow()[foes[0]]>=dA) throw new Error('el acechador deberia perseguir siempre');
+Math.random=rnd;
+lastDraw=0; frame();                         // la niebla se dibuja sin romper el cuadro
+botGame('sotano');                           // y el nivel se puede terminar
+juega('clasico');
+
+// 16) salida: la unica condicion es juntar las monedas del nivel
 gen(); foes=[];
 got=0; if(exitOpen()) throw new Error('la salida arranca abierta');
-got=4; if(exitOpen()) throw new Error('la salida abre antes de las 5 monedas');
-got=5; if(!exitOpen()) throw new Error('la salida no abre con las 5 monedas');
+got=LV.coins-1; if(exitOpen()) throw new Error('la salida abre antes de tiempo');
+got=LV.coins; if(!exitOpen()) throw new Error('la salida no abre con todas las monedas');
 p={x:C-1,y:R-1};
 got=4; unlockT=0;         frame();              // pintar la salida cerrada no rompe
 got=5; unlockT=now();     frame();              // ni la abierta con el cartel encima
@@ -248,7 +362,7 @@ got=0; unlockT=0;
 
 frame();
 
-// 16) escritorio: el perfil lite NO se aplica, todo queda como estaba
+// 17) escritorio: el perfil lite NO se aplica, todo queda como estaba
 if(MOBILE) throw new Error('escritorio detectado como movil');
 if(!PERF.scan||PERF.glow!==1||PERF.fps||PERF.hudMs||PERF.dust!==1)
   throw new Error('el perfil lite se colo en escritorio');
@@ -266,8 +380,8 @@ if(!v1) throw new Error('el cuadro no dibujo');
 if(vis.x===v1) throw new Error('escritorio no deberia saltear cuadros');
 SNAP=snap();
 
-// 17) pantalla completa: el boton la maneja, pero en escritorio nada la fuerza
-cv.onclick(); tec.onclick(); igo.onclick();
+// 18) pantalla completa: el boton la maneja, pero en escritorio nada la fuerza
+cv.onclick(); tec.onclick(); lvlPick('clasico'); lvlPlay();
 if(document.fullscreenElement) throw new Error('escritorio no deberia entrar solo a pantalla completa');
 fsb.onclick();
 if(!document.fullscreenElement) throw new Error('el boton no entro a pantalla completa');
@@ -277,10 +391,10 @@ if(document.fullscreenElement) throw new Error('el boton no salio de pantalla co
 if(fsb.className) throw new Error('el boton quedo marcado al salir');
 if(fsb.style.display==='none') throw new Error('con API disponible el boton tiene que verse');
 
-console.log('OK 17/17 | partida completa:',teclas,'teclas, precision',prec+'%');
+console.log('OK 18/18 | partida completa:',teclas,'teclas, precision',prec+'%');
 `;
 
-// ---- 18) el mismo juego en un teléfono: perfil lite, gameplay intacto ----
+// ---- 19) el mismo juego en un teléfono: perfil lite, gameplay intacto ----
 const mobile=`
 if(!MOBILE) throw new Error('no detecto el telefono');
 if(PERF.scan||!(PERF.glow<1)||!PERF.fps||!PERF.hudMs||!(PERF.dust<1))
@@ -304,27 +418,40 @@ const capas=mz.slice(); gen();
 if(mz[0]!==capas[0]||mz[1]!==capas[1]) throw new Error('gen() no deberia crear canvas nuevos');
 
 // tope de cuadros: dos llamadas seguidas dibujan una sola vez
-gen(); foes=[]; p={x:10,y:0}; vis={x:0,y:0};
+juega('clasico'); p={x:10,y:0}; vis={x:0,y:0};
 lastDraw=0; frame(); const v1=vis.x;
 if(!v1) throw new Error('el primer cuadro no dibujo');
 frame();
 if(vis.x!==v1) throw new Error('el tope de fps no salteo el cuadro repetido');
 
 // y el juego se juega igual: partida completa y dificultad identica
-botGame();
+botGame('clasico');
 lastDraw=0; frame();
 if(log.length!==hits+fails) throw new Error('log descuadrado en movil');
 SNAP=snap();
 
-// ---- 19) GUI del teléfono: barra flotante, menú hamburguesa y encuadre ----
-// la barra se corre al borde opuesto en cuanto el gato entra en su franja
-gen(); foes=[]; vis={x:0,y:0}; lastDraw=0; frame();
-if(!barLow||bar.className!=='low') throw new Error('la barra no se aparto del gato');
+// ---- 20) GUI del teléfono: barra arriba, rango de combo y menú ----
+// la barra de info vive SIEMPRE arriba del laberinto: ya no se muda de borde
+juega('clasico'); vis={x:0,y:0}; lastDraw=0; frame();
+if(bar.className==='low') throw new Error('la barra ya no deberia mudarse de borde');
 p={x:0,y:R-1}; vis={x:0,y:R-1}; lastDraw=0; frame();
-if(barLow||bar.className) throw new Error('la barra no volvio arriba con el gato abajo');
+if(bar.className==='low') throw new Error('la barra se movio con el gato abajo');
+
+// el rango: al subir, la letra festeja y toda la GUI toma su color
+combo=0; lastRank=0; lastDraw=0; frame();
+combo=RANKS[RANKS.length-1].c; lastDraw=0; frame();
+if(lastRank!==RANKS.length-1) throw new Error('la barra no siguio al rango');
+if(brank.className!=='rank up') throw new Error('el ascenso de rango no se festejo');
+if(rpop.className!=='rank show') throw new Error('no aparecio el nombre del rango');
+if(css['--rc']!==RANKS[RANKS.length-1].col) throw new Error('la GUI no tomo el color del rango');
+const antes=brank.className;
+combo=0; lastDraw=0; frame();
+if(lastRank!==0) throw new Error('no volvio a bajar de rango');
+if(brank.className==='rank up') throw new Error('bajar de rango no se festeja');
+if(!bfill.style.width) throw new Error('el medidor de combo no se dibujo');
 
 // el menú congela el reloj igual que el diálogo de skill issue
-gen(); foes=[]; press(letters[Object.keys(letters)[0]]);
+juega('clasico'); press(letters[Object.keys(letters)[0]]);
 const tm=t0, sm=shownAt;
 menuOpen();
 if(!menuOn||!paused||menu.className!=='open') throw new Error('el menu no abrio');
@@ -340,23 +467,24 @@ if(menuOn||paused) throw new Error('REINICIAR no cerro el menu');
 gen(); menuOpen(); pauseAt-=400; menuClose();
 if(t0) throw new Error('el menu arranco el reloj sin jugar');
 
-// tocar el laberinto, TECLADO y JUGAR entran a pantalla completa
-for(const [quien,fn] of [['el laberinto',cv.onclick],['TECLADO',tec.onclick],['JUGAR',igo.onclick]]){
-  document.exitFullscreen(); fn();
-  if(!document.fullscreenElement) throw new Error(quien+' no entro a pantalla completa');
-}
-// pero si el jugador sale con el boton, tocar el laberinto no lo devuelve ahi
+// ---- 21) pantalla completa automática: SOLO la primera vez ----
+fsAuto=true; document.exitFullscreen();
+cv.onclick();
+if(!document.fullscreenElement) throw new Error('el primer toque no entro a pantalla completa');
+document.exitFullscreen();
+cv.onclick(); tec.onclick();
+if(document.fullscreenElement) throw new Error('el automatico tiene que ser de una sola vez');
+fsb.onclick();
+if(!document.fullscreenElement) throw new Error('el boton no entro a pantalla completa');
 fsb.onclick();
 if(document.fullscreenElement) throw new Error('el boton no salio de pantalla completa');
-cv.onclick(); tec.onclick();
-if(document.fullscreenElement) throw new Error('volvio solo a pantalla completa tras salir a mano');
-fsb.onclick();
-if(!document.fullscreenElement) throw new Error('el boton no la volvio a habilitar');
-document.exitFullscreen();
 cv.onclick();
-if(!document.fullscreenElement) throw new Error('el boton no reactivo el automatico');
-document.exitFullscreen();
-
+if(document.fullscreenElement) throw new Error('el boton no deberia rearmar el automatico');
+// y arrancar un nivel desde el selector tambien gasta el unico automatico
+fsAuto=true; lvlShow(); lvlPick('clasico'); lvlPlay();
+if(!document.fullscreenElement) throw new Error('entrar a la partida no uso el automatico');
+document.exitFullscreen(); lvlShow(); lvlPick('clasico'); lvlPlay();
+if(document.fullscreenElement) throw new Error('la segunda partida no deberia forzar pantalla completa');
 `;
 
 vm.runInNewContext(src+common+harness,ctx);
@@ -364,4 +492,27 @@ const mctx=mkctx(true);
 vm.runInNewContext(src+common+mobile,mctx);
 if(!ctx.SNAP||ctx.SNAP!==mctx.SNAP)
   throw new Error('el perfil movil movio algo del gameplay');
-console.log('OK 19/19 | el perfil lite prende solo en pointer:coarse y no toca la dificultad');
+
+// ---- 22) CSS: en el teléfono TODO va alineado arriba y la barra sobre el tablero ----
+const style=html.match(/<style>([\s\S]*?)<\/style>/)[1];
+const bloque=sel=>{const i=style.indexOf(sel+'{');
+  if(i<0) throw new Error('falta la regla '+sel);
+  return style.slice(i+sel.length+1,style.indexOf('}',i))};
+const lbody=bloque('.lite body');
+if(!/justify-content:flex-start/.test(lbody)) throw new Error('la GUI del telefono no arranca arriba');
+if(!/height:100dvh/.test(lbody)||!/overflow:hidden/.test(lbody))
+  throw new Error('el telefono no se queda dentro de la pantalla');
+const lbar=bloque('.lite #bar');
+if(/position:(fixed|absolute)/.test(lbar)) throw new Error('la barra no deberia flotar sobre el laberinto');
+if(!/flex:none/.test(lbar)) throw new Error('la barra tiene que conservar su alto');
+if(/#bar\.low/.test(style)) throw new Error('quedo la regla de la barra que se mudaba de borde');
+for(const sel of ['.lite #menu','.lite #lvl','.lite #skill'])
+  if(!/align-items:start/.test(bloque(sel))) throw new Error(sel+' no esta alineado arriba');
+const stage=html.match(/<div id=stage>[\s\S]*?<\/div>\s*<div id=scare>/)[0];
+if(stage.indexOf('id=bar')>stage.indexOf('id=board'))
+  throw new Error('la barra tiene que ir ANTES del tablero en el markup');
+const lstage=bloque('.lite #stage');
+if(!/--tuth/.test(lstage)) throw new Error('el tablero no le reserva alto al tutorial');
+if(!/--vh/.test(lstage)) throw new Error('el tablero no se achica con el alto visible');
+
+console.log('OK 22/22 | el perfil lite prende solo en pointer:coarse y no toca la dificultad');

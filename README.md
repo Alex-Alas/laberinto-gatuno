@@ -7,44 +7,90 @@ Un solo archivo HTML, sin dependencias — sprites, música y efectos van embebi
 **Jugar:** abrí `index.html` en cualquier navegador. En el teléfono, tocá el laberinto
 o el botón **TECLADO** para abrir el teclado del sistema.
 
-Al cargar se abre un tutorial con la mecánica dibujada (los sprites del propio juego, un
-anillo de tiempo animado y los chips de letra). Se cierra con **JUGAR**, tocando afuera o
-con la primera tecla, y se reabre con **? CÓMO SE JUEGA**. La línea de controles cambia
-sola entre escritorio y teléfono con `@media (pointer:coarse)`.
+La primera vez arranca un **tutorial guiado**: no es un cartel con cinco reglas, es el
+nivel 1 jugándose, encendiendo un sistema por paso y sin avanzar hasta que lo usaste.
+Al terminarlo —o con **SALTAR**— se abre el **selector de nivel**, y desde ahí se vuelve
+con **▦ NIVELES**. Si ya lo terminaste alguna vez (`localStorage`), la próxima visita
+entra derecho al selector.
+
+## Niveles y modos
+
+Todo lo que cambia entre partidas vive en la tabla `LEVELS` del `<script>`: tamaño del
+tablero, monedas, gatos, ventana por letra y mecánicas. El resto del juego lee `LV` y
+nunca pregunta en qué nivel está, así que un nivel nuevo es un objeto más en la lista.
+
+| | PRIMEROS PASOS | EL LABERINTO | EL SÓTANO |
+|---|---|---|---|
+| Tablero | 9x7 | 15x11 | 17x13 |
+| Monedas | 3 | 5 | 7 |
+| Gatos | 1 (guiado) | 2 (+1 a la 3ª moneda) | 3 (+1) y un acechador |
+| Ventana por letra | 2400 → 1400 ms | 1700 → 650 ms | 1500 → 600 ms |
+| Extras | tutorial paso a paso | — | niebla, faroles |
+
+El **sótano** es el que suma mecánicas nuevas, pensadas para una partida larga:
+
+- **Niebla.** Sólo ves unas cuatro celdas alrededor del gato: un relleno con degradado
+  radial sobre todo lo que es mundo (paredes, monedas, enemigos). Las letras, el QTE y
+  los carteles se dibujan *después*, así que nunca quedan tapados. El mapa te lo acordás
+  vos.
+- **Faroles.** Tres, y a oscuras se siguen viendo —dan luz propia—, así que sirven de
+  faro. Pisar uno enciende el sótano entero: 2.5 s a pleno y otros 2.5 s apagándose de a
+  poco, hasta que la niebla se vuelve a cerrar. Con la salida abierta, la casilla verde
+  también se ve desde lejos.
+- **Acechador.** El primer gato del sótano nunca despista (persecución 100%, no el 70-95%
+  del resto), pero se mueve a medio paso. No lo perdés: lo administrás.
+
+El selector también lista los **modos de juego** que todavía no existen
+(CONTRARRELOJ, SUPERVIVENCIA) en gris: el día que se implementen sólo hay que sacarles
+el `soon`.
 
 ## Reglas
 
-- Juntá las 5 monedas y llegá al cuadro verde. **La salida está cerrada hasta la quinta
-  moneda**: hasta entonces se dibuja roja y con el candado cerrado, y el encabezado dice
-  cuántas faltan. Al juntarlas se pone verde, el candado se abre y salta un cartel
-  `SALIDA DESBLOQUEADA` con su arpegio. Era la regla que más gente no entendía.
-- El anillo alrededor del jugador es tu ventana de reacción: arranca en 1.7 s y se
-  encoge 70 ms por cada punto de combo. Si se agota: +0.4 s de penalización y combo a cero.
+- Juntá todas las monedas del nivel y llegá al cuadro verde. **La salida está cerrada
+  hasta la última moneda**: hasta entonces se dibuja roja y con el candado cerrado, y el
+  encabezado dice cuántas faltan. Al juntarlas se pone verde, el candado se abre y salta
+  un cartel `SALIDA DESBLOQUEADA` con su arpegio. Era la regla que más gente no entendía.
+- El anillo alrededor del jugador es tu ventana de reacción: en el clásico arranca en
+  1.7 s y se encoge 70 ms por cada punto de combo. Si se agota: +0.4 s de penalización y
+  combo a cero.
 - Letra equivocada: +0.6 s y combo a cero. Cualquier error te devuelve **un paso**
   por el camino que recorriste.
 - Responder en menos de 350 ms descuenta tiempo, topado para que el neto nunca baje
   del 75% del tiempo real.
-- Dos gatos oscuros te persiguen. Al alcanzarte se abre un QTE: tecleás la secuencia
+- Los gatos oscuros te persiguen. Al alcanzarte se abre un QTE: tecleás la secuencia
   completa antes de que se acabe la barra. Fallarlo cuesta +2 s y **3 pasos atrás**.
 
 ## Dificultad
 
-Escala con las monedas recogidas (`got`, 0 a 5):
+Escala con la fracción de monedas recogidas, entre los topes de cada nivel. En el
+clásico (5 monedas) da exactamente los números de siempre:
 
-| | 0 monedas | 5 monedas |
+| | 0 monedas | todas |
 |---|---|---|
 | Paso de los enemigos | 750 ms | 300 ms |
 | Probabilidad de persecución | 70% | 95% |
 | Letras del QTE | 3 | 8 |
 
 El QTE siempre da 700 ms por letra, así que crece en largo, no en presión por tecla.
-A las 3 monedas aparece un tercer gato.
+A mitad de camino aparece un gato más.
 
-## Combo y sonido
+## Combo, rango y sonido
 
-Barra debajo del encabezado: llena de 0 a `COMBO_MAX` (15, que es donde la ventana de
-reacción toca su piso de 650 ms) y cambia de tramo por color — cian, amarillo, naranja y
-rosa en MAX. Da un saltito en cada acierto (`cpop`, decae al 88% por cuadro).
+La racha dejó de ser un número: es un **rango con nombre**, al estilo Devil May Cry.
+`RANKS` va de **D — DORMIDO** a **SSS — SIN PIEDAD** (D, C, B, A, S, SS, SSS), y el color
+del rango manda sobre toda la GUI vía la variable CSS `--rc`. La dificultad sigue topando
+en `COMBO_MAX` (15, donde la ventana de reacción toca su piso de 650 ms); SS y SSS son
+puro flex, para que siempre quede algo arriba que perseguir.
+
+El medidor del teléfono muestra lo que falta para el rango **siguiente**: se vacía y
+vuelve a llenarse en cada ascenso, que es lo que hace que la racha se sienta. Al subir,
+la letra crece de golpe, la barra destella y el nombre del rango entra volando sobre el
+laberinto. En cada acierto la letra rebota con `cpop` (decae al 88% por cuadro).
+
+El Artifact es un solo archivo sin imports, así que no hay `@font-face`: la tipografía
+del rango es una pila de fuentes pesadas (`Impact`, `Franklin Gothic Heavy`, `Arial
+Black`, `Roboto Condensed`) más itálica, `skewX(-11deg)`, degradado metálico con
+`background-clip:text` y un halo con `drop-shadow`.
 
 Los efectos son osciladores de WebAudio, no más mp3 embebidos: el acierto es un blip de
 55 ms que **sube un semitono por punto de combo** (tope a los 12, para que no se vuelva
@@ -74,6 +120,25 @@ Si tu precisión cae debajo del 80% (con al menos 12 teclas de muestra), el jueg
 pausa —el cronómetro también— y ofrece más tiempo de reacción a cambio de un baby point.
 Cada punto suma 35% a la ventana y a la duración del QTE. Cualquiera sea la respuesta,
 no vuelve a preguntar hasta 25 teclas después, para no spamear.
+
+## GUI del teléfono
+
+La pantalla útil es la que **deja el teclado**, así que todo va alineado arriba
+(`justify-content:flex-start` y paneles con `align-items:start`) y lo que sobra queda
+abajo, donde el teclado lo va a tapar igual.
+
+- Una sola **barra de info**, fija arriba del laberinto y en el flujo: nunca lo tapa ni
+  se muda de borde. A la izquierda el reloj y las monedas; a la derecha el rango de combo
+  con su medidor.
+- El resto de los botones vive en el **menú hamburguesa**, que congela el reloj mientras
+  está abierto (igual que el selector de nivel y el diálogo de baby mode).
+- El alto lo resuelve el CSS: `--ar` (la proporción `C/R` del nivel) y `--vh` (el alto
+  **visible**, de `visualViewport`) dejan que el tablero se achique sólo lo necesario para
+  que la barra, el laberinto y el cartel del tutorial entren enteros arriba del teclado.
+  Si el navegador miente con `visualViewport` —puede pasar dentro del iframe del
+  Artifact— el `min()` con `100dvh` deja todo como estaba.
+- **Pantalla completa automática una sola vez:** el primer toque al entrar a la partida.
+  De ahí en adelante se maneja sólo con el botón del menú, incluso entre partidas.
 
 ## Rendimiento
 
@@ -112,7 +177,12 @@ entera de la dificultad entre los dos.
   y sólo se escribe el que cambió.
 - **`box-shadow` del canvas animado con `--bop`**: repintar un resplandor de 58px en cada
   beat. En `.lite` queda fijo y `--bop` sólo mueve transforms.
-- **125 `fillRect` de scanlines por cuadro** → una capa CSS (`#stage::after`).
+- **125 `fillRect` de scanlines por cuadro** → una capa CSS (`#board::after`).
+- **El degradado radial de la niebla**, evaluado píxel por píxel sobre el tablero entero
+  en cada cuadro: costaba más que todo el resto del cuadro junto (17 de 28 ms con el
+  teléfono a 6× de throttle). El degradado no cambia nunca, así que se hornea una vez a
+  un parche de 256px y el cuadro lo pega escalado al radio de visión —un blit— más los
+  rectángulos sólidos de afuera. Mismo dibujo, 28.4 ms → 11.7 ms por cuadro.
 - **Los dos mp3 de ~1MB**: `preload=none`, y el de extra vibes ni siquiera recibe su `src`
   hasta que alguien toca el botón.
 - **Faltaba el `<meta name=viewport>`**: el teléfono maquetaba a 980px y después achicaba
@@ -172,16 +242,25 @@ QTE (éxito y fallo), baby mode y su cooldown, ruta del teclado móvil, que el l
 desborde, que los chips de letra nunca queden bajo el jugador, 25 laberintos donde el
 gato debe llegar por el camino mínimo, y una partida completa jugada por un bot.
 
-Del 11 al 15 va el combo y las vibes: que el medidor de combo llene y sature en
-`COMBO_MAX` con un color por tramo, que los `sfx()` sean no-op sin WebAudio, que extra
-vibes cambie de pista sin tocar ni una variable de gameplay y que `bopAt()` pique justo
-en el bombo medido (0.174 s), que el tutorial reuse los sprites y se cierre con la
-primera tecla, y que la salida sólo abra con las 5 monedas.
+Del 11 al 16 va el combo, las vibes, el tutorial y los niveles: que el medidor llene y
+sature en `COMBO_MAX`, que los rangos suban y el medidor se vacíe en cada ascenso, que
+los `sfx()` sean no-op sin WebAudio, que extra vibes cambie de pista sin tocar ni una
+variable de gameplay y que `bopAt()` pique justo en el bombo medido (0.174 s), que cada
+paso del tutorial se cierre sólo cuando el jugador usó lo que explica y termine en el
+selector, que el selector pause el reloj y no deje jugar un modo que no existe, que el
+sótano conserve niebla, faroles y acechador (y se pueda terminar), y que la salida sólo
+abra con todas las monedas del nivel.
 
-El 16 y el 17 son el perfil de rendimiento: corren el mismo `index.html` en dos contextos
+El 17 y el 18 son el perfil de rendimiento: corren el mismo `index.html` en dos contextos
 —uno con `pointer:fine` y otro con `pointer:coarse`— y verifican que el lite prenda sólo
 en el segundo, que ahí los mp3 grandes no se precarguen, que el tope de cuadros saltee el
 cuadro repetido, y que la foto de la dificultad (`snap()`: `foeMs`, `chaseP`, `qteLen`,
 `durBase` y `babyK` en todo su rango) dé exactamente igual en los dos. También chequean
 lo que **no** es del perfil: que las dos plataformas horneen las paredes con su margen y
 que la capa del latido aparezca recién al prender extra vibes.
+
+Del 19 al 22 va la GUI del teléfono: que la barra no se mude de borde, que el ascenso de
+rango se festeje (y bajar no), que el menú devuelva el tiempo pausado, que la pantalla
+completa automática sea de **una sola vez**, y —leyendo el `<style>` directo— que el
+perfil móvil quede alineado arriba y la barra siga estando antes del tablero en el
+markup.
