@@ -75,6 +75,52 @@ pausa —el cronómetro también— y ofrece más tiempo de reacción a cambio d
 Cada punto suma 35% a la ventana y a la duración del QTE. Cualquiera sea la respuesta,
 no vuelve a preguntar hasta 25 teclas después, para no spamear.
 
+## Rendimiento en móvil
+
+Todo lo que degrada algo visible vive detrás de un solo flag, `MOBILE`
+(`matchMedia('(pointer:coarse)')`, con el user-agent de respaldo), que arma el objeto
+`PERF`. En escritorio `PERF` deja los valores viejos y el canvas sale **pixel por pixel
+igual que antes** — hay un test que lo compara. Los números de dificultad no los toca
+ningún perfil.
+
+| | escritorio | teléfono |
+|---|---|---|
+| `bake` — paredes cacheadas | no | sí |
+| `glow` — factor de `shadowBlur` | 1 | 0.5 |
+| `scan` — scanlines en el canvas | sí | las pinta el CSS |
+| `dust` — partículas por chispazo | 100% | 60% |
+| `hudMs` — refresco del reloj | cada cuadro | cada 66 ms |
+| `fps` — tope de cuadros | libre | 61 |
+| `pre` — preload de los mp3 grandes | `auto` | `none` |
+
+Lo que más costaba, en orden:
+
+- **`shadowBlur` en las ~660 líneas del laberinto**, redibujadas en cada cuadro. Ahora se
+  hornean una vez por laberinto a un canvas aparte (`bakeMaze()`) y el cuadro es un
+  `drawImage`. El latido de extra vibes se suma encima con un segundo blit en `lighter`.
+- **Una sombra difuminada por partícula** (hasta 34). En el teléfono el halo se finge con
+  un cuadrado más grande y transparente, sin blur.
+- **Dos `innerHTML` por cuadro en el encabezado**: el navegador reparseaba HTML y
+  recalculaba estilo y layout 60 veces por segundo. Cada dato tiene ahora su `<span>` fijo
+  y sólo se escribe el que cambió.
+- **`box-shadow` del canvas animado con `--bop`**: repintar un resplandor de 58px en cada
+  beat. En `.lite` queda fijo y `--bop` sólo mueve transforms.
+- **125 `fillRect` de scanlines por cuadro** → una capa CSS (`#stage::after`).
+- **Los dos mp3 de ~1MB**: `preload=none`, y el de extra vibes ni siquiera recibe su `src`
+  hasta que alguien toca el botón.
+- **Faltaba el `<meta name=viewport>`**: el teléfono maquetaba a 980px y después achicaba
+  la página entera. Dentro del iframe del Artifact la etiqueta es inerte; abriendo el
+  archivo directo, cambia todo.
+
+Medido con Chromium en emulación de Pixel 5, con extra vibes prendido:
+
+| | antes | después |
+|---|---|---|
+| Dibujo de un cuadro (con flush de GPU) | 2.5 ms | 0.47 ms |
+| fps con CPU a 6× de throttle | 43 | 60 |
+| Tiempo de main thread en 4 s | 3.97 s | 1.89 s |
+| Layouts en 4 s | 173 | 90 |
+
 ## Notas de implementación
 
 - **IA de los enemigos:** campo de flujo por BFS desde el jugador en cada turno. La
@@ -98,8 +144,14 @@ QTE (éxito y fallo), baby mode y su cooldown, ruta del teclado móvil, que el l
 desborde, que los chips de letra nunca queden bajo el jugador, 25 laberintos donde el
 gato debe llegar por el camino mínimo, y una partida completa jugada por un bot.
 
-Los últimos cinco cubren lo nuevo: que el medidor de combo llene y sature en `COMBO_MAX`
-con un color por tramo, que los `sfx()` sean no-op sin WebAudio, que extra vibes cambie
-de pista sin tocar ni una variable de gameplay y que `bopAt()` pique justo en el bombo
-medido (0.174 s), que el tutorial reuse los sprites y se cierre con la primera tecla, y
-que la salida sólo abra con las 5 monedas.
+Del 11 al 15 va el combo y las vibes: que el medidor de combo llene y sature en
+`COMBO_MAX` con un color por tramo, que los `sfx()` sean no-op sin WebAudio, que extra
+vibes cambie de pista sin tocar ni una variable de gameplay y que `bopAt()` pique justo
+en el bombo medido (0.174 s), que el tutorial reuse los sprites y se cierre con la
+primera tecla, y que la salida sólo abra con las 5 monedas.
+
+El 16 y el 17 son el perfil de rendimiento: corren el mismo `index.html` en dos contextos
+—uno con `pointer:fine` y otro con `pointer:coarse`— y verifican que el lite prenda sólo
+en el segundo, que ahí los mp3 grandes no se precarguen, que el tope de cuadros saltee el
+cuadro repetido, y que la foto de la dificultad (`snap()`: `foeMs`, `chaseP`, `qteLen`,
+`durBase` y `babyK` en todo su rango) dé exactamente igual en los dos.
