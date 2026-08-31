@@ -4,15 +4,26 @@ const fs=require('fs'), vm=require('vm'), path=require('path');
 const src=fs.readFileSync(path.join(__dirname,'index.html'),'utf8').match(/<script>([\s\S]*)<\/script>/)[1];
 
 const noop=new Proxy(function(){},{get:()=>noop,apply:()=>noop,set:()=>true});
-const el=()=>({getContext:()=>noop,style:{},value:'',set textContent(v){},set innerHTML(v){},
-  set src(v){this._s=v},get src(){return this._s},insertAdjacentHTML(){},blur(){},focus(){},width:0,height:0});
+const el=()=>({getContext:()=>noop,style:{},value:'',className:'',
+  set textContent(v){},set innerHTML(v){},
+  set src(v){this._s=v},get src(){return this._s},
+  insertAdjacentHTML(){},blur(){},focus(){},addEventListener(){},width:0,height:0});
 
 // El mismo index.html se corre en dos contextos: uno "escritorio" (pointer:fine)
 // y uno "teléfono" (pointer:coarse).  Así se verifica que el perfil lite prenda
 // sólo en el segundo y que ninguno de los dos toque el gameplay.
 const mkctx=coarse=>{
+  // API de pantalla completa de mentira: guarda el elemento y avisa a los listeners
+  const fsl=[], fire=()=>fsl.forEach(f=>f());
+  const doc={getElementById:el,createElement:el,
+    addEventListener(k,f){ if(k==='fullscreenchange') fsl.push(f) },
+    fullscreenEnabled:true, fullscreenElement:null,
+    exitFullscreen(){ doc.fullscreenElement=null; fire(); return Promise.resolve() }};
   const root={style:{setProperty(k,v){ctx.css[k]=v}},cls:'',
-              classList:{add(c){root.cls=c},remove(c){root.cls=''}}};
+              classList:{add(c){root.cls=c},remove(c){root.cls=''}},
+              requestFullscreen(){ doc.fullscreenElement=root; fire();
+                                   return Promise.resolve() }};
+  doc.documentElement=root;
   const ctx={console,Int16Array,performance:{now:()=>Date.now()},requestAnimationFrame:()=>0,
     setTimeout:()=>0,clearTimeout:()=>0,addEventListener:()=>0,innerWidth:375,
     visualViewport:{width:375,addEventListener:()=>0},
@@ -24,7 +35,7 @@ const mkctx=coarse=>{
                       this.play=()=>{this.paused=false;return Promise.resolve()};
                       this.pause=()=>{this.paused=true}},
     css:{},
-    document:{getElementById:el,createElement:el,documentElement:root}};
+    document:doc};
   ctx.window=ctx;
   return ctx;
 };
@@ -255,10 +266,21 @@ if(!v1) throw new Error('el cuadro no dibujo');
 if(vis.x===v1) throw new Error('escritorio no deberia saltear cuadros');
 SNAP=snap();
 
-console.log('OK 16/16 | partida completa:',teclas,'teclas, precision',prec+'%');
+// 17) pantalla completa: el boton la maneja, pero en escritorio nada la fuerza
+cv.onclick(); tec.onclick(); igo.onclick();
+if(document.fullscreenElement) throw new Error('escritorio no deberia entrar solo a pantalla completa');
+fsb.onclick();
+if(!document.fullscreenElement) throw new Error('el boton no entro a pantalla completa');
+if(fsb.className!=='on') throw new Error('el boton no quedo marcado');
+fsb.onclick();
+if(document.fullscreenElement) throw new Error('el boton no salio de pantalla completa');
+if(fsb.className) throw new Error('el boton quedo marcado al salir');
+if(fsb.style.display==='none') throw new Error('con API disponible el boton tiene que verse');
+
+console.log('OK 17/17 | partida completa:',teclas,'teclas, precision',prec+'%');
 `;
 
-// ---- 17) el mismo juego en un teléfono: perfil lite, gameplay intacto ----
+// ---- 18) el mismo juego en un teléfono: perfil lite, gameplay intacto ----
 const mobile=`
 if(!MOBILE) throw new Error('no detecto el telefono');
 if(PERF.scan||!(PERF.glow<1)||!PERF.fps||!PERF.hudMs||!(PERF.dust<1))
@@ -293,6 +315,48 @@ botGame();
 lastDraw=0; frame();
 if(log.length!==hits+fails) throw new Error('log descuadrado en movil');
 SNAP=snap();
+
+// ---- 19) GUI del teléfono: barra flotante, menú hamburguesa y encuadre ----
+// la barra se corre al borde opuesto en cuanto el gato entra en su franja
+gen(); foes=[]; vis={x:0,y:0}; lastDraw=0; frame();
+if(!barLow||bar.className!=='low') throw new Error('la barra no se aparto del gato');
+p={x:0,y:R-1}; vis={x:0,y:R-1}; lastDraw=0; frame();
+if(barLow||bar.className) throw new Error('la barra no volvio arriba con el gato abajo');
+
+// el menú congela el reloj igual que el diálogo de skill issue
+gen(); foes=[]; press(letters[Object.keys(letters)[0]]);
+const tm=t0, sm=shownAt;
+menuOpen();
+if(!menuOn||!paused||menu.className!=='open') throw new Error('el menu no abrio');
+const nk=log.length; press('a');
+if(log.length!==nk) throw new Error('acepta teclas con el menu abierto');
+pauseAt-=400; menuClose();
+if(menuOn||paused||menu.className) throw new Error('el menu no cerro');
+if(Math.abs((t0-tm)-400)>50||Math.abs((shownAt-sm)-400)>50)
+  throw new Error('el menu no devolvio el tiempo pausado');
+menuOpen(); rst.onclick();
+if(menuOn||paused) throw new Error('REINICIAR no cerro el menu');
+// sin primera tecla no hay reloj: cerrar el menú no puede inventarlo
+gen(); menuOpen(); pauseAt-=400; menuClose();
+if(t0) throw new Error('el menu arranco el reloj sin jugar');
+
+// tocar el laberinto, TECLADO y JUGAR entran a pantalla completa
+for(const [quien,fn] of [['el laberinto',cv.onclick],['TECLADO',tec.onclick],['JUGAR',igo.onclick]]){
+  document.exitFullscreen(); fn();
+  if(!document.fullscreenElement) throw new Error(quien+' no entro a pantalla completa');
+}
+// pero si el jugador sale con el boton, tocar el laberinto no lo devuelve ahi
+fsb.onclick();
+if(document.fullscreenElement) throw new Error('el boton no salio de pantalla completa');
+cv.onclick(); tec.onclick();
+if(document.fullscreenElement) throw new Error('volvio solo a pantalla completa tras salir a mano');
+fsb.onclick();
+if(!document.fullscreenElement) throw new Error('el boton no la volvio a habilitar');
+document.exitFullscreen();
+cv.onclick();
+if(!document.fullscreenElement) throw new Error('el boton no reactivo el automatico');
+document.exitFullscreen();
+
 `;
 
 vm.runInNewContext(src+common+harness,ctx);
@@ -300,4 +364,4 @@ const mctx=mkctx(true);
 vm.runInNewContext(src+common+mobile,mctx);
 if(!ctx.SNAP||ctx.SNAP!==mctx.SNAP)
   throw new Error('el perfil movil movio algo del gameplay');
-console.log('OK 17/17 | el perfil lite prende solo en pointer:coarse y no toca la dificultad');
+console.log('OK 19/19 | el perfil lite prende solo en pointer:coarse y no toca la dificultad');
