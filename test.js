@@ -645,8 +645,26 @@ const bloque=sel=>{const i=style.indexOf(sel+'{');
   return style.slice(i+sel.length+1,style.indexOf('}',i))};
 const lbody=bloque('.lite body');
 if(!/justify-content:flex-start/.test(lbody)) throw new Error('la GUI del telefono no arranca arriba');
-if(!/height:100dvh/.test(lbody)||!/overflow:hidden/.test(lbody))
+if(!/overflow:hidden/.test(lbody)||!/position:fixed/.test(lbody))
   throw new Error('el telefono no se queda dentro de la pantalla');
+// el alto de la pagina es el alto VISIBLE: si la pagina es mas alta que lo que se
+// ve, el navegador tiene margen para correrla al abrir el teclado y el laberinto
+// se va de pantalla (que era el bug: quedaba escondido arriba)
+if(!/height:min\(var\(--vh/.test(lbody))
+  throw new Error('la pagina no se limita al alto visible');
+if(!/overflow:hidden/.test(bloque('.lite')))
+  throw new Error('el <html> del telefono todavia puede desplazarse');
+// el input escondido va ARRIBA: pegado abajo, el "traer a la vista" del navegador
+// al enfocarlo empuja la pagina entera hacia el fondo
+const kbr=bloque('#kb');
+if(!/top:0/.test(kbr)||/bottom:0/.test(kbr))
+  throw new Error('el input del teclado quedo pegado al borde de abajo');
+const vp=html.match(/<meta name="viewport"[^>]*>/)[0];
+if(!/interactive-widget=resizes-content/.test(vp))
+  throw new Error('falta interactive-widget: el teclado desplazaria la pagina');
+if(!/function unscroll\(/.test(src)) throw new Error('falta el rescate de scroll');
+if(!/preventScroll/.test(src)) throw new Error('el focus del teclado desplaza la pagina');
+if(/kb\.focus\(\)/.test(src)) throw new Error('quedo un kb.focus() sin preventScroll');
 const lbar=bloque('.lite #bar');
 if(/position:(fixed|absolute)/.test(lbar)) throw new Error('la barra no deberia flotar sobre el laberinto');
 if(!/flex:none/.test(lbar)) throw new Error('la barra tiene que conservar su alto');
