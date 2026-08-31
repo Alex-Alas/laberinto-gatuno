@@ -107,7 +107,7 @@
       · el log de teclas y los textos de ayuda quedan sólo en escritorio.
     El alto lo resuelve el CSS: el tablero es 15x11, así que el alto de pantalla
     ya fija un ancho máximo y el laberinto entra entero sin que el JS adivine nada. */
- .lite body{height:100dvh;min-height:0;overflow:hidden;padding:4px;gap:4px}
+ .lite body{height:100dvh;min-height:0;overflow:hidden;padding:4px;gap:4px;align-items:flex-start}
  .lite #stage{width:min(var(--w),calc((100dvh - 8px)*15/11));max-width:100%;display:flex;flex-direction:column}
  .lite h2,.lite #sub,.lite #cmeter,.lite #log,.lite p.help{display:none}
  .lite #menu p.help{display:block;max-width:none;font-size:11px;margin-top:12px;opacity:.5}
