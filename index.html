@@ -112,12 +112,11 @@
  .lite #menu p.help{display:block;max-width:none;font-size:11px;margin-top:12px;opacity:.5}
 
  .lite #bar{display:inline-flex;align-items:center;gap:7px;position:absolute;
-      left:6px;top:6px;z-index:3;height:34px;max-width:calc(100% - 12px);
+      left:50%;top:-40px;transform:translateX(-50%);z-index:3;height:34px;max-width:calc(100% - 12px);
       padding-right:9px;overflow:hidden;white-space:nowrap;
       border:1px solid #1ff5;border-radius:8px;background:#04060cec;
-      box-shadow:0 0 12px #0ff3;font-size:12px;
-      transition:top .3s cubic-bezier(.4,0,.2,1),transform .3s cubic-bezier(.4,0,.2,1)}
- .lite #bar.low{top:calc(100% - 6px);transform:translateY(-100%)}
+      box-shadow:0 0 12px #0ff3;font-size:12px}
+ .lite #bar.low{top:calc(100% + 6px);transform:translateX(-50%) translateY(-100%)}
  .lite #bt,.lite #bc,.lite #bx{min-width:0;overflow:hidden}   /* que recorte el texto... */
  .lite #bt{color:#cef}
  .lite #bc{color:#f88;letter-spacing:1px}
