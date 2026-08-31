@@ -184,6 +184,33 @@ abajo, donde el teclado lo va a tapar igual.
 - **Pantalla completa automática una sola vez:** el primer toque al entrar a la partida.
   De ahí en adelante se maneja sólo con el botón del menú, incluso entre partidas.
 
+### Que el laberinto no se pueda esconder
+
+El bug era éste: al moverse, a veces la página se iba al fondo y el laberinto quedaba
+arriba, fuera de pantalla, y había que arrastrar para volver a verlo. Son dos cosas que
+se suman —el navegador al abrir el teclado **desplaza la página para traer a la vista el
+input enfocado**, y ese input estaba pegado al borde de abajo— y cuatro capas que lo
+cierran:
+
+1. **`interactive-widget=resizes-content`** en el `<meta viewport>`: con el teclado
+   abierto Chrome/Android achica la **página** (y con ella `dvh`) en vez de dejarla del
+   alto de siempre y correrla. Sin margen sobrante no hay a dónde desplazarse.
+2. **El `<body>` mide el alto visible.** `.lite body` es `position:fixed` pegado arriba y
+   `height:min(var(--vh,100dvh),100dvh)`; `<html>` va con `overflow:hidden` y
+   `overscroll-behavior:none`. La página nunca es más alta que lo que se ve, así que el
+   documento no tiene scroll. Esto cubre a iOS, que ignora `interactive-widget`.
+3. **`#kb` se mudó de `bottom:0` a `top:0`.** Ahora "traer el input a la vista" es
+   justamente dejar el tablero donde tiene que estar, no empujarlo fuera de pantalla.
+   Los `focus()` van todos por `kbFocus()`, con `{preventScroll:true}`.
+4. **`unscroll()`**, el cinturón: si algo desplazó igual (el rebote de iOS, un
+   `scrollIntoView` ajeno, el iframe del Artifact donde la etiqueta viewport es inerte)
+   vuelve a `0,0`. Corre en `scroll`, `focusin`, el `scroll` del `visualViewport`, dentro
+   de `fit()` y unas veces más después de enfocar, porque iOS desplaza **cuando termina
+   de animar** el teclado.
+
+`fit()` ignora `visualViewport` si hay pinch-zoom (`scale>1.02`): ahí el viewport visual
+se achica por el zoom y la página se plegaría sola.
+
 ## Rendimiento
 
 Hay dos capas de optimización, y conviene no mezclarlas.
@@ -315,8 +342,10 @@ que la capa del latido aparezca recién al prender extra vibes.
 Del 19 al 22 va la GUI del teléfono: que la barra no se mude de borde, que el ascenso de
 rango se festeje (y bajar no), que el bloque del rango sea el botón del maullido, que el
 menú devuelva el tiempo pausado, que la pantalla completa automática sea de **una sola
-vez**, y —leyendo el `<style>` directo— que el perfil móvil quede alineado arriba y la
-barra siga estando antes del tablero en el markup.
+vez**, y —leyendo el `<style>` directo— que el perfil móvil quede alineado arriba, que la
+barra siga estando antes del tablero en el markup y que las cuatro capas que impiden que
+el laberinto se esconda sigan puestas: `interactive-widget` en el viewport, el `<body>`
+limitado a `--vh`, el `#kb` anclado arriba y `unscroll()` + `preventScroll` en el script.
 
 El 23 y el 24 leen el archivo: que no quede monoespaciado suelto (ni en el CSS ni en
 ningún `x.font=` del canvas), que el `body` use `--ui`, y que el latido de extra vibes

@@ -2,8 +2,11 @@
 <meta charset="utf-8"><title>Laberinto</title>
 <!-- sin esto el telefono maqueta a 980px y despues achica la pagina entera:
      texto ilegible y el compositor rasterizando de mas.  Dentro del iframe
-     del Artifact la etiqueta es inerte, y en escritorio se ignora. -->
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+     del Artifact la etiqueta es inerte, y en escritorio se ignora.
+     interactive-widget=resizes-content: al abrir el teclado el navegador achica
+     la PAGINA (y con ella dvh) en vez de dejarla del alto de siempre y correrla
+     hacia abajo, que era lo que se llevaba el laberinto fuera de pantalla. -->
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
 <style>
  *{box-sizing:border-box}
  /* --w  : ancho útil real, lo fija fit() con el viewport visible.
@@ -33,7 +36,12 @@
  h2{margin:0;letter-spacing:2px;font-size:17px;font-weight:700;text-align:center;line-height:1.5;
       transform:scale(calc(1 + var(--bop,0)*.085))}
  #sub{opacity:.6;font-size:12px;margin:0;letter-spacing:1px;text-align:center}
- #kb{position:fixed;bottom:0;left:0;width:1px;height:1px;opacity:0;border:0;padding:0;font-size:16px}
+ /* El input real vive ARRIBA, no abajo.  Al enfocarlo el navegador lo trae a la
+    vista, y pegado al borde inferior ese gesto empujaba la pagina entera hacia
+    abajo hasta esconder el laberinto: el usuario terminaba arrastrando para
+    volver a verlo.  Anclado arriba, "traerlo a la vista" es justamente dejar el
+    tablero donde tiene que estar.  16px para que iOS no haga zoom al enfocar. */
+ #kb{position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;border:0;padding:0;font-size:16px}
  #log{width:var(--w);min-height:34px;max-height:56px;overflow:hidden;line-height:17px;
       font-size:14px;font-weight:700;letter-spacing:3px;word-break:break-all;text-align:center;
       border:1px solid #1ff3;border-radius:4px;padding:4px 6px;background:#0b0b1288}
@@ -204,7 +212,17 @@
       · el log de teclas y los textos de ayuda quedan sólo en escritorio.
     El alto lo resuelve el CSS: con --ar (C/R del nivel) el ancho del tablero sale
     del alto disponible, así que el laberinto entra entero sin que el JS adivine. */
- .lite body{height:100dvh;min-height:0;overflow:hidden;padding:4px;gap:0;
+ /* El alto de la pagina es el alto VISIBLE, no el de la pantalla.  Al abrir el
+    teclado el navegador achica el viewport visual pero deja la pagina igual de
+    alta, y esa diferencia es exactamente el margen que tenia para desplazarse y
+    esconder el laberinto arriba.  Con el <body> clavado al borde superior y su
+    alto en --vh (lo publica fit()) no queda nada abajo a donde ir: no hay scroll
+    posible, ni del documento ni del navegador.  El min() con 100dvh es el
+    respaldo para cuando no hay visualViewport o miente (iframe del Artifact). */
+ .lite{height:100%;overflow:hidden;overscroll-behavior:none}
+ .lite body{position:fixed;top:0;left:0;right:0;
+      height:min(var(--vh,100dvh),100dvh);min-height:0;overflow:hidden;
+      overscroll-behavior:none;padding:4px;gap:0;
       align-items:center;justify-content:flex-start}
  .lite #stage{width:min(var(--w),
       calc((min(var(--vh,100dvh),100dvh) - 20px - var(--barh) - var(--tuth,0px))*var(--ar)));
@@ -532,7 +550,7 @@ function babyEnd(yes){
   nextAsk=hits+fails+25;                    // cooldown: 25 teclas antes de volver a preguntar
   skill.style.display='none';
   unpause();
-  if(MOBILE) kb.focus();                    // devolver el teclado que cerró el diálogo
+  if(MOBILE) kbFocus();                     // devolver el teclado que cerró el diálogo
 }
 byes.onclick=()=>babyEnd(true); bno.onclick=()=>babyEnd(false);
 
@@ -1240,7 +1258,7 @@ function fsSync(){
   fsb.textContent=on?'\u25A0 PANTALLA NORMAL':'\u25A1 PANTALLA COMPLETA';
   fsb.className=on?'on':'';
   fit();                                     // cambió el alto útil: reencuadrar
-  if(on&&MOBILE) setTimeout(()=>kb.focus(),80);   // entrar a fullscreen cierra el teclado
+  if(on&&MOBILE) setTimeout(kbFocus,80);         // entrar a fullscreen cierra el teclado
 }
 // El automático es UNA sola vez: el primer toque al entrar a la partida.  Después
 // la pantalla completa se maneja sólo con el botón del menú (si el jugador sale a
@@ -1256,7 +1274,7 @@ if(document.addEventListener){
 
 // tocar el laberinto abre el teclado; en el teléfono además entra a pantalla
 // completa (hay gesto del usuario, que es lo único que pide la API)
-function tap(){ kb.focus(); autoFS() }
+function tap(){ kbFocus(); autoFS() }
 tec.onclick=()=>{ menuClose(); tap(); tec.blur() };
 cv.onclick=tap;
 bar.onclick=tap;
@@ -1330,7 +1348,7 @@ function lvlHide(){
 function lvlPlay(){
   const l=ALL.find(v=>v.id===pick);
   if(!l||l.soon) return;
-  lvlHide(); setLevel(l.id); gen(); autoFS(); kb.focus();
+  lvlHide(); setLevel(l.id); gen(); autoFS(); kbFocus();
 }
 llist.onclick=e=>{ const b=e.target.closest&&e.target.closest('button[data-id]');
                    if(b) lvlPick(b.dataset.id) };
@@ -1400,19 +1418,55 @@ function tutEnd(){
 tskip.onclick=()=>{ tskip.blur(); tutEnd() };
 how.onclick=()=>{ menuClose(); lvlHide(); setLevel('tutorial'); gen(); how.blur() };
 
+// Si algo desplazó la página, la devolvemos arriba.  "Algo" es casi siempre el
+// navegador trayendo a la vista el input al abrir el teclado, pero también sirve
+// para el rebote de iOS o un scrollIntoView ajeno.  El laberinto vive pegado al
+// borde superior y ahí se tiene que quedar: con el <body> ya limitado al alto
+// visible esto casi nunca tiene trabajo, pero es lo que cubre a los navegadores
+// que ignoran interactive-widget (iOS) y al iframe del Artifact, donde la
+// etiqueta viewport es inerte.
+function unscroll(){
+  if(!MOBILE) return;
+  try{
+    if(window.scrollX||window.scrollY) window.scrollTo(0,0);
+    const se=document.scrollingElement;
+    if(se&&(se.scrollTop||se.scrollLeft)){ se.scrollTop=0; se.scrollLeft=0 }
+  }catch(e){}
+}
+// Enfocar el teclado SIN que el navegador desplace nada.  preventScroll frena el
+// "traer a la vista" inmediato; iOS además desplaza cuando termina de animar el
+// teclado, así que se vuelve a barrer un par de veces.
+function kbFocus(){
+  try{ kb.focus({preventScroll:true}) }catch(e){}   // sin soporte lo ignoran, pero enfocan
+  unscroll();
+  [60,180,400].forEach(ms=>setTimeout(unscroll,ms));
+}
 // El ancho y el alto útiles salen del viewport VISIBLE (el de layout miente dentro
-// de iframes y, en el teléfono, no descuenta el teclado).  Con --vh el CSS achica
-// el tablero solo lo necesario para que la barra, el laberinto y el cartel del
-// tutorial entren enteros arriba del teclado; si el navegador no da visualViewport
-// —o miente dentro del iframe— el min() con 100dvh deja todo como estaba.
+// de iframes y, en el teléfono, no descuenta el teclado).  --vh es el alto del que
+// cuelgan las dos cosas: el <body> mide eso (así no hay página de sobra donde
+// esconder el tablero) y el CSS achica el laberinto sólo lo necesario para que la
+// barra, el tablero y el cartel del tutorial entren enteros arriba del teclado.
+// Con pinch-zoom visualViewport también se achica y ahí NO cuenta: se vuelve al
+// alto de layout, si no la página se plegaría al zoom.  Si el navegador no da
+// visualViewport —o miente dentro del iframe— el min() con 100dvh deja todo igual.
 function fit(){
-  const vv=window.visualViewport;
-  root.style.setProperty('--w',
-    Math.max(240,Math.min(Math.max(510,C*S),(vv?vv.width:innerWidth)-16))+'px');
-  root.style.setProperty('--vh',(vv?vv.height:innerHeight)+'px');
+  const vv=window.visualViewport,
+        ok=!!(vv&&!(vv.scale>1.02)&&vv.width>0&&vv.height>0),
+        vw=ok?vv.width :innerWidth,
+        vh=ok?vv.height:innerHeight;
+  root.style.setProperty('--w',Math.max(240,Math.min(Math.max(510,C*S),vw-16))+'px');
+  root.style.setProperty('--vh',Math.round(vh)+'px');
+  unscroll();
 }
 addEventListener('resize',fit);
-if(window.visualViewport) visualViewport.addEventListener('resize',fit);
+if(window.visualViewport){
+  visualViewport.addEventListener('resize',fit);
+  visualViewport.addEventListener('scroll',unscroll);
+}
+if(MOBILE){                                  // último cinturón: nada de scroll
+  addEventListener('scroll',unscroll,{passive:true});
+  addEventListener('focusin',unscroll);
+}
 fsSync();                                    // deja el botón con el texto correcto
 fit();
 
