@@ -13,6 +13,14 @@ Al terminarlo —o con **SALTAR**— se abre el **selector de nivel**, y desde a
 con **▦ NIVELES**. Si ya lo terminaste alguna vez (`localStorage`), la próxima visita
 entra derecho al selector.
 
+El **primer encuentro con un gato negro** es el único momento del juego que se **frena
+solo**: el gato entra lejos para que se lo vea venir, y cuando te alcanza el juego se
+congela entero en un cartel que explica qué hay que teclear —el reloj, los gatos y el
+respiro quedan quietos, leerlo no cuesta un segundo de partida—. Recién con **ESTOY
+LISTO** (o cualquier tecla) arranca el QTE, y arranca en su versión blanda. Al ganarlo el
+gato se reubica a ocho segundos de camino y el respiro dura 5 s: tiempo para acomodarse
+antes del siguiente. La pausa sale **una sola vez por partida**.
+
 ## Niveles y modos
 
 Todo lo que cambia entre partidas vive en la tabla `LEVELS` del `<script>`: tamaño del
@@ -70,9 +78,31 @@ el `soon`.
   completa antes de que se acabe la barra. Fallarlo cuesta +2 s, **3 pasos atrás** y
   **−8 de estilo**: perder contra un gato es lo único que se lleva el medidor puesto.
 - **Respiro:** ganar un QTE congela **2 s** la ventana de reacción *y* el paso de los
-  gatos. Salís del QTE con la pantalla llena de secuencia y sin saber para dónde ibas:
-  ese rato es para mirar el laberinto de nuevo, no para correr. El anillo se dibuja lleno,
-  en blanco y con un halo que respira, para que se vea que el reloj está quieto.
+  gatos (en el tutorial, **5 s**). Salís del QTE con la pantalla llena de secuencia y sin
+  saber para dónde ibas: ese rato es para mirar el laberinto de nuevo, no para correr. El
+  anillo se dibuja lleno, en blanco y con un halo que respira, para que se vea que el
+  reloj está quieto.
+
+## Reparto: nada te aparece encima
+
+Monedas, faroles y gatos pasan todos por la misma función, `place()`. Antes cada uno caía
+en una celda al azar y listo, y eso en el 9x7 del nivel 1 dejaba monedas en la casilla de
+al lado y gatos a dos pasos: no había tramo para reaccionar a un encuentro, respirar y
+prepararse para el siguiente. `place()` tira hasta `SPREAD_K` celdas al azar y se queda
+con la primera que cumple los **dos mínimos**; si ninguna llega, con la menos mala, así
+que nunca se cuelga.
+
+- **Cuánto hay que caminar hasta una moneda o un farol** (`NEAR`): se mide **por el
+  laberinto** (el mismo BFS que usan los gatos), no en línea recta. En línea recta el
+  laberinto miente: dos celdas pegadas pueden estar a media vuelta de camino, y al revés.
+- **Cuánto tarda un gato en llegar** (`FAR`): ésa se mide en **segundos**, no en celdas.
+  Diez celdas son una eternidad en el nivel 1 (900 ms por paso) y un suspiro en el sótano
+  con todas las monedas (280 ms), así que un número fijo de celdas daba un respiro
+  distinto en cada nivel y en cada tramo de la partida. `FAR` devuelve las celdas que a la
+  velocidad de caza de **ese momento** valen `REST_MS` (8 s) de camino: al reubicarse
+  después de un QTE, el gato siempre te queda a ocho segundos.
+- **Cuánto separa dos cosas entre sí** (`SEP`): ésta sí en línea recta, porque es la que
+  se **ve**. Vale para monedas contra faroles y para los gatos entre ellos.
 
 ## Habilidades
 
@@ -114,6 +144,11 @@ clásico (5 monedas) da exactamente los números de siempre:
 
 El QTE siempre da 700 ms por letra, así que crece en largo, no en presión por tecla.
 A mitad de camino aparece un gato más.
+
+La excepción es el **primer encuentro del tutorial**: 3 letras y **1500 ms por letra**, y
+se queda así hasta que se gane uno (si el primero se falla, el que sigue vuelve a ser el
+fácil). Un QTE que cae de sorpresa la primera vez no se aprende: se pierde, y lo que queda
+es el susto, no la mecánica.
 
 ## Combo, estilo, rango y sonido
 
@@ -407,10 +442,21 @@ Chromium, emulación de Pixel 5 y escritorio de 1280px, con extra vibes prendido
 node test.js
 ```
 
+`index.html` pasa por un formateador (comillas dobles, saltos de línea, un espacio
+después de cada `:`), así que los tests que buscan **formas** —reglas de CSS, markup,
+patrones de código— no leen el archivo crudo: lo aplastan primero a la forma compacta
+(`squash`, `mk`, `flat`). Así el test puede seguir escrito como `const CF=` o
+`<div id=bar>` sin depender de cómo lo escriba el formateador mañana.
+
 Corre el juego en un `vm` con stubs de DOM: formato del timer, retroceso por error,
 QTE (éxito y fallo), baby mode y su cooldown, ruta del teclado móvil, que el layout no
 desborde, que los chips de letra nunca queden bajo el jugador, 25 laberintos donde el
 gato debe llegar por el camino mínimo, y una partida completa jugada por un bot.
+
+El **5b** es el reparto: 60 laberintos por nivel, con el gato al principio y al final de
+la partida, donde ninguna moneda cae más cerca que `NEAR` del jugador, ningún gato más
+cerca que `FAR` —los dos medidos por el laberinto— y nada queda amontonado con lo demás.
+Y que `FAR` crezca cuando la caza acelera: el respiro se mide en segundos, no en celdas.
 
 Del 11 al 16 van los dos medidores, las vibes, el tutorial y los niveles: que el de combo
 llene y sature en `COMBO_MAX`, que los rangos suban por el **estilo** y el medidor se
@@ -418,7 +464,10 @@ vacíe en cada ascenso, que un error borre el combo entero pero al estilo sólo 
 `STYLE_ERR` (y perder un QTE, `STYLE_LOSS`, que es mucho más), que el estilo tope y no
 baje de cero, que los `sfx()` sean no-op sin WebAudio, que extra vibes cambie de pista sin
 tocar ni una variable de gameplay y que `bopAt()` pique justo en el bombo medido
-(0.174 s), que cada paso del tutorial se cierre sólo cuando el jugador usó lo que explica,
+(0.174 s), que cada paso del tutorial se cierre sólo cuando el jugador usó lo que explica
+y que el primer encuentro **frene el juego antes** del QTE (cartel abierto, partida en
+pausa, la tecla de ESTOY LISTO no se juega, el reloj no le cobra al jugador lo que tardó
+en leer, el QTE que sale es el corto y el respiro que deja es el largo),
 que el selector pause el reloj y no deje jugar un modo que no existe, que el sótano
 conserve niebla, faroles y acechador (y se pueda terminar), que su ventana por letra sea
 **la misma** que la del clásico, y que la salida sólo abra con todas las monedas del

@@ -147,6 +147,44 @@ got=5; qteStart(); const m5=qte.ms/qte.seq.length; qte=null;
 if(m0!==m5||m0!==MS_LETRA) throw new Error('margen por letra no constante');
 got=0;
 
+// 5b) reparto: nada aparece pegado al jugador ni amontonado con lo demas.  El
+// nivel 1 se juega en 9x7 y antes las monedas podian caer en la casilla de al
+// lado y el gato a dos pasos: no habia tramo para reaccionar ni para respirar.
+for(const id of ['tutorial','clasico','sotano']){
+  setLevel(id);
+  for(let v=0;v<60;v++){
+    gen();
+    if(LV.tut) spawn(coins,LV.coins);     // en el tutorial las suelta un paso, no gen()
+    // el tramo final es el que aprieta: el gato camina al doble de velocidad, asi
+    // que el respiro en CELDAS tiene que crecer para seguir valiendo los mismos
+    // segundos.  Se reubica un gato como despues de un QTE ganado.
+    for(const g of [0,LV.coins]){
+      got=g; foes=[]; for(let i=0;i<(LV.foes||1);i++) foes.push(far());
+      const d=flow();
+      foes.forEach(f=>{ if(d[f]<FAR())
+        throw new Error(id+': un gato entro a '+d[f]+' pasos (minimo '+FAR()+')') });
+      foes.forEach((a,i)=>foes.slice(i+1).forEach(b=>{ if(sep(a,b)<SEP())
+        throw new Error(id+': dos gatos amontonados a '+sep(a,b)+' celdas') }));
+    }
+    got=0;
+    const dd=flow(), cosas=[...coins,...lamps];
+    cosas.forEach(i=>{ if(dd[i]<NEAR())
+      throw new Error(id+': una moneda quedo a '+dd[i]+' pasos del jugador') });
+    // el sotano reparte diez cosas en 17x13: al ultimo le puede faltar una celda
+    // para el minimo, pero nunca quedan pegadas
+    cosas.forEach((a,i)=>cosas.slice(i+1).forEach(b=>{ if(sep(a,b)<SEP()-1)
+      throw new Error(id+': dos monedas/faroles a '+sep(a,b)+' celdas') }));
+  }
+}
+// el respiro del gato se mide en SEGUNDOS: mas rapida la caza, mas celdas de aire
+setLevel('clasico'); gen();
+got=0; const fa0=FAR(), fm0=foeMs();
+got=LV.coins; const fa5=FAR();
+if(!(fa5>fa0)) throw new Error('el respiro no crece cuando el gato acelera');
+if(Math.abs(fa0*fm0-REST_MS)>fm0) throw new Error('FAR no vale REST_MS de caminata');
+got=0;
+setLevel('clasico');
+
 // 6) QTE fallido: 3 pasos atras + congelado; exitoso: sin retroceso
 gen(); foes=[]; const camino=[cell()];
 for(let i=0;i<4;i++){ step(); camino.push(cell()) }
@@ -328,12 +366,36 @@ if(tstep!==2||combo!==0) throw new Error('el paso 3 no reinicio el combo');
 for(let i=0;i<4;i++) step(); tutCheck();
 if(tstep!==3) throw new Error('el paso del combo no se cerro');
 if(!foes.length) throw new Error('el paso del QTE no solto el gato');
+// el gato entra LEJOS: hay que verlo venir, no encontrarselo encima
+if(flow()[foes[0]]<FAR()) throw new Error('el gato del tutorial entro pegado al jugador');
 // un jugador rapido se le escapa al gato: el paso tiene que destrabarse solo
 tAt-=TUT_PUSH+1; tutCheck();
-if(!qte) throw new Error('el paso del QTE se quedo trabado esperando al gato');
+// pero el PRIMER encuentro no arranca de una: el juego se frena y lo explica
+if(qte) throw new Error('el primer QTE del tutorial arranco sin explicarse');
+if(brief.className!=='on') throw new Error('el primer encuentro no abrio el cartel');
+if(!paused) throw new Error('el cartel del primer encuentro no congelo el juego');
+if(typeof bok.onclick!=='function') throw new Error('el cartel no tiene boton');
+// cualquier tecla vale como ESTOY LISTO, pero esa tecla NO se juega: no mueve al
+// gato blanco ni se cuenta como letra
+const nb=log.length, cb=cell(), tA=t0, sA=shownAt;
+pauseAt-=400; press('a');                                   // simula 400ms leyendo
+if(paused||brief.className) throw new Error('la tecla no cerro la pausa');
+if(log.length!==nb||cell()!==cb) throw new Error('la tecla de ESTOY LISTO se jugo igual');
+if(Math.abs((t0-tA)-400)>50||Math.abs((shownAt-sA)-400)>50)
+  throw new Error('leer el cartel le costo segundos de partida');
+if(!qte) throw new Error('el QTE no arranco despues de la explicacion');
+// y ese primero es el blando: secuencia corta y mas del doble de margen por letra
+if(qte.seq.length!==TUT_QTE_N) throw new Error('el primer QTE del tutorial no es el corto');
+if(qte.ms/qte.seq.length<=MS_LETRA) throw new Error('el primer QTE no da mas tiempo por letra');
 if(tstep!==3) throw new Error('el empujon no deberia saltear el paso');
 qte.seq.slice().forEach(k=>press(k)); tutCheck();
 if(tstep!==4) throw new Error('el QTE limpio no cerro el paso');
+// ganarlo deja un respiro LARGO: aparecen las monedas y hay un cartel nuevo que
+// leer, y con dos segundos el gato reubicado ya venia de vuelta
+if(graceT-now()<=GRACE_MS) throw new Error('el tutorial no da el respiro largo');
+// el cartel se explica UNA sola vez por partida
+qteStart(); if(brief.className==='on') throw new Error('el cartel volvio a salir');
+qte=null;
 if(coins.length!==LV.coins) throw new Error('el paso de las monedas no las solto');
 got=LV.coins; coins=[]; tutCheck();
 if(tstep!==5||!exitOpen()) throw new Error('el paso de la salida no arranco');
@@ -771,7 +833,24 @@ if(!ctx.SNAP||ctx.SNAP!==mctx.SNAP)
   throw new Error('el perfil movil movio algo del gameplay');
 
 // ---- 22) CSS: en el teléfono TODO va alineado arriba y la barra sobre el tablero ----
-const style=html.match(/<style>([\s\S]*?)<\/style>/)[1];
+// El index.html pasa por un formateador, asi que las reglas vienen partidas en
+// varios renglones y con un espacio despues de cada ':'.  Para BUSCAR patrones da
+// igual: se aplasta a la forma compacta de siempre (y de paso se van los
+// comentarios, que si no hacen aparecer reglas que ya no existen).
+const squash=t=>t.replace(/\/\*[\s\S]*?\*\//g,'')
+                 .replace(/\s+/g,' ').replace(/ *([{};:,>]) */g,'$1');
+const style=squash(html.match(/<style>([\s\S]*?)<\/style>/)[1]);
+// El markup salio del mismo formateador: etiquetas partidas en varios renglones y
+// atributos entre comillas.  `mk` lo devuelve a la forma compacta —un renglon, sin
+// comillas simples de atributo— para que los patrones de abajo sigan como estaban.
+const mk=html.replace(/\s*\n\s*/g,' ').replace(/\s+>/g,'>').replace(/="([^"\s>]*)"/g,'=$1');
+// Y con el <script> igual: `code` es el fuente sin los data: URI (megabytes de
+// base64 que hacen aparecer cualquier palabra por casualidad) y `flat` es ademas
+// sin los espacios que el formateador mete alrededor de la puntuacion, para que un
+// test pueda pedir `const CF=` sin depender de si el dia de manana se escribe
+// `const CF =`.  Los dos son para BUSCAR formas de codigo, no para leer textos.
+const code=src.replace(/(['"])data:[\s\S]*?\1/g,"'#'");
+const flat=code.replace(/"/g,"'").replace(/ *([=?:,;{}()[\]]) */g,'$1');
 const bloque=sel=>{const i=style.indexOf(sel+'{');
   if(i<0) throw new Error('falta la regla '+sel);
   return style.slice(i+sel.length+1,style.indexOf('}',i))};
@@ -791,7 +870,7 @@ if(!/overflow:hidden/.test(bloque('.lite')))
 const kbr=bloque('#kb');
 if(!/top:0/.test(kbr)||/bottom:0/.test(kbr))
   throw new Error('el input del teclado quedo pegado al borde de abajo');
-const vp=html.match(/<meta name="viewport"[^>]*>/)[0];
+const vp=mk.match(/<meta name=viewport[^>]*>/)[0];
 if(!/interactive-widget=resizes-content/.test(vp))
   throw new Error('falta interactive-widget: el teclado desplazaria la pagina');
 if(!/function unscroll\(/.test(src)) throw new Error('falta el rescate de scroll');
@@ -807,7 +886,7 @@ if(!/height:var\(--barh\)/.test(bloque('.lite #bar')))
 if(/#bar\.low/.test(style)) throw new Error('quedo la regla de la barra que se mudaba de borde');
 for(const sel of ['.lite #menu','.lite #lvl','.lite #skill','.lite #res'])
   if(!/align-items:start/.test(bloque(sel))) throw new Error(sel+' no esta alineado arriba');
-const stage=html.match(/<div id=stage>[\s\S]*?<\/div>\s*<div id=scare>/)[0];
+const stage=mk.match(/<div id=stage>[\s\S]*?<\/div>\s*<div id=scare>/)[0];
 if(stage.indexOf('id=bar')>stage.indexOf('id=board'))
   throw new Error('la barra tiene que ir ANTES del tablero en el markup');
 const lstage=bloque('.lite #stage');
@@ -820,8 +899,8 @@ if(!/Arial Narrow/.test(style)) throw new Error('la pila condensada no llego al 
 if(!/var\(--ui\)/.test(bloque('body'))) throw new Error('el body no usa --ui');
 if(/ui-monospace/.test(style)||/ui-monospace/.test(src))
   throw new Error('quedo monoespaciado suelto: la GUI y el tablero van con la misma familia');
-if(!/const CF=/.test(src)||!/const DF=/.test(src)) throw new Error('el canvas no tiene su pila de fuentes');
-for(const m of src.match(/x\.font=[^;]+;/g)||[])
+if(!/const CF=/.test(flat)||!/const DF=/.test(flat)) throw new Error('el canvas no tiene su pila de fuentes');
+for(const m of flat.match(/x\.font=[^;]+;/g)||[])
   if(!/CF|DF/.test(m)) throw new Error('un texto del tablero quedo fuera de la familia: '+m);
 
 // ---- 24) extra vibes: el latido llega a mucho mas que el canvas y la barra ----
@@ -830,7 +909,7 @@ if(new Set(vibSel).size<10)
   throw new Error('el latido llega a muy pocos elementos: '+new Set(vibSel).size);
 for(const sel of ['#log','#tut','#board','#btns','#bar','#bcombo','#bfill'])
   if(vibSel.indexOf(sel)<0) throw new Error('extra vibes no llega a '+sel);
-if(!/classList\[vibes\?'add':'remove'\]\('vibes'\)/.test(src))
+if(!/classList\[vibes\?'add':'remove'\]\('vibes'\)/.test(flat))
   throw new Error('el boton no enciende la clase .vibes');
 if(!/@keyframes rpopl/.test(style)) throw new Error('falta la entrada espejada del cartel del rango');
 if(/var\(--rc,#4cf\)22/.test(style)) throw new Error('quedo el degradado con el hex roto de 5 digitos');
@@ -841,16 +920,18 @@ if(/var\(--rc,#4cf\)22/.test(style)) throw new Error('quedo el degradado con el 
 // telefono y gasta el ancho de mas en lo que alla no entraba.
 // los assets van embebidos en base64: cualquier palabra corta aparece ahi por azar,
 // asi que estos grep miran el codigo con los data: URI afuera
-const code=src.replace(/'data:[^']*'/g,"'#'");
 // con \b, porque el medidor de combo NUEVO se llama #bcbar y contiene 'cbar'
 if(/#cmeter\b|#cbar\b|#clab\b/.test(style)||/\b(cmeter|cbar|clab)\b/.test(code))
   throw new Error('quedo el medidor de combo viejo del escritorio');
-if(/id=hud|id=sub[>\s]/.test(html.slice(0,html.indexOf('<script>')))||/hudt|hudx|subt|babyEl/.test(code))
+if(/id=hud|id=sub[>\s]/.test(mk.slice(0,mk.indexOf('<script>')))||/hudt|hudx|subt|babyEl/.test(code))
   throw new Error('quedo el HUD suelto viejo (h2 + p) del escritorio');
-const oculto=style.match(/^.*#mstats.*$/m)[0];
+// la lista de selectores que esconde cosas en escritorio: la que nombra a
+// #mstats, desde la llave de cierre anterior hasta la suya
+const im=style.indexOf('#mstats');
+const oculto=style.slice(style.lastIndexOf('}',im)+1,style.indexOf('{',im));
 if(/#bar/.test(oculto)) throw new Error('el escritorio sigue escondiendo la barra');
 // la barra va entera en una linea: ahi tienen que estar las zonas de escritorio
-const barm=html.match(/<div id=bar>.*<\/div>/)[0];
+const barm=mk.match(/<div id=bar>.*<\/div>/)[0];
 for(const id of ['bmeta','bname','bpb','bstat','bmax'])
   if(barm.indexOf('id='+id)<0) throw new Error('la barra no trae la zona de escritorio '+id);
 for(const sel of [':root:not(.lite) #bmeta',':root:not(.lite) #bstat',':root:not(.lite) #bmax'])
@@ -891,7 +972,7 @@ if(!/bmeow\.onclick/.test(code)) throw new Error('el ♪ no es boton');
 
 // ---- 27) la pantalla de resultados existe y esta cableada ----
 for(const id of ['res','rtag','rttl','rtime','rsub','rgrid','rpb','rnext','ragain','rlvls'])
-  if(html.indexOf('id='+id)<0) throw new Error('al resumen le falta '+id);
+  if(mk.indexOf('id='+id)<0) throw new Error('al resumen le falta '+id);
 if(style.indexOf('#res.open{')<0) throw new Error('el resumen no se abre con .open');
 if(!/#res button/.test(style)) throw new Error('los botones del resumen no heredan el estilo del resto');
 for(const m of ['rtime.textContent','rgrid.innerHTML','rnext.onclick','rlvls.onclick'])
