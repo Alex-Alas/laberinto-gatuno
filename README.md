@@ -16,10 +16,14 @@ entra derecho al selector.
 El **primer encuentro con un gato negro** es el único momento del juego que se **frena
 solo**: el gato entra lejos para que se lo vea venir, y cuando te alcanza el juego se
 congela entero en un cartel que explica qué hay que teclear —el reloj, los gatos y el
-respiro quedan quietos, leerlo no cuesta un segundo de partida—. Recién con **ESTOY
-LISTO** (o cualquier tecla) arranca el QTE, y arranca en su versión blanda. Al ganarlo el
-gato se reubica a ocho segundos de camino y el respiro dura 5 s: tiempo para acomodarse
-antes del siguiente. La pausa sale **una sola vez por partida**.
+respiro quedan quietos, leerlo no cuesta un segundo de partida—. Y antes de explicarlo lo
+**muestra**: arriba del texto corre la escena del QTE en chico —el mismo gato viniéndose
+encima, las tres letras pasando de gris a blanco a verde, la barra roja vaciándose y el
+gato saliendo volando al final— en loop, porque lo que hay que reconocer cuando pase de
+verdad es una imagen, no un párrafo. Recién con **ESTOY LISTO** (o cualquier tecla)
+arranca el QTE, y arranca en su versión blanda. Al ganarlo el gato se reubica a ocho
+segundos de camino y el respiro dura 5 s: tiempo para acomodarse antes del siguiente. La
+pausa sale **una sola vez por partida**.
 
 ## Niveles y modos
 
@@ -526,6 +530,14 @@ El 26 y el 27 del segundo archivo leen el CSS y el markup de lo nuevo: que la ba
 el medidor de combo y el `♪` con sus estados `.ready` y `.cd`, que el cuadro los escriba,
 y que la pantalla de resultados exista entera —sus nodos, su `.open`, sus botones con el
 estilo del resto— y en el teléfono arranque alineada arriba como los demás paneles.
+
+El 28 ata la demo del cartel del primer encuentro a lo que dibuja el canvas: que la escena
+esté antes del párrafo, que sus tres letras sean las tres del QTE blando, que los colores
+salgan del mismo `const col` que pinta la secuencia y la barra del mismo `#f57`, que el
+gato sea el `BIG` del overlay (nada de una segunda imagen que engorde el archivo), que
+todo el movimiento lo haga el CSS —ningún timer en el JS, así se apaga sola con el cartel
+cerrado— y que con `prefers-reduced-motion` quede en un cuadro fijo. Una demo que enseña
+algo distinto de lo que va a pasar es peor que no tenerla.
 
 > Los `grep` sobre el `<script>` van contra `code`, que es el `src` con los `data:` URI
 > afuera: los assets van embebidos en base64 y ahí cualquier palabra corta aparece por

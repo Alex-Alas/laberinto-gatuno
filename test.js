@@ -978,4 +978,43 @@ if(!/#res button/.test(style)) throw new Error('los botones del resumen no hered
 for(const m of ['rtime.textContent','rgrid.innerHTML','rnext.onclick','rlvls.onclick'])
   if(code.indexOf(m)<0) throw new Error('el resumen no escribe '+m);
 
-console.log('OK 30/30 | el perfil lite prende solo en pointer:coarse y no toca la dificultad');
+// ---- 28) el cartel del primer encuentro MUESTRA el QTE, no solo lo cuenta ----
+// Un cartel de puro texto se lee y no se reconoce, y lo que hay que reconocer
+// cuando el gato te alcanza de verdad es una IMAGEN.  Arriba del texto va la
+// escena en chico, y el test la ata a la del canvas: si manana cambian los
+// colores de la secuencia o el gato del overlay, la demo tiene que cambiar con
+// ellos o esto se cae —una demo que ensena otra cosa es peor que no tenerla—.
+const brf=mk.match(/<div id=brief>[\s\S]*?<script>/)[0];
+for(const id of ['bdemo','bdcat','bdttl','bdseq','bdbar','bdwin'])
+  if(!new RegExp('id='+id+'[ >]').test(brf))
+    throw new Error('a la demo del cartel le falta '+id);
+if(brf.indexOf('id=bdemo')>brf.indexOf('<p>'))
+  throw new Error('la demo va ANTES del parrafo: primero se ve, despues se lee');
+if(!/<div id=bdseq>(<b>\w<\/b>){3}<\/div>/.test(brf))
+  throw new Error('la secuencia de la demo no tiene las tres letras del QTE blando');
+if(brf.indexOf('id=bok')<brf.indexOf('id=bdemo'))
+  throw new Error('ESTOY LISTO tiene que seguir cerrando el cartel, no abrirlo');
+// los tres colores de letra salen del MISMO sitio que los del canvas
+const cols=(flat.match(/const col=done\?'(#\w+)':i==qte\.i\?'(#\w+)':'(#\w+)'/)||[]).slice(1);
+if(cols.length!==3) throw new Error('no se pudieron leer los colores del QTE del canvas');
+for(const k of ['bdk1','bdk2','bdk3']){
+  const i=style.indexOf('@keyframes '+k);
+  if(i<0) throw new Error('falta la animacion '+k+' de la demo');
+  const kf=style.slice(i,style.indexOf('}}',i));
+  for(const c of cols)  // el (?!hex) evita que #6f9 se de por visto dentro de #6f98
+    if(!new RegExp(c+'(?![0-9a-f])','i').test(kf))
+      throw new Error(k+' no pasa por el color '+c+' que dibuja el QTE');
+}
+if(!/background:#f57/.test(bloque('#bdbar i')))
+  throw new Error('la barra de la demo no es la roja del QTE');
+// y el gato es el del overlay, sin un byte extra de imagen
+if(!/\$\('bdcat'\)\.src=BIG\.src/.test(flat))
+  throw new Error('la demo no usa el mismo gato que se te viene encima en el QTE');
+if(/bdemo|bdseq|bdbar/.test(flat.replace(/\$\('bdcat'\)\.src=BIG\.src;/,'')))
+  throw new Error('la demo tiene que moverse sola con CSS, sin timers en el JS');
+if(style.indexOf('@media (prefers-reduced-motion:reduce)')<0)
+  throw new Error('la demo no respeta a quien pide menos movimiento');
+if(style.indexOf('#bdemo *,#bdemo::after{animation:none')<0)
+  throw new Error('con menos movimiento la demo deberia quedarse en un cuadro fijo');
+
+console.log('OK 31/31 | el perfil lite prende solo en pointer:coarse y no toca la dificultad');
