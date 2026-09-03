@@ -238,15 +238,41 @@ if(typeof tec.onclick!=='function'||typeof cv.onclick!=='function') throw new Er
 kb.value='ZZZ'; kb.oninput();
 if(hits+fails<3) throw new Error('no proceso la cadena completa');
 
-// 9b) layout: fit() nunca excede el viewport visible
+// 9b) layout: fit() nunca excede el viewport visible, y en escritorio el tablero
+// se lleva el espacio que sobra sin perder nitidez (K = pixeles por pixel de tablero)
 fit();
 if(parseInt(css['--w'])>visualViewport.width-16) throw new Error('el layout desborda: '+css['--w']);
-visualViewport.width=1200; fit();
-if(parseInt(css['--w'])!==510) throw new Error('no respeta el maximo de 510px');
-setLevel('sotano');                          // un tablero mas ancho pide mas ancho
-if(parseInt(css['--w'])!==LV.C*S) throw new Error('el nivel grande no se dibuja entero');
 if(css['--vh']!=='700px') throw new Error('fit() no publico el alto visible: '+css['--vh']);
-juega('clasico'); visualViewport.width=375; fit();
+// ventana angosta: sin las dos columnas el tablero se queda en su tamaño nativo
+visualViewport.width=800; fit();
+if(parseInt(css['--w'])!==510) throw new Error('sin las dos columnas deberia quedarse en 510px');
+if(K!==1) throw new Error('a tamaño nativo el canvas no necesita resolucion de mas');
+if(cv.width!==C*S) throw new Error('el canvas no siguio al tablero');
+// consola de escritorio: el tablero crece con la pantalla...
+visualViewport.width=1600; visualViewport.height=1000; fit();
+const wDsk=parseInt(css['--w']);
+if(wDsk<=510) throw new Error('el tablero no crecio con la pantalla: '+wDsk);
+if(wDsk>1600-16) throw new Error('el tablero crecido se sale de ancho');
+if(wDsk>1000*(C/R)) throw new Error('el tablero crecido no entra de alto');
+// ...y el canvas sube de resolucion con el: agrandar por CSS lo dejaba borroso
+if(K<2) throw new Error('el tablero crecido sigue dibujandose a resolucion nativa');
+if(cv.width!==C*S*K||cv.height!==R*S*K) throw new Error('el canvas no tomo la resolucion K');
+if(mz[0].width!==(C*S+PAD*2)*K) throw new Error('las paredes horneadas no siguieron a K');
+setLevel('sotano');                          // un tablero mas ancho pide mas ancho
+if(parseInt(css['--w'])<LV.C*S) throw new Error('el nivel grande no se dibuja entero');
+// el cartel del tutorial le come alto al tablero: con el prendido, el tablero achica
+juega('tutorial'); const wTut=parseInt(css['--w']);
+tutOn=false; fit();
+if(parseInt(css['--w'])<=wTut) throw new Error('el cartel del tutorial no le reserva alto al tablero');
+tutOn=true; fit();
+// pantalla baja: el tablero se ACHICA en vez de desbordar la pagina (con el ancho
+// clavado en 510 no quedaba alto para la barra ni para el cartel y aparecia scroll)
+visualViewport.height=560; fit();
+const wBajo=parseInt(css['--w']);
+if(wBajo>=510) throw new Error('en una pantalla baja el tablero no se achico: '+wBajo);
+if(wBajo/(C/R)>560) throw new Error('el tablero sigue sin entrar de alto');
+juega('clasico'); visualViewport.width=375; visualViewport.height=700; fit();
+if(K!==1) throw new Error('en una ventana chica el canvas vuelve a resolucion nativa');
 
 // 9c) IA: con el campo de flujo el gato SIEMPRE alcanza al PJ por el camino mas corto
 const rnd=Math.random;
@@ -368,19 +394,36 @@ if(tstep!==3) throw new Error('el paso del combo no se cerro');
 if(!foes.length) throw new Error('el paso del QTE no solto el gato');
 // el gato entra LEJOS: hay que verlo venir, no encontrarselo encima
 if(flow()[foes[0]]<FAR()) throw new Error('el gato del tutorial entro pegado al jugador');
-// un jugador rapido se le escapa al gato: el paso tiene que destrabarse solo
+// un jugador rapido se le escapa al gato: el paso tiene que destrabarse solo, pero
+// el gato NO se aparece encima.  El primer empujon lo deja a dos pasos y el resto
+// lo camina el solo: el paso dice "miralo venir", un teletransporte lo desmiente
 tAt-=TUT_PUSH+1; tutCheck();
+if(qte||brief.className==='on') throw new Error('el primer empujon cayo encima del jugador');
+if(foes[0]===cell()) throw new Error('el gato aparecio en la casilla del jugador');
+if(flow()[foes[0]]>3) throw new Error('el primer empujon no acerco al gato');
+// y si aun asi se le sigue escapando, ahi si se da el encuentro por hecho
+tAt-=TUT_GRAB+1; tutCheck();
 // pero el PRIMER encuentro no arranca de una: el juego se frena y lo explica
 if(qte) throw new Error('el primer QTE del tutorial arranco sin explicarse');
 if(brief.className!=='on') throw new Error('el primer encuentro no abrio el cartel');
 if(!paused) throw new Error('el cartel del primer encuentro no congelo el juego');
 if(typeof bok.onclick!=='function') throw new Error('el cartel no tiene boton');
-// cualquier tecla vale como ESTOY LISTO, pero esa tecla NO se juega: no mueve al
-// gato blanco ni se cuenta como letra
+// NINGUNA tecla cierra el cartel.  El cartel explica un QTE, que se gana tecleando:
+// con "cualquier tecla es ESTOY LISTO" la letra que el jugador ya tenia en el aire
+// para moverse se llevaba puesta la unica explicacion que hay del sistema
 const nb=log.length, cb=cell(), tA=t0, sA=shownAt;
-pauseAt-=400; press('a');                                   // simula 400ms leyendo
-if(paused||brief.className) throw new Error('la tecla no cerro la pausa');
-if(log.length!==nb||cell()!==cb) throw new Error('la tecla de ESTOY LISTO se jugo igual');
+for(const k of ['a','Enter',' ','z']) press(k);
+if(!paused||brief.className!=='on') throw new Error('una tecla suelta cerro el cartel');
+if(log.length!==nb||cell()!==cb) throw new Error('las teclas sobre el cartel se jugaron igual');
+// y el boton tampoco vale de entrada: el clic que ya venia en camino cuando salto
+// el cartel no cuenta, primero hay que haber podido leerlo
+briefAt=now(); bok.onclick();
+if(!paused||brief.className!=='on') throw new Error('ESTOY LISTO se dejo apretar sin tiempo de leer');
+// pasado ese rato el boton —y solo el boton— sigue el juego
+briefAt-=BRIEF_LOCK+1; pauseAt-=400;                        // simula 400ms leyendo
+bok.onclick();
+if(paused||brief.className) throw new Error('el boton no cerro la pausa');
+if(log.length!==nb||cell()!==cb) throw new Error('cerrar el cartel jugo una letra');
 if(Math.abs((t0-tA)-400)>50||Math.abs((shownAt-sA)-400)>50)
   throw new Error('leer el cartel le costo segundos de partida');
 if(!qte) throw new Error('el QTE no arranco despues de la explicacion');
@@ -943,8 +986,21 @@ const dsk=bloque(':root:not(.lite) body');
 if(!/display:grid/.test(dsk)) throw new Error('el escritorio no arma las dos columnas');
 for(const sel of [':root:not(.lite) #log',':root:not(.lite) p.help'])
   if(!/grid-column:2/.test(bloque(sel))) throw new Error(sel+' no fue a la columna lateral');
-if(!/grid-column:1\/-1/.test(bloque(':root:not(.lite) #btns')))
-  throw new Error('los botones de escritorio dejaron de ser una fila');
+// los botones secundarios ya no viven en una fila abajo del tablero comiendole alto:
+// en los DOS perfiles estan dentro del menu, que ahora es el mismo panel en los dos
+if(/:root:not\(\.lite\) #btns\{/.test(style))
+  throw new Error('quedo la fila de botones de escritorio abajo del tablero');
+if(/#menu,#menu>div\{display:contents/.test(style))
+  throw new Error('el menu de escritorio sigue disuelto en la pagina');
+const men=bloque('#menu');
+if(!/position:fixed/.test(men)||!/display:none/.test(men))
+  throw new Error('el menu no es un panel');
+if(!/display:grid/.test(bloque('#menu.open'))) throw new Error('el menu no se abre con .open');
+if(/display:none/.test(bloque('#burger')))
+  throw new Error('sin hamburguesa a la vista el menu de escritorio no se encuentra');
+if(!/e\.key==='Escape'/.test(flat)) throw new Error('ESCAPE no abre el menu');
+// y el tablero se queda con el alto que dejaron: crece con la pantalla
+if(!/DSK_MIN|DSK_SIDE/.test(flat)) throw new Error('fit() no mide la consola de escritorio');
 if(style.indexOf('@media (min-width:860px)')<0)
   throw new Error('sin la consulta de ancho, una ventana angosta se queda sin respaldo');
 // las dos columnas NO pueden pisar al telefono: una tablet tactil ancha entra igual
