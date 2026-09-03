@@ -41,6 +41,27 @@ encuentro pasa caminando como cualquier otro— y sólo si aun así se le sigue 
 otros 4 s después, da el encuentro por hecho. Antes el empujón lo teletransportaba a tu
 casilla, justo en el paso que dice *miralo venir*.
 
+**Las dos habilidades tienen el mismo trato.** Vivían en un renglón de ayuda del menú,
+y un renglón se lee pero no se reconoce: cuando en la partida aparece una letra violeta
+sobre un muro, o el `♪` de la barra se prende, hay que saber que es *eso*. Así que los
+pasos 5 y 6 del tutorial las encienden de a una, cada uno con su propio cartel (`#hab`)
+que **primero las muestra y después las cuenta** —la escena en chico corriendo sola, con
+los mismos gatos y los mismos colores del tablero—, y no avanzan hasta que la habilidad se
+usó de verdad:
+
+- **DETERMINACIÓN.** El gato vencido se va del tablero, el paso regala una carga y la
+  demo muestra al gato blanco cruzando la pared por la letra violeta, con una de las tres
+  cargas apagándose. El paso se cierra cuando **atravesaste un muro**; teclear letras
+  normales no alcanza.
+- **MAULLIDO.** El paso lo arma a mano y suelta **dos gatos negros** a media distancia
+  —un maullido sin nadie a quien ahuyentar no enseña nada—, y la demo muestra la onda
+  saliendo del gato blanco y a los dos negros dando media vuelta, con el halo pasando del
+  rojo de caza al celeste del maullido. El paso se cierra cuando **maullaste**.
+
+Los dos carteles se cierran con **ENTENDIDO** y nada más, por la misma razón que el del
+QTE: el maullido se suelta con **ESPACIO**, y el espacio que ya venía en camino se llevaba
+puesta la explicación de lo que estaba por leer. El botón también se carga solo (1,2 s).
+
 ## Niveles y modos
 
 Todo lo que cambia entre partidas vive en la tabla `LEVELS` del `<script>`: tamaño del
@@ -128,7 +149,8 @@ que nunca se cuelga.
 
 Las dos se ganan jugando bien, no se compran ni se eligen; el HUD muestra el estado de
 cada una: la determinación en iconos (`◈` por carga) y el maullido en el `♪` de la barra,
-que está en los dos perfiles.
+que está en los dos perfiles. Las dos las enseña el **tutorial**, con su propia escena
+animada, en los pasos 5 y 6 (arriba).
 
 - **DETERMINACIÓN.** Cada **3 gatos vencidos** en un QTE te da una carga (hasta 3). Con
   carga encima, los **muros** de tu celda también muestran letra: van en violeta y con el
@@ -177,15 +199,60 @@ Son **dos medidores distintos**, y ésa es la regla que más se nota al jugar:
 | | qué es | lo sube | lo baja |
 |---|---|---|---|
 | **COMBO** (`combo`) | la racha de aciertos seguidos | +1 por letra y por QTE ganado | **cualquier error lo borra entero** |
-| **ESTILO** (`stl`) | el grado, lo que se ve como rango | +1 por letra, +2 por QTE ganado | −2 un error, **−8 perder contra un gato** |
+| **ESTILO** (`stl`) | el grado, lo que se ve como rango | +0,5 por letra **hasta el techo del combo**; +4 el primer gato vencido y +2 más por cada gato encadenado | −3 un error, **−10 perder contra un gato**, y **−0,45 por segundo** todo lo que pase del techo |
 
 Antes eran la misma variable: una tecla mal tirada te bajaba de SSS a D de una, y con ella
 se iba el maullido, el color de la GUI y las ganas. Ahora la **racha** se pierde de una
 —para eso es una racha— y el **estilo** se gasta de a poco; lo único que se lo lleva
-puesto es perder un QTE. El combo sigue mandando la dificultad (la ventana de reacción se
-encoge 70 ms por punto, hasta el piso en `COMBO_MAX`), el tono del blip y el armado del
-maullido; el estilo manda el rango. El estilo topa en `STYLE_MAX` (26): sin tope, media
-partida buena lo dejaba tan arriba que ningún castigo se notaba.
+puesto de golpe es perder un QTE. El combo sigue mandando la dificultad (la ventana de
+reacción se encoge 70 ms por punto, hasta el piso en `COMBO_MAX`), el tono del blip y el
+armado del maullido; el estilo manda el rango. El estilo topa en `STYLE_MAX` (26).
+
+### Por qué el estilo no se regala
+
+Sumar +1 por letra hasta el tope volvía al medidor un **contador de teclas**: cualquiera
+que caminara el laberinto sin errores terminaba en SSS, y el rango dejaba de decir nada.
+Tres reglas lo convierten en un juicio, y las tres se leen en la barra mientras se juega:
+
+1. **El techo de las letras** (`styleCap()`). Teclear bien sube el medidor, pero sólo
+   hasta un techo que sale del **combo**: `RANKS[4].c · √(combo/COMBO_MAX)`. Sin racha el
+   techo es **cero**; con la racha llena llega **justo a S** y ni un punto más. La raíz es
+   a propósito: los primeros puntos de combo pagan mucho —para que el medidor se mueva
+   desde el arranque— y los últimos casi nada. Caminar el laberinto, por limpio que sea,
+   **no pasa de S**.
+2. **Los gatos son el resto.** SS y SSS salen de **vencer gatos**, y encadenarlos sin
+   perder ninguno paga cada vez más: el primero `STYLE_QTE` (4) y cada uno seguido
+   `STYLE_CHAIN` (2) de más, hasta el quinto (`STYLE_CHAIN_MAX`). La cadena (`kills`) se
+   corta al perder un QTE, y cada gato encadenado se canta con su cartel
+   (`¡RACHA DE 3 GATOS!`). Un rango alto ya no es *jugar prolijo*: es **haber estado
+   cazando**.
+3. **Lo que pasa del techo se escurre.** Cada segundo por encima de `styleCap()` se van
+   `STYLE_DECAY` (0,45) puntos. Un rango alto **no se guarda**: o se sostiene la racha y
+   se sigue cazando, o se cae solo. Y si el combo se rompe, el techo cae a cero y **todo**
+   el medidor queda escurriéndose hasta que la racha vuelve a subirlo — ésa es la parte
+   que obliga a que el combo sea **constante** y no un pico.
+
+El escurrido corre con el reloj **del juego** y con el `dt` topado en 250 ms: el menú, el
+selector y los carteles no lo mueven, y una pestaña dormida no puede vaciar el medidor de
+un saque.
+
+### El rango que te llevás es el PROMEDIO
+
+El resumen mostraba el **máximo** de la partida. Con eso, un solo momento bueno en cuatro
+minutos malos se llevaba el SSS y el resumen mentía sobre cómo se había jugado. Ahora el
+rango grande es el **promedio**: la integral del medidor dividida por el tiempo jugado
+(`stlSum / stlT`, acumulada en `frame()` con el mismo reloj del juego, así que las pausas
+no cuentan). Rozar SSS una vez ya no vale nada; sostener S de punta a punta vale todo.
+
+El **pico** (`maxStl`) sigue estando, al lado, como el récord que es. Y para que el
+jugador no se entere recién al final, la barra dice el promedio mientras se juega
+(`estilo promedio S` en escritorio, y `estilo A (promedio C, pico SS)` en el menú del
+teléfono).
+
+Con esto, en una partida del clásico: teclear perfecto y no pelear con nadie deja el
+promedio en **A**; jugar bien y ganar la mayoría de los QTE, en **S**; y para llegar a
+**SS** hay que sostener la racha *y* encadenar gatos casi toda la partida. **SSS de
+promedio** es, a propósito, un logro de exhibición.
 
 El rango es el estilo con nombre, al estilo Devil May Cry. `RANKS` va de **D — DORMIDO** a
 **SSS — SIN PIEDAD** (D, C, B, A, S, SS, SSS), y el color del rango manda sobre toda la
@@ -265,9 +332,10 @@ no llegaba a ver ni su tiempo. Ahora todo nivel termina en su resumen (`#res`), 
 
 - el **tiempo neto** grande, y abajo el crudo y la penalización (o el bonus, si el neto
   quedó por debajo del crudo);
-- el **rango máximo** de la partida con su nombre —el máximo, no el que quedó: ahora que
-  el estilo no se reinicia de un error, un mal final igual lo baja—, el récord de combo,
-  la precisión, las monedas, las teclas y, si hubo, los gatos vencidos y los baby points;
+- el **rango promedio** de la partida con su nombre (ver *El rango que te llevás es el
+  promedio*), y al lado el **pico**; después el récord de combo, la precisión, las
+  monedas, las teclas y, si hubo, los gatos vencidos, la **racha de gatos** más larga y
+  los baby points;
 - la **mejor marca**, o `¡NUEVA MEJOR MARCA!` si la partida la rompió (el tutorial no
   guarda marca);
 - y las tres salidas: **el nivel siguiente** (que en el último no se muestra),
@@ -521,18 +589,33 @@ Del 11 al 16 van los dos medidores, las vibes, el tutorial y los niveles: que el
 llene y sature en `COMBO_MAX`, que los rangos suban por el **estilo** y el medidor se
 vacíe en cada ascenso, que un error borre el combo entero pero al estilo sólo le saque
 `STYLE_ERR` (y perder un QTE, `STYLE_LOSS`, que es mucho más), que el estilo tope y no
-baje de cero, que los `sfx()` sean no-op sin WebAudio, que extra vibes cambie de pista sin
+baje de cero, que extra vibes cambie de pista sin
 tocar ni una variable de gameplay y que `bopAt()` pique justo en el bombo medido
 (0.174 s), que cada paso del tutorial se cierre sólo cuando el jugador usó lo que explica
 y que el empujón del paso del gato lo **acerque** en vez de aparecérselo encima, y que el
 primer encuentro **frene el juego antes** del QTE (cartel abierto, partida en pausa,
 ninguna tecla lo cierra ni se juega, el botón tampoco vale sin tiempo de leer, el reloj no
 le cobra al jugador lo que tardó en leer, el QTE que sale es el corto y el respiro que
-deja es el largo),
+deja es el largo), que los pasos de las **dos habilidades** abran su cartel con la escena
+que les toca y no avancen hasta usarlas de verdad —el de determinación regala la carga,
+deja el tablero sin gatos y espera a que se atraviese un muro (una letra normal no lo
+cierra); el del maullido lo deja armado, suelta dos gatos y espera a que se maulle— y que
+esos carteles tampoco se cierren con una tecla (14b y 14c),
 que el selector pause el reloj y no deje jugar un modo que no existe, que el sótano
 conserve niebla, faroles y acechador (y se pueda terminar), que su ventana por letra sea
 **la misma** que la del clásico, y que la salida sólo abra con todas las monedas del
 nivel.
+
+Del **11d** al **11g** va lo que hace que el estilo sea un juicio y no un contador: que el
+**techo del combo** sea cero sin racha y llegue **justo a S** con la racha llena, que suba
+con cada punto de combo, que una letra sume dentro del techo y **no** lo pase, que
+doscientas letras seguidas topen exactamente en S (11d); que la **cadena de gatos** pague
+`STYLE_QTE` el primero y `STYLE_CHAIN` más cada uno seguido hasta su tope, que perderla
+la corte y que el pico quede guardado para el resumen (11e); que lo que pasa del techo se
+**escurra** a `STYLE_DECAY` por segundo, que no se coma lo que el combo sostiene y que no
+baje de cero (11f); y que el rango del resumen sea el **promedio** y no el pico —nueve
+segundos en D con un pico de SSS al final tienen que dar D—, que sostener S dé S, que las
+pausas no corran el promedio y que `gen()` deje todo en cero (11g).
 
 Del 16b al 16f van las dos habilidades, el radar y el cartel del rango: que ganar un QTE
 congele 2 s la ventana **y** el paso de los gatos (y perderlo no dé respiro), que la carga
@@ -595,6 +678,17 @@ gato sea el `BIG` del overlay (nada de una segunda imagen que engorde el archivo
 todo el movimiento lo haga el CSS —ningún timer en el JS, así se apaga sola con el cartel
 cerrado— y que con `prefers-reduced-motion` quede en un cuadro fijo. Una demo que enseña
 algo distinto de lo que va a pasar es peor que no tenerla.
+
+El 29 hace lo mismo con el cartel de las **dos habilidades**: que las dos escenas existan
+enteras, que sólo se vea la que pide la clase de `#hab`, que en las dos la demo vaya antes
+del párrafo, que el violeta salga del mismo `burst` con el que se gasta una carga, el
+celeste del `burst` del maullido y el azul de la pared del mismo `strokeStyle` que hornea
+el laberinto, que el segundo anillo vaya corrido como los dos que dibuja el canvas, que
+los gatos sean el `PJ` y el `FOE` del tablero, que todo el movimiento sea CSS y que quede
+en un cuadro fijo con `prefers-reduced-motion`. Y algo que no se ve hasta que se prueba:
+que el bloque de CSS del cartel esté **antes** de los `@media` que lo pisan —tienen la
+misma especificidad, así que ganan por orden, y declarado después ni la pantalla baja ni
+*menos movimiento* hacían nada—.
 
 > Los `grep` sobre el `<script>` van contra `code`, que es el `src` con los `data:` URI
 > afuera: los assets van embebidos en base64 y ahí cualquier palabra corta aparece por

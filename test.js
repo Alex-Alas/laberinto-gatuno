@@ -83,10 +83,15 @@ function snap(){
   for(let n=0;n<=5;n++){ got=n; q.push(foeMs(),chaseP(),qteLen()) }
   for(let c=0;c<=20;c++){ combo=c; deal(); q.push(durBase,comboFill()) }
   for(let v=0;v<=STYLE_MAX+4;v++){ stl=v; q.push(rankI(),rankFill(),comboCol()) }
+  for(let c=0;c<=COMBO_MAX+3;c++){ combo=c; q.push(styleCap().toFixed(4)) }
+  const k0=kills;
+  for(let k=1;k<=7;k++){ kills=k; q.push(qteStyle()) }
+  kills=k0;
   for(let b=0;b<=3;b++){ baby=b; q.push(babyK(),dur()) }
   baby=b0; got=g0; combo=c0; stl=s0; deal();
   return JSON.stringify([C,R,S,POOL,COMBO_MAX,MS_LETRA,BEAT,VIBE_OFF,q,
-                         [STYLE_ERR,STYLE_LOSS,STYLE_QTE,STYLE_MAX,
+                         [STYLE_ERR,STYLE_LOSS,STYLE_QTE,STYLE_HIT,STYLE_CHAIN,
+                          STYLE_CHAIN_MAX,STYLE_DECAY,STYLE_MAX,
                           GRACE_MS,MEOW_MS,MEOW_CD,MEOW_R,RADAR_MS,RES_MS],
                          LEVELS.map(l=>[l.id,l.C,l.R,l.coins,l.foes,l.dur0,l.durMin,l.foe0,l.foeMin]),
                          RANKS.map(r=>[r.c,r.k]),
@@ -325,21 +330,25 @@ stl=0; combo=0;
 // 11c) ESTILO y COMBO son dos medidores: el error borra uno y abolla el otro
 juega('clasico'); gen(); foes=[]; coins=[]; combo=0; stl=0; nextAsk=1e9;
 for(let i=0;i<6;i++) step();
-if(combo!==6||stl!==6) throw new Error('los aciertos no suben las dos cosas');
+if(combo!==6) throw new Error('los aciertos no suben el combo');
+if(!(stl>0&&stl<=6*STYLE_HIT)) throw new Error('los aciertos no suben el estilo');
+const s6=stl;
 wrong();
 if(combo!==0) throw new Error('el error tiene que borrar el combo');
-if(stl!==6-STYLE_ERR) throw new Error('el error no deberia reiniciar el estilo');
+if(stl!==s6-STYLE_ERR) throw new Error('el error no deberia reiniciar el estilo');
 if(!(STYLE_LOSS>=STYLE_ERR*3)) throw new Error('perder contra un gato tiene que doler MUCHO mas');
 // "tarde" es lo mismo que la letra equivocada
 stl=10; combo=5; penalize(400,'#f70','late','-');
 if(combo!==0||stl!==10-STYLE_ERR) throw new Error('el "tarde" no separa combo y estilo');
 // perder contra un gato: la racha se corta igual, pero el estilo se hunde
-stl=20; combo=7; qteStart(); press([...POOL].find(c=>c!==qte.seq[0])); scareHide();
+stl=20; combo=7; kills=3; qteStart(); press([...POOL].find(c=>c!==qte.seq[0])); scareHide();
 if(combo!==0) throw new Error('perder el QTE tiene que borrar el combo');
 if(stl!==20-STYLE_LOSS) throw new Error('perder el QTE no hundio el estilo');
+if(kills!==0) throw new Error('perder el QTE tiene que cortar la cadena de gatos');
 // ganarlo suma mas que una letra suelta, y el estilo tiene tope
-stl=0; combo=0; qteStart(); qte.seq.slice().forEach(k=>press(k));
+stl=0; combo=0; kills=0; qteStart(); qte.seq.slice().forEach(k=>press(k));
 if(stl!==STYLE_QTE||combo!==1) throw new Error('ganar el QTE no sumo estilo y combo');
+if(!(STYLE_QTE>STYLE_HIT*4)) throw new Error('un gato tiene que valer mucho mas que una letra');
 stl=STYLE_MAX; styleUp(5);
 if(stl!==STYLE_MAX) throw new Error('el estilo se pasa de su tope');
 styleDown(STYLE_MAX*2); if(stl!==0) throw new Error('el estilo se fue abajo de cero');
@@ -348,7 +357,89 @@ stl=RANKS[RANKS.length-1].c; combo=0;
 if(rankI()!==RANKS.length-1) throw new Error('el rango deberia leer el estilo');
 stl=0; combo=COMBO_MAX;
 if(rankI()!==0) throw new Error('el combo ya no manda el rango');
-combo=0; stl=0; nextAsk=12;
+combo=0; stl=0; kills=0; nextAsk=12;
+
+// 11d) EL TECHO DEL COMBO: teclear bien sube el estilo, pero solo hasta donde lo
+// deja la racha.  Sin combo el techo es cero y con la racha llena llega justo a S:
+// caminar el laberinto, por limpio que sea, no da SS ni SSS.
+combo=0; if(styleCap()!==0) throw new Error('sin combo el techo del estilo no es cero');
+if(Math.abs((combo=COMBO_MAX, styleCap())-RANKS[4].c)>1e-9)
+  throw new Error('con el combo lleno el techo tiene que llegar justo a S');
+combo=COMBO_MAX*3; if(styleCap()!==RANKS[4].c) throw new Error('el techo se pasa de S');
+for(let c=1;c<=COMBO_MAX;c++){ combo=c-1; const a=styleCap(); combo=c;
+  if(!(styleCap()>a)) throw new Error('cada punto de combo tiene que subir el techo') }
+// una letra suma... hasta el techo, y ahi deja de sumar
+combo=COMBO_MAX; stl=0; styleHit();
+if(stl!==STYLE_HIT) throw new Error('la letra no sumo dentro del techo');
+stl=RANKS[4].c; styleHit();
+if(stl!==RANKS[4].c) throw new Error('la letra paso el techo del combo');
+combo=0; stl=8; styleHit();
+if(stl!==8) throw new Error('sin combo las letras siguen sumando estilo');
+// y las letras SOLAS no llegan a SS: por muchas que se tecleen, topan en S
+combo=COMBO_MAX; stl=0; for(let i=0;i<200;i++) styleHit();
+if(rankI()!==4) throw new Error('teclear solo tendria que topar exactamente en S');
+
+// 11e) LA CADENA DE GATOS: es lo unico que pasa de S, y cada gato seguido paga mas
+kills=1; const q1=qteStyle();
+if(q1!==STYLE_QTE) throw new Error('el primer gato de la cadena paga el minimo');
+for(let k=2;k<=STYLE_CHAIN_MAX+1;k++){ kills=k-1; const a=qteStyle(); kills=k;
+  if(qteStyle()-a!==STYLE_CHAIN) throw new Error('la cadena no paga STYLE_CHAIN mas por gato') }
+kills=STYLE_CHAIN_MAX+1; const qtop=qteStyle();
+kills=99; if(qteStyle()!==qtop) throw new Error('la cadena no tiene tope');
+// tres gatos encadenados desde el techo de las letras SI pasan de S
+combo=COMBO_MAX; stl=RANKS[4].c; kills=0;
+for(let i=0;i<3;i++){ kills++; styleUp(qteStyle()) }
+if(rankI()<=4) throw new Error('encadenar gatos tiene que pasar de S');
+// y el resumen guarda la cadena mas larga
+gen(); foes=[]; kills=0; maxKills=0;
+qteStart(); qte.seq.slice().forEach(k=>press(k));
+qteStart(); qte.seq.slice().forEach(k=>press(k));
+if(kills!==2||maxKills!==2) throw new Error('dos gatos seguidos no armaron la cadena');
+qteStart(); press([...POOL].find(c=>c!==qte.seq[0])); scareHide();
+if(kills!==0||maxKills!==2) throw new Error('el pico de la cadena tiene que quedar guardado');
+combo=0; stl=0; kills=0; maxKills=0;
+
+// 11f) LO QUE PASA DEL TECHO SE ESCURRE: un rango alto no se guarda, se sostiene
+juega('clasico'); gen(); foes=[]; coins=[]; nextAsk=1e9;
+step();                                   // arranca el reloj (t0)
+combo=0; stl=20; stlAt=0; lastDraw=0; frame();   // el primer cuadro solo fija stlAt
+// frame() tapa el dt en 250 ms (una pestana dormida no puede vaciar el medidor de
+// un saque), asi que un segundo de juego son cuatro cuadros de 250
+const seg=(ms)=>{ for(let m=0;m<ms;m+=250){ stlAt=now()-250; lastDraw=0; frame() } };
+seg(1000);
+if(Math.abs(stl-(20-STYLE_DECAY))>.05) throw new Error('el estilo por encima del techo no se escurrio');
+// pero nunca por debajo del techo que sostiene el combo
+combo=COMBO_MAX; stl=RANKS[4].c; seg(4000);
+if(stl!==RANKS[4].c) throw new Error('el escurrido se comio lo que sostiene el combo');
+// y el escurrido no baja de cero ni con el combo roto
+combo=0; stl=.2; seg(4000);
+if(stl!==0) throw new Error('el estilo se fue abajo de cero escurriendose');
+
+// 11g) EL PROMEDIO: el rango del resumen es el estilo PROMEDIO de la partida, no
+// el pico ni el que quedo al final.  Medio minuto en D y un pico de SSS al final
+// tienen que dar un promedio bajo, que es justo lo que el maximo escondia.
+juega('clasico'); gen(); foes=[]; coins=[]; nextAsk=1e9;
+step();
+stlSum=0; stlT=0; combo=COMBO_MAX;
+stl=0; stlAt=now(); seg(9000);                    // 9 s en D...
+stl=RANKS[RANKS.length-1].c; maxStl=stl; seg(1000); // ...y 1 s en SSS
+if(rankI(maxStl)!==RANKS.length-1) throw new Error('el pico deberia ser SSS');
+if(rankI(avgStl())!==0) throw new Error('el promedio no puede ser el pico');
+if(!(avgStl()>0&&avgStl()<RANKS[1].c)) throw new Error('el promedio no salio de la integral');
+// al reves: sostener S toda la partida SI da S de promedio (y el combo lleno lo
+// sostiene solo: es justo el techo de las letras, asi que no se escurre)
+stlSum=0; stlT=0; stl=RANKS[4].c; stlAt=now(); seg(10000);
+if(rankI(avgStl())!==4) throw new Error('sostener el rango no lo dio en el promedio');
+// las pausas no cuentan: con el juego congelado el promedio no se mueve
+const sT=stlT; menuOpen(); lastDraw=0; frame(); frame();
+if(stlT!==sT) throw new Error('el promedio corrio con el juego en pausa');
+menuClose();
+// y gen() lo deja todo de cero
+gen(); foes=[];
+if(stlSum||stlT||stlAt||kills||maxKills||maxStl||stl)
+  throw new Error('la partida nueva heredo el estilo de la anterior');
+if(avgStl()!==0) throw new Error('sin partida el promedio no es cero');
+nextAsk=12;
 
 // 12) SFX: sin WebAudio en el stub tienen que ser no-op, no reventar la partida
 sfxOk(); sfxBad(); sfxLate(); sfxCoin(); sfxUnlock();
@@ -439,9 +530,53 @@ if(graceT-now()<=GRACE_MS) throw new Error('el tutorial no da el respiro largo')
 // el cartel se explica UNA sola vez por partida
 qteStart(); if(brief.className==='on') throw new Error('el cartel volvio a salir');
 qte=null;
+
+// 14b) DETERMINACION: el paso la MUESTRA en su propio cartel y despues la hace usar
+if(!has(hab,'on')||!has(hab,'det')) throw new Error('el paso de la determinacion no abrio su cartel');
+if(!paused) throw new Error('el cartel de la determinacion no congelo el juego');
+if(!det) throw new Error('el paso no regalo la carga que hay que gastar');
+if(foes.length) throw new Error('el paso de la determinacion tendria que quedar sin gatos');
+// y tampoco se cierra con el teclado: el cartel que sigue explica el MAULLIDO, que
+// se suelta con ESPACIO, y el espacio que ya venia en camino se lo llevaria puesto
+const nh=log.length, ch=cell();
+for(const k of ['a','Enter',' ','z']) press(k);
+if(!paused||!has(hab,'on')) throw new Error('una tecla suelta cerro el cartel de habilidades');
+if(log.length!==nh||cell()!==ch) throw new Error('las teclas sobre el cartel se jugaron igual');
+habAt=now(); hok.onclick();
+if(!paused) throw new Error('ENTENDIDO se dejo apretar sin tiempo de leer');
+habAt-=HAB_LOCK+1; pauseAt-=300; hok.onclick();
+if(paused||hab.className) throw new Error('el boton no cerro el cartel de habilidades');
+tutCheck(); if(tstep!==4) throw new Error('el paso de la determinacion se cerro solo');
+// teclear normal no alcanza: hay que ATRAVESAR un muro con la letra violeta
+const plain=()=>{ const d=Object.keys(letters).find(w=>!phase[w]); press(letters[d]) };
+let gv=0; while(!Object.keys(phase).length&&gv++<40) plain();
+const vd=Object.keys(phase)[0];
+if(!vd) throw new Error('la determinacion no marco ningun muro');
+plain(); tutCheck();
+if(tstep!==4) throw new Error('una letra normal cerro el paso de la determinacion');
+let gw=0; while(!Object.keys(phase).length&&gw++<40) plain();
+const cAnt=cell(), dAnt=det;
+press(letters[Object.keys(phase)[0]]);
+if(det!==dAnt-1) throw new Error('la letra violeta no gasto la carga');
+if(cell()===cAnt) throw new Error('la letra violeta no atraveso el muro');
+tutCheck(); if(tstep!==5) throw new Error('atravesar el muro no cerro el paso');
+
+// 14c) MAULLIDO: mismo trato, y el paso pone gatos para que se los vea huir
+if(!has(hab,'on')||!has(hab,'meow')) throw new Error('el paso del maullido no abrio su cartel');
+if(!paused) throw new Error('el cartel del maullido no congelo el juego');
+if(!meowOn||meowCd(now())) throw new Error('el paso no dejo el maullido listo');
+if(foes.length<2) throw new Error('el paso del maullido no puso gatos que ahuyentar');
+habAt=now()-HAB_LOCK-1; hok.onclick();
+if(paused||hab.className) throw new Error('el cartel del maullido no se cerro');
+tutCheck(); if(tstep!==5) throw new Error('el paso del maullido se cerro sin maullar');
+plain(); tutCheck(); if(tstep!==5) throw new Error('una letra cerro el paso del maullido');
+if(!meow()) throw new Error('el maullido no salio');
+tutCheck(); if(tstep!==6) throw new Error('maullar no cerro el paso');
+
 if(coins.length!==LV.coins) throw new Error('el paso de las monedas no las solto');
+if(foes.length) throw new Error('las monedas entran con el tablero limpio de gatos');
 got=LV.coins; coins=[]; tutCheck();
-if(tstep!==5||!exitOpen()) throw new Error('el paso de la salida no arranco');
+if(tstep!==7||!exitOpen()) throw new Error('el paso de la salida no arranco');
 win=true; tutCheck();
 if(tutOn||tut.className) throw new Error('el tutorial no termino');
 // terminarlo GANANDO ya no salta al selector: primero va la pantalla de resultados
@@ -1073,4 +1208,76 @@ if(style.indexOf('@media (prefers-reduced-motion:reduce)')<0)
 if(style.indexOf('#bdemo *,#bdemo::after{animation:none')<0)
   throw new Error('con menos movimiento la demo deberia quedarse en un cuadro fijo');
 
-console.log('OK 31/31 | el perfil lite prende solo en pointer:coarse y no toca la dificultad');
+// ---- 29) el cartel de las HABILIDADES: la determinacion y el maullido tambien
+// se MUESTRAN antes de contarse ----
+// Las dos vivian en un renglon de ayuda del menu, y un renglon se lee pero no se
+// reconoce: cuando en la partida aparece una letra violeta sobre un muro, o el
+// medidor dice que el maullido esta listo, hay que saber que es ESO.  Asi que
+// tienen el mismo trato que el QTE —primero la escena en chico, corriendo sola,
+// y despues el texto— y el test las ata a lo que dibuja el canvas: si manana
+// cambia el violeta de la determinacion o el celeste del maullido, las demos
+// tienen que cambiar con ellos o esto se cae.
+const hb=mk.slice(mk.indexOf('<div id=hab>'),mk.indexOf('<script>'));
+if(!hb) throw new Error('falta el cartel de las habilidades');
+for(const id of ['hsdet','hsmeow','hddet','hdmeow','hdpips','hdrow','hdwall','hdk','hdcat',
+                 'hmrow','hmcat','hmf1','hmf2','hmr1','hmr2','hmkey','hok'])
+  if(!new RegExp('id='+id+'[ >]').test(hb))
+    throw new Error('al cartel de las habilidades le falta '+id);
+// una escena por habilidad, y en las dos la demo va ANTES del parrafo
+for(const [sec,demo] of [['hsdet','hddet'],['hsmeow','hdmeow']]){
+  const i=hb.indexOf('id='+sec), blk=hb.slice(i,hb.indexOf('</section>',i));
+  if(i<0||blk.indexOf('id='+demo)<0) throw new Error('la seccion '+sec+' no trae su demo');
+  if(blk.indexOf('id='+demo)>blk.indexOf('<p>'))
+    throw new Error('en '+sec+' la demo va ANTES del parrafo: primero se ve, despues se lee');
+  if(style.indexOf('#hab.'+(sec==='hsdet'?'det':'meow')+' #'+sec+',')<0
+     &&style.indexOf('#hab.'+(sec==='hsdet'?'det':'meow')+' #'+sec+'{')<0)
+    throw new Error('la clase de #hab no elige la escena '+sec);
+}
+if(style.indexOf('#hsdet,#hsmeow{display:none')<0)
+  throw new Error('las dos escenas se ven a la vez: tiene que haber una sola');
+if(hb.indexOf('id=hok')<hb.indexOf('id=hdmeow'))
+  throw new Error('ENTENDIDO tiene que cerrar el cartel, no abrirlo');
+// los colores salen del MISMO sitio que los del canvas: el violeta con el que se
+// gasta una carga, el celeste de la onda del maullido y el azul de las paredes
+const vio=(code.match(/det--;[\s\S]{0,400}?burst\([^)]*?"(#[0-9a-f]{3,6})"/i)||[])[1];
+const cel=(code.match(/scareUntil = meowAt[\s\S]{0,1400}?burst\([^)]*?"(#[0-9a-f]{3,6})"/i)||[])[1];
+const muro=(code.match(/k\.strokeStyle = "(#[0-9a-f]{3,6})"/i)||[])[1];
+if(!vio||!cel||!muro) throw new Error('no se pudieron leer del canvas los colores de las habilidades');
+const pasa=(sel,c,q)=>{ if(bloque(sel).indexOf(c)<0) throw new Error(q) };
+pasa('#hdk',vio,'la letra de la demo no es el violeta de la determinacion');
+pasa('#hdpips i',vio,'las cargas de la demo no son las de la determinacion');
+pasa('#hdwall',muro,'la pared de la demo no es la que dibuja el canvas');
+pasa('.hmring',cel,'la onda de la demo no es el celeste del maullido');
+pasa('#hmkey',cel,'la tecla de la demo no es la del maullido');
+// el canvas dibuja DOS anillos corridos: la demo tambien, o ensena otra cosa
+if(!/for \(const o of \[0, 0\.22\]\)/.test(code))
+  throw new Error('no se pudo leer el doble anillo del maullido del canvas');
+if(!/animation-delay/.test(bloque('#hmr2')))
+  throw new Error('la demo del maullido no corre el segundo anillo como el canvas');
+// las dos se mueven SOLAS con CSS
+for(const k of ['hdcat','hdk','hdwall','hdpip','hdflash','hmring','hmcat','hmf1','hmf2','hmkey'])
+  if(style.indexOf('@keyframes '+k)<0) throw new Error('falta la animacion '+k+' de las demos');
+// ...y los gatos son los del tablero, sin un byte extra de imagen
+if(!/\$\('hdcat'\)\.src=\$\('hmcat'\)\.src=PJ\.src/.test(flat))
+  throw new Error('la demo de la determinacion no usa el gato blanco del tablero');
+if(!/\$\('hmf1'\)\.src=\$\('hmf2'\)\.src=FOE\.src/.test(flat))
+  throw new Error('la demo del maullido no usa los gatos negros del tablero');
+const sinSrc=flat.replace(/\$\('hdcat'\)\.src=\$\('hmcat'\)\.src=PJ\.src;/,'')
+                 .replace(/\$\('hmf1'\)\.src=\$\('hmf2'\)\.src=FOE\.src;/,'');
+if(/hdcat|hdwall|hdpips|hmring|hmf1|hmkey/.test(sinSrc))
+  throw new Error('las demos tienen que moverse solas con CSS, sin timers en el JS');
+if(style.indexOf('#hddet *,#hddet::after,#hdmeow *{animation:none')<0)
+  throw new Error('con menos movimiento las demos deberian quedarse en un cuadro fijo');
+// ...y los overrides tienen la MISMA especificidad que las reglas de arriba, asi
+// que ganan por orden: con el bloque del cartel declarado despues, ni "menos
+// movimiento" ni la pantalla baja hacian nada (y no se nota hasta que se prueba)
+if(!(style.indexOf('.hdemo{')<style.indexOf('@media (max-height:620px)')))
+  throw new Error('el CSS del cartel tiene que ir antes de los @media que lo pisan');
+if(!(style.indexOf('#hdcat{')<style.indexOf('@media (prefers-reduced-motion:reduce)')))
+  throw new Error('la demo se declara despues de su propio override de menos movimiento');
+// y el cartel se cierra por su boton y nada mas, igual que el del primer encuentro
+if(!/hok\.onclick=habGo/.test(flat)) throw new Error('ENTENDIDO no esta cableado');
+if(!/HAB_LOCK/.test(flat)) throw new Error('el cartel no espera a que se lo pueda leer');
+if(style.indexOf('#hab.on #hok{')<0) throw new Error('ENTENDIDO no se carga solo');
+
+console.log('OK 32/32 | el perfil lite prende solo en pointer:coarse y no toca la dificultad');
