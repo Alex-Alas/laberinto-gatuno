@@ -20,10 +20,26 @@ respiro quedan quietos, leerlo no cuesta un segundo de partida—. Y antes de ex
 **muestra**: arriba del texto corre la escena del QTE en chico —el mismo gato viniéndose
 encima, las tres letras pasando de gris a blanco a verde, la barra roja vaciándose y el
 gato saliendo volando al final— en loop, porque lo que hay que reconocer cuando pase de
-verdad es una imagen, no un párrafo. Recién con **ESTOY LISTO** (o cualquier tecla)
-arranca el QTE, y arranca en su versión blanda. Al ganarlo el gato se reubica a ocho
-segundos de camino y el respiro dura 5 s: tiempo para acomodarse antes del siguiente. La
-pausa sale **una sola vez por partida**.
+verdad es una imagen, no un párrafo. Recién con **ESTOY LISTO** arranca el QTE, y arranca
+en su versión blanda. Al ganarlo el gato se reubica a ocho segundos de camino y el respiro
+dura 5 s: tiempo para acomodarse antes del siguiente. La pausa sale **una sola vez por
+partida**.
+
+Ese cartel **no se cierra con el teclado**, y es a propósito. Lo que explica es un QTE
+—que se gana **tecleando**— y aparece justo cuando el jugador está tecleando para moverse:
+con "cualquier tecla es ESTOY LISTO", la letra que ya tenía en el aire se llevaba puesta
+la única explicación que hay del sistema, y encima parecía que el QTE ya había arrancado y
+lo estaba perdiendo. Se sale **por su botón**: con el mouse, o con `TAB` (que lleva el
+foco ahí) y `ENTER`. Y el botón tampoco vale de entrada: durante 1,4 s está apagado —se lo
+ve cargarse— para que el clic o el toque que ya venía en camino cuando saltó el cartel
+tampoco se lo lleve puesto.
+
+Y el gato de ese paso **nunca aparece encima tuyo**. Un jugador rápido se le escapa para
+siempre a un gato que da un paso por segundo, así que el tutorial se da una mano si el
+paso se estira: a los 12 s reubica al gato **a dos pasos** —se lo ve llegar, y el
+encuentro pasa caminando como cualquier otro— y sólo si aun así se le sigue escapando,
+otros 4 s después, da el encuentro por hecho. Antes el empujón lo teletransportaba a tu
+casilla, justo en el paso que dice *miralo venir*.
 
 ## Niveles y modos
 
@@ -329,9 +345,39 @@ o sea que están en los dos perfiles. Acá sólo crecen.
 
 El layout es una consola de dos columnas: la barra cruza las dos, el tablero manda a la
 izquierda, y a la derecha van el log de teclas —estirado al alto del tablero— y los
-textos de ayuda. Los botones siguen en **fila** abajo, cruzando las dos columnas: en
-escritorio no hace falta esconderlos en una hamburguesa. El cartel del tutorial también
-cruza las dos, así los textos de ayuda quedan apilados sin huecos.
+textos de ayuda. El cartel del tutorial también cruza las dos, así los textos de ayuda
+quedan apilados sin huecos.
+
+Los botones secundarios **no** viven abajo del tablero: viven en el mismo menú que el
+teléfono. En escritorio se abre con la hamburguesa de la barra o con **ESCAPE** (con otro
+panel arriba `ESCAPE` no hace nada: cada uno tiene su propia salida, y el cartel del
+primer encuentro no tiene ninguna que no sea su botón). Eran una fila permanente abajo del
+laberinto para cosas que se tocan una vez por partida; ese alto ahora es del laberinto.
+
+### El tablero crece con la pantalla
+
+El tablero se dibuja a `C*S` píxeles y hasta acá se quedaba clavado ahí: en una pantalla
+de escritorio quedaba una postal de 510 px en el medio de mucho aire. Ahora `fit()` le da
+**todo lo que sobra** —el ancho que deja la columna de servicio y el alto que dejan la
+barra y el cartel del tutorial, siempre en la proporción `C/R` del nivel—, y también lo
+**achica** si hace falta: con el ancho clavado, una pantalla baja no tenía dónde poner la
+barra y la página terminaba con scroll, que es lo único que el laberinto no puede tener.
+
+Agrandar un canvas por CSS lo deja borroso, así que el dibujo se separó del canvas:
+
+- Todo el dibujo habla en **coordenadas de tablero** (`S` px por celda, `BW x BH` el
+  tablero entero). Donde antes se leía `cv.width` ahora se lee `BW`.
+- El canvas guarda **`K` píxeles por cada uno de esos**, y el cuadro arranca con un
+  `setTransform(K, ...)` que hace la conversión sola. Ni una cuenta del dibujo cambió.
+- `K` es entero (1 a 3), sale de cuánto se agranda el tablero y lo recalcula `fit()`;
+  cuando cambia, el canvas se redimensiona y las paredes se **rehornean** (el canvas nuevo
+  arranca en blanco). La capa horneada va con la misma escala y se dibuja pidiendo su
+  tamaño en coordenadas de tablero.
+- En el teléfono `K` se queda en **1**: allá el tablero ya entra justo y los píxeles de
+  más se pagan en cuadros.
+
+De paso el tutorial dejó de verse borroso: su tablero es de 9x7 (306 px) y ya se estaba
+agrandando a 510 con un canvas de 306.
 
 Detalles que no se ven pero mandan:
 
@@ -340,8 +386,8 @@ Detalles que no se ven pero mandan:
 - La grilla vive dentro de `@media (min-width:860px)`. Debajo de eso —el iframe del
   Artifact puede ser angosto— la barra apila sus tres renglones como en el teléfono, que
   es lo único que entra ahí sin recortarse, y todo vuelve a la columna centrada.
-- La columna del tablero mide **exactamente `--w`**: con `auto`, la fila de botones (que
-  cruza las dos columnas) estiraba la columna del tablero con su ancho máximo y empujaba
+- La columna del tablero mide **exactamente `--w`** (el ancho que calcula `fit()`): con
+  `auto`, lo que cruza las dos columnas estira la del tablero con su ancho máximo y empuja
   la columna lateral lejos del laberinto.
 - `#stage` se disuelve con `display:contents` sólo acá, para que la barra pueda cruzar
   las dos columnas. En el teléfono sigue siendo la caja que le mide el alto al laberinto.
@@ -439,6 +485,10 @@ Chromium, emulación de Pixel 5 y escritorio de 1280px, con extra vibes prendido
   hay un `<input>` invisible y se lee el evento `input`. `keydown` sigue para escritorio.
 - **Layout:** el ancho útil sale de `visualViewport.width`, no del viewport de layout,
   que miente dentro de iframes.
+- **Resolución del tablero:** el dibujo habla en coordenadas de tablero (`BW x BH`) y el
+  canvas guarda `K` píxeles por cada una, con un `setTransform(K, ...)` al empezar el
+  cuadro. Así el laberinto crece en escritorio sin quedar borroso (ver *GUI del
+  escritorio*).
 
 ## Tests
 
@@ -457,6 +507,11 @@ QTE (éxito y fallo), baby mode y su cooldown, ruta del teclado móvil, que el l
 desborde, que los chips de letra nunca queden bajo el jugador, 25 laberintos donde el
 gato debe llegar por el camino mínimo, y una partida completa jugada por un bot.
 
+El **9b** es el layout de escritorio: que el tablero crezca con la pantalla sin salirse ni
+de ancho ni de alto, que se **achique** en una pantalla baja en vez de desbordar la
+página, que `K` suba con él y el canvas y la capa horneada lo sigan, y que en una ventana
+angosta vuelva todo al tamaño nativo.
+
 El **5b** es el reparto: 60 laberintos por nivel, con el gato al principio y al final de
 la partida, donde ninguna moneda cae más cerca que `NEAR` del jugador, ningún gato más
 cerca que `FAR` —los dos medidos por el laberinto— y nada queda amontonado con lo demás.
@@ -469,9 +524,11 @@ vacíe en cada ascenso, que un error borre el combo entero pero al estilo sólo 
 baje de cero, que los `sfx()` sean no-op sin WebAudio, que extra vibes cambie de pista sin
 tocar ni una variable de gameplay y que `bopAt()` pique justo en el bombo medido
 (0.174 s), que cada paso del tutorial se cierre sólo cuando el jugador usó lo que explica
-y que el primer encuentro **frene el juego antes** del QTE (cartel abierto, partida en
-pausa, la tecla de ESTOY LISTO no se juega, el reloj no le cobra al jugador lo que tardó
-en leer, el QTE que sale es el corto y el respiro que deja es el largo),
+y que el empujón del paso del gato lo **acerque** en vez de aparecérselo encima, y que el
+primer encuentro **frene el juego antes** del QTE (cartel abierto, partida en pausa,
+ninguna tecla lo cierra ni se juega, el botón tampoco vale sin tiempo de leer, el reloj no
+le cobra al jugador lo que tardó en leer, el QTE que sale es el corto y el respiro que
+deja es el largo),
 que el selector pause el reloj y no deje jugar un modo que no existe, que el sótano
 conserve niebla, faroles y acechador (y se pueda terminar), que su ventana por letra sea
 **la misma** que la del clásico, y que la salida sólo abra con todas las monedas del
