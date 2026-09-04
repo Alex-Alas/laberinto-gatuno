@@ -228,7 +228,12 @@ juega('clasico'); baby=0;
 
 // 8) assets externos + preload
 if(!PJ.src.endsWith('assets/jugador.webp')||!FOE.src.endsWith('assets/gato.webp')) throw new Error('sprites');
-if(!GIF.src.endsWith('assets/boom.gif')||!sgif.src.endsWith('assets/rage.gif')) throw new Error('gifs');
+if(!GIF.src.endsWith('assets/boom.gif')) throw new Error('gifs');
+// el rage del dialogo (158KB) no se baja hasta que el dialogo aparece
+sgif.src=''; nextAsk=0; hits=3; fails=9; checkSkill();
+if(!paused||skill.style.display!=='grid') throw new Error('no aparecio el dialogo');
+if(!String(sgif.src).endsWith('assets/rage.gif')) throw new Error('el dialogo no cargo su gif');
+babyEnd(false);
 if(!BGM.loop||!(BGM.volume>0&&BGM.volume<1)) throw new Error('musica mal configurada');
 if([SCREAM,BANG,BGM].some(a=>a.preload!=='auto')) throw new Error('falta preload de audio');
 BGM.paused=true; press('a'); if(BGM.paused) throw new Error('la musica no arranco con la 1a tecla');
@@ -846,12 +851,13 @@ lvlHide(); juega('clasico');
 
 // 17) escritorio: el perfil lite NO se aplica, todo queda como estaba
 if(MOBILE) throw new Error('escritorio detectado como movil');
-if(!PERF.scan||PERF.glow!==1||PERF.fps||PERF.hudMs||PERF.dust!==1)
+if(PERF.scan||PERF.glow!==1||PERF.fps||PERF.hudMs||PERF.dust!==1)
   throw new Error('el perfil lite se colo en escritorio');
 if(document.documentElement.cls) throw new Error('escritorio no lleva la clase lite');
-if(BGM.preload!=='auto'||VIBE.preload!=='auto') throw new Error('escritorio sin preload de audio');
-if(!src0[0]||!src0[1]) throw new Error('escritorio deberia cargar las dos pistas de entrada');
-if(!VIBE.src.endsWith('assets/vibes.mp3')) throw new Error('escritorio ya deberia tener el mp3 de vibes');
+if(BGM.preload!=='auto') throw new Error('escritorio sin preload de audio');
+if(VIBE.preload!=='none') throw new Error('las vibes se precargan sin pedirlas en escritorio');
+if(!src0[0]) throw new Error('escritorio deberia cargar el BGM de entrada');
+if(src0[1]) throw new Error('escritorio bajo las vibes sin pedirlas');
 // el horneado de paredes no depende del perfil
 if(!baked||!mz[0]) throw new Error('escritorio no horneo las paredes');
 if(BLUR[0]!==10||BLUR[1]!==26) throw new Error('las capas no cubren el rango del latido');
@@ -883,7 +889,7 @@ console.log('OK 26/26 | partida completa:',teclas,'teclas, precision',prec+'%');
 // ---- 19) el mismo juego en un teléfono: perfil lite, gameplay intacto ----
 const mobile=`
 if(!MOBILE) throw new Error('no detecto el telefono');
-if(PERF.scan||!(PERF.glow<1)||!PERF.fps||!PERF.hudMs||!(PERF.dust<1))
+if(!(PERF.glow<1)||!PERF.fps||!PERF.hudMs||!(PERF.dust<1))
   throw new Error('perfil lite incompleto');
 if(document.documentElement.cls!=='lite') throw new Error('falta la clase lite en <html>');
 
@@ -1099,6 +1105,13 @@ if(stage.indexOf('id=bar')>stage.indexOf('id=board'))
 const lstage=bloque('.lite #stage');
 if(!/--tuth/.test(lstage)) throw new Error('el tablero no le reserva alto al tutorial');
 if(!/--vh/.test(lstage)) throw new Error('el tablero no se achica con el alto visible');
+// las scanlines salen del CSS (#board::after global), no del canvas: eran ~150
+// fillRect por cuadro en escritorio
+if(!/scan:0/.test(flat)) throw new Error('el canvas sigue pintando scanlines');
+const boa=bloque('#board::after');
+if(!/repeating-linear-gradient/.test(boa)) throw new Error('las scanlines no salen del CSS');
+if(/\.lite #board::after/.test(style)) throw new Error('las scanlines quedaron solo en el telefono');
+if(!/\.vibes #board::after/.test(style)) throw new Error('el beat ya no aclara las scanlines');
 
 // ---- 23) tipografía: una sola familia para la GUI y el tablero ----
 if(!/--ui:/.test(style)) throw new Error('falta la pila de fuentes --ui');

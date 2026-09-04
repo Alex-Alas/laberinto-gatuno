@@ -311,7 +311,10 @@ detrás de todo. Es **sólo visual** — no toca la dificultad, ni el reloj, ni 
 El botón pone la clase `.vibes` en `<html>` y de ahí cuelgan todas las reglas del latido:
 sin la clase el CSS ni las mira. Todo lo que pulsa lo hace sobre `transform`, `opacity`,
 `filter` o sombras de cajas chicas — nada que obligue a rehacer el layout 60 veces por
-segundo.
+segundo. Dos atenuaciones: el `--bop` que publica el JS va cuantizado en 20 pasos (la
+misma vista con un tercio de las recalculaciones), y en el teléfono (`.lite.vibes`) las
+sombras de la barra quedan fijas —el canvas sí sigue latiendo— porque cada beat
+recalculaba el `box-shadow` de media barra.
 
 La fase sale de `VIBE.currentTime`, no de un timer aparte, así que la imagen no se puede
 desincronizar del audio (ni siquiera al loopear). `bopAt()` es `(1 - fase)^1.8`: golpe
@@ -485,7 +488,7 @@ user-agent de respaldo) que arma el objeto `PERF`:
 | | escritorio | teléfono |
 |---|---|---|
 | `glow` — factor de `shadowBlur` | 1 | 0.5 |
-| `scan` — scanlines dibujadas en el canvas | sí | las pinta el CSS |
+| `scan` — scanlines | las pinta el CSS | las pinta el CSS |
 | `dust` — partículas por chispazo | 100% | 60% |
 | `hudMs` — refresco del reloj | cada cuadro | cada 66 ms |
 | `fps` — tope de cuadros | libre | 61 |
@@ -506,21 +509,32 @@ entera de la dificultad entre los dos.
   y sólo se escribe el que cambió.
 - **`box-shadow` del canvas animado con `--bop`**: repintar un resplandor de 58px en cada
   beat. En `.lite` queda fijo y `--bop` sólo mueve transforms.
-- **125 `fillRect` de scanlines por cuadro** → una capa CSS (`#board::after`).
+- **125 `fillRect` de scanlines por cuadro** → una capa CSS (`#board::after`, en los
+  dos perfiles; con extra vibes el beat las aclara con `opacity`).
 - **El degradado radial de la niebla**, evaluado píxel por píxel sobre el tablero entero
   en cada cuadro: costaba más que todo el resto del cuadro junto (17 de 28 ms con el
   teléfono a 6× de throttle). El degradado no cambia nunca, así que se hornea una vez a
   un parche de 256px y el cuadro lo pega escalado al radio de visión —un blit— más los
   rectángulos sólidos de afuera. Mismo dibujo, 28.4 ms → 11.7 ms por cuadro.
 - **Los dos mp3 de ~730KB**: `preload=none`, y **ninguno de los dos recibe su `src`**
-  hasta que hace falta —el de fondo con la primera tecla, el de extra vibes al tocar el
-  botón—. Lo segundo no es un detalle: pasarle la URL al constructor (`new Audio(url)`)
+  hasta que hace falta —el de fondo con la primera tecla en el teléfono (en escritorio
+  se carga de entrada), el de extra vibes al tocar el botón, en los dos perfiles—.
+  Lo segundo no es un detalle: pasarle la URL al constructor (`new Audio(url)`)
   arranca la descarga ahí mismo, así que el `preload=none` de la línea siguiente llega
   tarde. Por eso los dos se crean vacíos y `srcOn()` les pone la pista cuando va a sonar.
   Mientras iban embebidos en base64 esto no se notaba: no había red de por medio.
 - **Faltaba el `<meta name=viewport>`**: el teléfono maquetaba a 980px y después achicaba
   la página entera. Dentro de un iframe la etiqueta es inerte; abriendo la página
   directo, cambia todo.
+- **El `rage.gif` del diálogo (158KB)** se bajaba al abrir la página aunque el diálogo
+  quizá no salga nunca: ahora se carga la primera vez que aparece.
+- **El `resize` rehorneaba las paredes por evento**: arrastrar la ventana eran decenas de
+  horneados con `shadowBlur`. Los listeners van a `fitSoon()` (debounce 150 ms);
+  `fit()` sigue síncrono para las llamadas directas.
+- **El cuadro se dibujaba hasta con la pestaña oculta**: con `document.hidden` se salta
+  el dibujo (el `dt` del estilo está topado a 250 ms, así que al volver no hay salto).
+- **Anillo y letras sin sombra en el teléfono**: el color ya dice lo que hay que saber
+  (tiempo restante, letra normal o violeta), y eran las sombras más frecuentes del cuadro.
 
 ### El horneado de paredes
 

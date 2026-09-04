@@ -68,7 +68,15 @@ const cv = $("cv"),
 	hab = $("hab"),
 	hok = $("hok");
 const RAGE = "assets/rage.gif";
-sgif.src = RAGE;
+// el gif del diálogo (158KB) no se baja al abrir la página: se carga la primera
+// vez que el diálogo aparece (ver checkSkill) y ahí queda para las siguientes
+function rageOn() {
+	if (!sgif.src) sgif.src = RAGE;
+	else {
+		sgif.src = "";
+		sgif.src = RAGE; // el gif arranca desde el frame 1
+	}
+}
 
 // ---- resolución del tablero -------------------------------------------------
 // TODO el dibujo habla en "coordenadas de tablero": S píxeles por celda, BW x BH
@@ -116,7 +124,7 @@ const MOBILE = (() => {
 	}
 })();
 const PERF = MOBILE
-	? //  glow: factor de shadowBlur · scan: scanlines dibujadas en el canvas
+	? //  glow: factor de shadowBlur · scan: las scanlines las pinta el CSS
 		//  dust: cuántas partículas · hudMs: cada cuánto se reescribe el reloj
 		//  fps: tope de cuadros (pantallas de 120Hz) · pre: preload de los mp3 grandes
 		{
@@ -128,7 +136,7 @@ const PERF = MOBILE
 			pre: "none",
 			lazy: 1,
 		}
-	: { glow: 1, scan: 1, dust: 1, hudMs: 0, fps: 0, pre: "auto", lazy: 0 };
+	: { glow: 1, scan: 0, dust: 1, hudMs: 0, fps: 0, pre: "auto", lazy: 0 };
 const GLOW = PERF.glow;
 if (MOBILE) document.documentElement.classList.add("lite");
 
@@ -189,18 +197,15 @@ const VIBE_SRC = "assets/vibes.mp3";
 const VIBE = new Audio();
 VIBE.loop = true;
 VIBE.volume = 0.34;
-VIBE.preload = PERF.pre;
+VIBE.preload = "none"; // las vibes se bajan al pedirlas, también en escritorio
 // Las dos pistas se crean VACÍAS: pasarle la URL al constructor arranca la descarga
 // ahí mismo, y ahí el preload="none" del teléfono llega tarde.  srcOn() se la pone a
 // la que va a sonar —el BGM con la 1ª tecla, las vibes recién al pedirlas—; en
-// escritorio las dos se cargan de entrada, como cuando iban embebidas.
+// escritorio el BGM se carga de entrada, las vibes no (otros ~730KB ahorrados).
 const srcOn = (a) => {
 	if (!a.src) a.src = a === VIBE ? VIBE_SRC : BGM_SRC;
 };
-if (!PERF.lazy) {
-	srcOn(BGM);
-	srcOn(VIBE);
-}
+if (!PERF.lazy) srcOn(BGM);
 mus.onclick = () => {
 	BGM.muted = !BGM.muted;
 	VIBE.muted = BGM.muted;
@@ -624,8 +629,7 @@ function checkSkill() {
 	pauseAt = now();
 	if (MOBILE) kb.blur(); // el teclado taparía el diálogo
 	sacc.textContent = Math.round(acc() * 100) + "%";
-	sgif.src = "";
-	sgif.src = RAGE; // el gif arranca desde el frame 1
+	rageOn();
 	skill.style.display = "grid";
 }
 // con cualquier panel abierto el reloj se congela; al cerrarlo se devuelve lo pausado
@@ -1409,6 +1413,13 @@ const LP = {
 
 function frame() {
 	requestAnimationFrame(frame);
+	// pestaña oculta: si igual llega un cuadro no se dibuja nada (el dt del estilo
+	// está topado a 250 ms, así que al volver no hay salto).  document.hidden es
+	// undefined en los tests y ahí nunca se salta.
+	if (document.hidden === true) {
+		lastDraw = 0; // al volver, el tope de fps no se come el primer cuadro
+		return;
+	}
 	const RT = now();
 	// pantallas de 120Hz pedían el doble de cuadros por el mismo juego
 	if (PERF.fps && RT - lastDraw < 1000 / PERF.fps) return;
@@ -1460,9 +1471,12 @@ function frame() {
 	}
 
 	bop = vibes && !VIBE.paused ? bopAt(VIBE.currentTime) : 0;
-	if (bop !== lastBop) {
-		root.style.setProperty("--bop", bop.toFixed(3));
-		lastBop = bop;
+	// El CSS late en 20 pasos en vez de seguir el bop continuo: la misma vista con
+	// un tercio de las recalculaciones de estilo (el canvas sigue usando el fino).
+	const bopCss = Math.round(bop * 20) / 20;
+	if (bopCss !== lastBop) {
+		root.style.setProperty("--bop", bopCss.toFixed(2));
+		lastBop = bopCss;
 	}
 
 	vis.x += (p.x - vis.x) * 0.35;
@@ -1608,7 +1622,8 @@ function frame() {
 					? "#fd0"
 					: "#f45";
 		x.shadowColor = x.strokeStyle;
-		x.shadowBlur = (respiro ? 16 : 0) * GLOW;
+		// en el teléfono el anillo va sin sombra: el color ya dice el tiempo que queda
+		x.shadowBlur = MOBILE ? 0 : (respiro ? 16 : 0) * GLOW;
 		x.lineWidth = respiro ? 4 : 3;
 		x.beginPath();
 		x.arc(PX, PY, S * 0.62, -1.571, -1.571 + 6.283 * Math.max(0, left));
@@ -1821,7 +1836,8 @@ function frame() {
 			x.stroke();
 			x.setLineDash([]);
 			x.shadowColor = c;
-			x.shadowBlur = (14 + bop * 12) * GLOW;
+			// en el teléfono las letras van sin sombra: ya traen disco y borde propios
+			x.shadowBlur = MOBILE ? 0 : (14 + bop * 12) * GLOW;
 			x.fillStyle = c;
 			x.fillText(letters[d].toUpperCase(), X, Y);
 		}
@@ -1899,12 +1915,7 @@ function frame() {
 		x.fillStyle = `rgba(255,40,60,${flash * 0.28})`;
 		x.fillRect(0, 0, BW, BH);
 	}
-	if (PERF.scan) {
-		// en móvil las pinta el CSS (.lite #stage::after)
-		x.fillStyle = `rgba(0,0,0,${(0.22 - bop * 0.09).toFixed(3)})`; // el beat las aclara
-		for (let y = 0; y < BH; y += 3)
-			x.fillRect(0, y, BW, 1);
-	}
+	// las scanlines las pinta el CSS (#board::after): eran ~150 fillRect por cuadro
 	if (bop > 0.02) {
 		// y el borde del tablero también late
 		x.strokeStyle = `rgba(120,235,255,${(bop * 0.45).toFixed(3)})`;
@@ -1989,7 +2000,7 @@ function frame() {
 		bmfill.style.width = mw;
 		lastMw = mw;
 	}
-	const sc = (1 + cpop * 0.45 + bop * 0.09).toFixed(2); // cada acierto —y cada beat— golpea la letra
+	const sc = (1 + cpop * 0.45 + bopCss * 0.09).toFixed(2); // cada acierto —y cada beat— golpea la letra
 	if (sc !== lastSc) {
 		brank.style.transform = `skewX(-11deg) scale(${sc})`;
 		lastSc = sc;
@@ -2751,9 +2762,18 @@ function fit() {
 	if (sizeCanvas() && g && g.length === C * R) bakeMaze();
 	unscroll();
 }
-addEventListener("resize", fit);
+// El resize arrastra decenas de eventos por segundo y cada fit() con el tamaño
+// cambiado rehornea las paredes con shadowBlur: se coalesca a uno solo 150 ms
+// después del último evento.  fit() queda síncrono para las llamadas directas
+// (gen, setLevel, fsSync), que lo necesitan al instante.
+let fitT = 0;
+function fitSoon() {
+	clearTimeout(fitT);
+	fitT = setTimeout(fit, 150);
+}
+addEventListener("resize", fitSoon);
 if (window.visualViewport) {
-	visualViewport.addEventListener("resize", fit);
+	visualViewport.addEventListener("resize", fitSoon);
 	visualViewport.addEventListener("scroll", unscroll);
 }
 if (MOBILE) {

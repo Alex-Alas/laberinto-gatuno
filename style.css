@@ -1794,6 +1794,36 @@ p.help {
 .vibes #burger {
 	opacity: calc(0.7 + var(--bop, 0) * 0.3);
 }
+/* En el teléfono el latido no anima sombras: cada --bop recalculaba el box-shadow
+    de media barra 60 veces por segundo.  Valores fijos (= bop 0), misma vista
+    quieta; el canvas sí sigue latiendo.  Mayor especificidad que las reglas de
+    arriba, así que ganan con las dos clases presentes. */
+.lite.vibes #log {
+	border-color: rgba(70, 225, 255, 0.22);
+	box-shadow: 0 0 4px #0ff4;
+}
+.lite.vibes #bt {
+	text-shadow: 0 0 6px #0ff9;
+}
+.lite.vibes #bfill {
+	box-shadow:
+		0 0 9px currentColor,
+		0 0 20px currentColor;
+}
+.lite.vibes #bar {
+	box-shadow:
+		0 0 8px #0ff3,
+		inset 0 1px 0 #9ef3;
+}
+.lite.vibes #bcombo {
+	box-shadow: inset 0 0 22px -8px var(--rc, #4cf);
+}
+.lite.vibes #bx {
+	text-shadow: 0 0 6px currentColor;
+}
+.lite.vibes #bcfill {
+	box-shadow: 0 0 6px currentColor;
+}
 
 /* ---- tutorial guiado ------------------------------------------------------
     Reemplaza al cartel de onboarding: vive debajo del tablero (en los dos
@@ -2105,19 +2135,10 @@ p.help {
 	min-width: 118px;
 }
 
-/* ---- perfil móvil: la clase .lite la pone el script en <html> ----------
-    Nada de esto se aplica en escritorio.  Lo caro en el teléfono no era el
-    juego sino el compositor: un box-shadow gigante recalculado en cada beat
-    y 125 fillRect de scanlines por cuadro dentro del canvas. */
-.lite canvas {
-	box-shadow:
-		0 0 24px #0ff3,
-		inset 0 0 40px #0ff1;
-} /* fijo, sin --bop */
-.lite #btns button {
-	padding: 12px 10px;
-} /* blanco de dedo más grande */
-.lite #board::after {
+/* las scanlines no las dibuja el canvas: eran ~150 fillRect por cuadro y ahora son
+    una capa CSS sobre el tablero, en los dos perfiles.  Con extra vibes el beat
+    las aclara (opacity con --bop), que es lo que hacía el alpha del fillRect. */
+#board::after {
 	content: "";
 	position: absolute;
 	inset: 0;
@@ -2126,6 +2147,20 @@ p.help {
 	border-radius: 4px;
 	background: repeating-linear-gradient(#0003 0 1px, #0000 1px 3px);
 }
+.vibes #board::after {
+	opacity: calc(1 - var(--bop, 0) * 0.4);
+}
+/* ---- perfil móvil: la clase .lite la pone el script en <html> ----------
+    Nada de esto se aplica en escritorio.  Lo caro en el teléfono no era el
+    juego sino el compositor: un box-shadow gigante recalculado en cada beat. */
+.lite canvas {
+	box-shadow:
+		0 0 24px #0ff3,
+		inset 0 0 40px #0ff1;
+} /* fijo, sin --bop */
+.lite #btns button {
+	padding: 12px 10px;
+} /* blanco de dedo más grande */
 
 /* ---- GUI del teléfono -----------------------------------------------------
     La pantalla útil es la que deja el teclado, así que TODO se alinea arriba y
