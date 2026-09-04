@@ -1,6 +1,6 @@
 # Laberinto Gatuno — entorno de desarrollo
 
 - **Versionado y desarrollo:** este repo en GitHub ([Alex-Alas/laberinto-gatuno](https://github.com/Alex-Alas/laberinto-gatuno)), trabajado con Claude Code. Commits normales, sin CI.
-- **Artifact publicado:** <https://claude.ai/code/artifact/e8aedd6d-cf5e-44e6-a002-6d8eebcb5cb5> — republicar *este mismo* artifact al terminar un cambio, para que el link compartido no cambie.
-- **Hosting/compartir:** `index.html` se publica como Claude Artifact (no en GitHub Pages ni otro host). Por eso tiene que seguir siendo un único archivo HTML autocontenido — sin imports externos, sprites/audio/CSS/JS todo embebido inline. No lo dividas en múltiples archivos ni le agregues un build step.
-- Flujo al terminar un cambio: correr `node test.js`, commitear/pushear a GitHub, y volver a publicar `index.html` como Artifact para que se vea reflejado en el link compartido.
+- **Hosting/compartir:** GitHub Pages, servido desde la raíz de `main` — <https://alex-alas.github.io/laberinto-gatuno/>. Publica solo con cada push a `main`; no hay build step ni bundler.
+- **Estructura:** `index.html` (markup), `style.css`, `game.js` y `assets/` (sprites, gifs y mp3). Todo estático y sin dependencias: `game.js` se carga con un `<script src>` clásico al final del body, así que abrir `index.html` con doble clic también funciona.
+- Flujo al terminar un cambio: correr `node test.js` y commitear/pushear a GitHub.
