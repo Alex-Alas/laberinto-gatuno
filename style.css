@@ -2191,7 +2191,16 @@ p.help {
 	min-height: 0;
 	overflow: hidden;
 	overscroll-behavior: none;
-	padding: 4px;
+	/* En el teléfono con notch / Dynamic Island el borde superior queda debajo
+	    de la cámara: el viewport ya viene con viewport-fit=cover, así que
+	    env(safe-area-inset-*) trae ese alto y se suma al padding.  Sin notch
+	    vale 0 y queda el padding de siempre.  Lo mismo abajo (gesto home) y a
+	    los costados (teléfono acostado). */
+	padding:
+		calc(4px + env(safe-area-inset-top, 0px))
+		calc(4px + env(safe-area-inset-right, 0px))
+		calc(4px + env(safe-area-inset-bottom, 0px))
+		calc(4px + env(safe-area-inset-left, 0px));
 	gap: 0;
 	align-items: center;
 	justify-content: flex-start;
@@ -2201,7 +2210,9 @@ p.help {
 		var(--w),
 		calc(
 			(
-					min(var(--vh, 100dvh), 100dvh) - 20px - var(--barh) -
+					min(var(--vh, 100dvh), 100dvh) - 20px -
+						env(safe-area-inset-top, 0px) -
+						env(safe-area-inset-bottom, 0px) - var(--barh) -
 						var(--tuth, 0px)
 				) *
 				var(--ar)
@@ -2238,34 +2249,50 @@ p.help {
 	height: var(--barh);
 }
 
-/* con el teclado abierto la mitad de abajo no existe: los paneles arrancan arriba */
+/* con el teclado abierto la mitad de abajo no existe: los paneles arrancan arriba.
+    El padding superior suma el safe-area para que la Dynamic Island / cámara no
+    tape el contenido (ver .lite body). */
 .lite #menu {
 	align-items: start;
 	justify-items: center;
-	padding: 6px;
+	padding: calc(6px + env(safe-area-inset-top, 0px)) 6px 6px;
 }
 .lite #lvl {
 	align-items: start;
 	justify-items: center;
-	padding: 6px;
+	padding: calc(6px + env(safe-area-inset-top, 0px)) 6px 6px;
 }
 .lite #skill {
 	align-items: start;
 	justify-items: center;
-	padding: 6px;
+	padding: calc(6px + env(safe-area-inset-top, 0px)) 6px 6px;
 }
 .lite #brief {
 	align-items: start;
 	justify-items: center;
-	padding: 6px;
+	padding: calc(6px + env(safe-area-inset-top, 0px)) 6px 6px;
+}
+.lite #hab {
+	align-items: start;
+	justify-items: center;
+	padding: calc(6px + env(safe-area-inset-top, 0px)) 6px 6px;
 }
 .lite #res {
 	align-items: start;
 	justify-items: center;
-	padding: 6px;
+	padding: calc(6px + env(safe-area-inset-top, 0px)) 6px 6px;
 }
 .lite #lvl > div {
-	max-height: 98dvh;
+	max-height: calc(98dvh - env(safe-area-inset-top, 0px));
+}
+/* Los paneles arrancan debajo del safe-area (ver padding de arriba): sin
+    descontarlo del max-height el fondo del panel se iría fuera de pantalla. */
+.lite #menu > div,
+.lite #skill > div,
+.lite #brief > div,
+.lite #hab > div,
+.lite #res > div {
+	max-height: calc(94dvh - env(safe-area-inset-top, 0px));
 }
 .lite #lbody {
 	grid-template-columns: minmax(104px, 36%) 1fr;
