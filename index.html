@@ -37,7 +37,7 @@
 	<div id="tut">
 		<p id="tmsg">-</p>
 		<div class="trow">
-			<span id="tnum">1/6</span><span id="tbar"><i id="tfill"></i></span
+			<span id="tnum">1/8</span><span id="tbar"><i id="tfill"></i></span
 			><button id="tskip">SALTAR &#9654;</button>
 		</div>
 	</div>
@@ -165,6 +165,64 @@
 			estés, apretá el botón.
 		</p>
 		<div class="row"><button id="bok">ESTOY LISTO &#9654;</button></div>
+	</div>
+</div>
+<!-- Las dos habilidades se explican como el QTE: primero se MUESTRAN en chico y
+     recién después se cuentan.  Un solo cartel con las dos escenas —la clase de
+     #hab (det | meow) decide cuál se ve— y las dos se mueven solas con CSS. -->
+<div id="hab">
+	<div>
+		<section id="hsdet">
+			<h3>&#9672; DETERMINACIÓN</h3>
+			<!-- el gato blanco cruzando la pared por la letra violeta, en loop -->
+			<div id="hddet" class="hdemo" aria-hidden="true">
+				<div id="hdpips"><i>&#9672;</i><i>&#9672;</i><i>&#9672;</i></div>
+				<div id="hdrow">
+					<b id="hdwall"></b><b id="hdk">V</b><img id="hdcat" alt="" />
+				</div>
+			</div>
+			<ul class="hleg">
+				<li><b class="v">V</b>letra sobre un muro</li>
+				<li><b class="p">&#9672;</b>una carga, un muro</li>
+			</ul>
+			<p>
+				Cada <b>3 gatos vencidos</b> te da una carga. Con carga encima, los
+				<b>muros</b> de tu celda también sacan letra —<b>violeta</b> y con
+				el círculo punteado—: teclear una te <b>atraviesa la pared</b> y
+				gasta la carga. Es el atajo que el laberinto no tiene.
+			</p>
+		</section>
+		<section id="hsmeow">
+			<h3>&#9834; MAULLIDO</h3>
+			<!-- la onda saliendo del gato blanco y los negros dando media vuelta -->
+			<div id="hdmeow" class="hdemo" aria-hidden="true">
+				<div id="hmrow">
+					<i id="hmr1" class="hmring"></i><i id="hmr2" class="hmring"></i
+					><img id="hmf1" class="hmf" alt="" /><img
+						id="hmf2"
+						class="hmf"
+						alt=""
+					/><img id="hmcat" alt="" />
+				</div>
+				<span id="hmkey">ESPACIO</span>
+			</div>
+			<ul class="hleg">
+				<li><b class="m">&#9834;</b>listo en la barra</li>
+				<li><b class="c">2,5 s</b>huyendo &middot; 45 s de espera</li>
+			</ul>
+			<p>
+				Se <b>arma</b> la primera vez que llenás el combo y queda armado
+				toda la partida. <b>ESPACIO</b> o <b>ENTER</b> —en el teléfono, el
+				<b>&#9834;</b> de la barra— y los gatos cercanos dan media vuelta y
+				<b>corren para el otro lado</b> 2,5 s, sin poder alcanzarte.
+				Después, 45 s de espera.
+			</p>
+		</section>
+		<p class="bnote">
+			Leelo con calma: el juego está <b>en pausa</b> y <b>ninguna tecla</b> lo
+			hace arrancar.
+		</p>
+		<div class="row"><button id="hok">ENTENDIDO &#9654;</button></div>
 	</div>
 </div>
 <script src="game.js"></script>

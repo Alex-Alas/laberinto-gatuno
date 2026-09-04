@@ -576,11 +576,485 @@ p.help {
 	color: #6f9;
 	text-shadow: 0 0 8px #6f98;
 }
+/* ---- el cartel de las dos habilidades -------------------------------------
+    Misma caja que la del primer encuentro, en violeta (determinación) o celeste
+    (maullido) en vez del rojo del gato negro.  Adentro viven las DOS escenas y
+    se muestra sólo la que pide la clase de #hab, así que el markup del cartel es
+    uno solo.  Igual que la demo del QTE, todo el movimiento lo hace el CSS: con
+    el cartel en display:none no corre una sola animación. */
+#hab {
+	position: fixed;
+	inset: 0;
+	display: none;
+	place-items: center;
+	z-index: 70;
+	background: #000c;
+}
+#hab.on {
+	display: grid;
+}
+#hab > div {
+	background: #0b0714;
+	border: 1px solid #c8f8;
+	border-radius: 6px;
+	padding: 22px 26px;
+	width: min(440px, 92vw);
+	max-height: 92dvh;
+	overflow: auto;
+	text-align: center;
+	box-shadow: 0 0 40px #c8f3;
+}
+#hab.meow > div {
+	border-color: #9ff8;
+	box-shadow: 0 0 40px #9ff3;
+}
+#hab h3 {
+	margin: 0 0 10px;
+	font-size: 17px;
+	letter-spacing: 1px;
+	color: #d9b0ff;
+	text-shadow: 0 0 10px #c8f8;
+}
+#hab.meow h3 {
+	color: #9ff;
+	text-shadow: 0 0 10px #9ff8;
+}
+#hab p {
+	margin: 0 0 16px;
+	font-size: 13px;
+	line-height: 1.5;
+	opacity: 0.85;
+}
+#hab .bnote {
+	font-size: 11.5px;
+	opacity: 0.55;
+	margin: -6px 0 14px;
+}
+#hab .row {
+	display: flex;
+	gap: 8px;
+	justify-content: center;
+	flex-wrap: wrap;
+}
+/* ENTENDIDO se carga solo, igual que ESTOY LISTO: durante HAB_LOCK el clic que
+     ya venía en camino no se lleva puesta la explicación */
+#hab.on #hok {
+	animation: bokwake 1.3s linear;
+}
+/* una escena a la vez */
+#hsdet,
+#hsmeow {
+	display: none;
+}
+#hab.det #hsdet,
+#hab.meow #hsmeow {
+	display: block;
+}
+/* el recuadro de las dos demos: la misma cuadrícula tenue que la del QTE, para
+     que se lea como "esto pasa ahí adentro, en el tablero" */
+.hdemo {
+	position: relative;
+	isolation: isolate;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	height: 138px;
+	margin: 0 0 10px;
+	border: 1px solid #c8f3;
+	border-radius: 5px;
+	overflow: hidden;
+	background:
+		repeating-linear-gradient(0deg, #2a4a6633 0 1px, #0000 1px 18px),
+		repeating-linear-gradient(90deg, #2a4a6633 0 1px, #0000 1px 18px),
+		#050310;
+}
+#hdmeow {
+	border-color: #9ff3;
+}
+/* la leyenda de cada escena, debajo de su demo */
+.hleg {
+	display: flex;
+	justify-content: center;
+	flex-wrap: wrap;
+	gap: 4px 12px;
+	margin: 0 0 12px;
+	padding: 0;
+	list-style: none;
+	font-size: 11px;
+	opacity: 0.8;
+}
+.hleg b {
+	font-size: 14px;
+	margin-right: 3px;
+}
+.hleg .v,
+.hleg .p {
+	color: #c8f;
+	text-shadow: 0 0 8px #c8f8;
+}
+.hleg .m,
+.hleg .c {
+	color: #9ff;
+	text-shadow: 0 0 8px #9ff8;
+}
+
+/* ---- demo 1: la letra violeta atraviesa el muro ---------------------------
+     Ciclo de 4,4 s: la pared azul con su letra violeta encima, la letra se
+     enciende, el gato blanco cruza POR AHÍ, fogonazo violeta y se apaga una de
+     las tres cargas.  Los colores son los del canvas: #39f la pared, #c8f la
+     determinación. */
+#hdpips {
+	position: relative;
+	z-index: 2;
+	display: flex;
+	gap: 7px;
+	font: 15px/1 var(--ui);
+}
+#hdpips i {
+	font-style: normal;
+	color: #c8f;
+	text-shadow: 0 0 8px #c8f;
+}
+#hdpips i:nth-child(3) {
+	animation: hdpip 4.4s infinite;
+}
+#hdrow {
+	position: relative;
+	z-index: 2;
+	width: 186px;
+	height: 58px;
+}
+#hddet::after {
+	/* el fogonazo violeta del cruce, el mismo #c8f del burst */
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	background: radial-gradient(circle, #c8f7, #c8f0 62%);
+	opacity: 0;
+	animation: hdflash 4.4s infinite;
+}
+#hdwall {
+	position: absolute;
+	left: 50%;
+	top: 0;
+	width: 3px;
+	height: 100%;
+	margin-left: -1.5px;
+	background: #39f;
+	box-shadow: 0 0 10px #2af;
+	animation: hdwall 4.4s infinite;
+}
+#hdk {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 26px;
+	height: 26px;
+	margin: -13px 0 0 -13px;
+	border: 2px dashed #c8f;
+	border-radius: 50%;
+	/* el disco tapa el trazo de la pared, que si no le cruzaba la letra al medio */
+	background: #050310;
+	font: 900 16px/22px var(--ui);
+	color: #c8f;
+	text-shadow: 0 0 10px #c8f;
+	animation: hdk 4.4s infinite;
+}
+#hdcat {
+	position: absolute;
+	top: 9px;
+	left: 18px;
+	width: 40px;
+	height: 40px;
+	/* el mismo recorte redondo que el gato del QTE: los webp vienen cuadrados */
+	-webkit-mask-image: radial-gradient(circle, #000 48%, #0000 72%);
+	mask-image: radial-gradient(circle, #000 48%, #0000 72%);
+	animation: hdcat 4.4s infinite;
+}
+@keyframes hdcat {
+	0%,
+	22% {
+		transform: translateX(0);
+		opacity: 1;
+	}
+	40%,
+	68% {
+		transform: translateX(110px);
+		opacity: 1;
+	}
+	76% {
+		transform: translateX(110px);
+		opacity: 0;
+	}
+	76.1%,
+	86% {
+		transform: translateX(0);
+		opacity: 0;
+	}
+	94%,
+	100% {
+		transform: translateX(0);
+		opacity: 1;
+	}
+}
+@keyframes hdwall {
+	0%,
+	32% {
+		opacity: 1;
+	}
+	40%,
+	74% {
+		opacity: 0.16;
+	}
+	86%,
+	100% {
+		opacity: 1;
+	}
+}
+@keyframes hdk {
+	0%,
+	14% {
+		opacity: 0.7;
+		transform: scale(1);
+	}
+	24%,
+	34% {
+		opacity: 1;
+		transform: scale(1.2);
+	}
+	42%,
+	80% {
+		opacity: 0;
+		transform: scale(1);
+	}
+	92%,
+	100% {
+		opacity: 0.7;
+		transform: scale(1);
+	}
+}
+@keyframes hdflash {
+	0%,
+	32% {
+		opacity: 0;
+	}
+	40% {
+		opacity: 1;
+	}
+	56%,
+	100% {
+		opacity: 0;
+	}
+}
+@keyframes hdpip {
+	0%,
+	38% {
+		opacity: 1;
+		text-shadow: 0 0 8px #c8f;
+	}
+	48%,
+	80% {
+		opacity: 0.16;
+		text-shadow: none;
+	}
+	92%,
+	100% {
+		opacity: 1;
+		text-shadow: 0 0 8px #c8f;
+	}
+}
+
+/* ---- demo 2: el maullido saca a los gatos de encima -----------------------
+     Ciclo de 4,4 s: se aprieta ESPACIO, salen dos ondas celestes del gato blanco
+     —las mismas #9ff del burst y del anillo del canvas— y los dos negros dan
+     media vuelta (scaleX) y se van corriendo para afuera. */
+#hmrow {
+	position: relative;
+	z-index: 2;
+	width: 240px;
+	height: 74px;
+}
+#hmcat {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 38px;
+	height: 38px;
+	margin: -19px 0 0 -19px;
+	-webkit-mask-image: radial-gradient(circle, #000 48%, #0000 72%);
+	mask-image: radial-gradient(circle, #000 48%, #0000 72%);
+	animation: hmcat 4.4s infinite;
+}
+.hmring {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 26px;
+	height: 26px;
+	margin: -13px 0 0 -13px;
+	border: 2px solid #9ff;
+	border-radius: 50%;
+	box-shadow: 0 0 12px #9ff8;
+	opacity: 0;
+	animation: hmring 4.4s infinite;
+}
+#hmr2 {
+	animation-delay: 0.3s;
+}
+.hmf {
+	position: absolute;
+	top: 50%;
+	width: 30px;
+	height: 30px;
+	margin-top: -15px;
+	/* el mismo recorte redondo que usa el gato del QTE: el webp viene cuadrado */
+	-webkit-mask-image: radial-gradient(circle, #000 48%, #0000 72%);
+	mask-image: radial-gradient(circle, #000 48%, #0000 72%);
+}
+#hmf1 {
+	left: 46px;
+	animation: hmf1 4.4s infinite;
+}
+#hmf2 {
+	right: 46px;
+	animation: hmf2 4.4s infinite;
+}
+#hmkey {
+	position: relative;
+	z-index: 2;
+	font-size: 10px;
+	letter-spacing: 2px;
+	color: #9ff;
+	border: 1px solid #9ff6;
+	border-radius: 4px;
+	padding: 3px 9px;
+	animation: hmkey 4.4s infinite;
+}
+@keyframes hmkey {
+	0%,
+	8% {
+		transform: translateY(0);
+		background: #0000;
+		box-shadow: none;
+	}
+	14%,
+	26% {
+		transform: translateY(2px);
+		background: #9ff2;
+		box-shadow: 0 0 14px #9ff6;
+	}
+	36%,
+	100% {
+		transform: translateY(0);
+		background: #0000;
+		box-shadow: none;
+	}
+}
+@keyframes hmcat {
+	0%,
+	14% {
+		transform: scale(1);
+	}
+	21% {
+		transform: scale(1.22);
+	}
+	36%,
+	100% {
+		transform: scale(1);
+	}
+}
+@keyframes hmring {
+	0%,
+	14% {
+		transform: scale(1);
+		opacity: 0;
+	}
+	19% {
+		transform: scale(1.2);
+		opacity: 1;
+	}
+	50% {
+		transform: scale(7);
+		opacity: 0;
+	}
+	50.1%,
+	100% {
+		transform: scale(1);
+		opacity: 0;
+	}
+}
+/* Los dos negros: primero dan media vuelta (scaleX) y después se van corriendo.
+     El halo pasa del rojo de caza (#f36) al celeste del maullido (#9ff), que es
+     exactamente lo que hace el canvas con un gato asustado. */
+@keyframes hmf1 {
+	0%,
+	16% {
+		transform: translateX(0) scaleX(1);
+		opacity: 0.95;
+		filter: brightness(0.72) drop-shadow(0 0 7px #f36);
+	}
+	24% {
+		transform: translateX(0) scaleX(-1);
+		opacity: 0.95;
+		filter: brightness(0.85) drop-shadow(0 0 10px #9ff);
+	}
+	50% {
+		transform: translateX(-40px) scaleX(-1);
+		opacity: 0;
+		filter: brightness(0.85) drop-shadow(0 0 10px #9ff);
+	}
+	50.1%,
+	66% {
+		transform: translateX(0) scaleX(1);
+		opacity: 0;
+		filter: brightness(0.72) drop-shadow(0 0 7px #f36);
+	}
+	80%,
+	100% {
+		transform: translateX(0) scaleX(1);
+		opacity: 0.95;
+		filter: brightness(0.72) drop-shadow(0 0 7px #f36);
+	}
+}
+@keyframes hmf2 {
+	0%,
+	16% {
+		transform: translateX(0) scaleX(-1);
+		opacity: 0.95;
+		filter: brightness(0.72) drop-shadow(0 0 7px #f36);
+	}
+	24% {
+		transform: translateX(0) scaleX(1);
+		opacity: 0.95;
+		filter: brightness(0.85) drop-shadow(0 0 10px #9ff);
+	}
+	50% {
+		transform: translateX(40px) scaleX(1);
+		opacity: 0;
+		filter: brightness(0.85) drop-shadow(0 0 10px #9ff);
+	}
+	50.1%,
+	66% {
+		transform: translateX(0) scaleX(-1);
+		opacity: 0;
+		filter: brightness(0.72) drop-shadow(0 0 7px #f36);
+	}
+	80%,
+	100% {
+		transform: translateX(0) scaleX(-1);
+		opacity: 0.95;
+		filter: brightness(0.72) drop-shadow(0 0 7px #f36);
+	}
+}
 /* En pantalla baja (el teléfono acostado) el cartel se aprieta en vez de
      empujar ESTOY LISTO fuera de la vista: primero se achica la demo y, si aún
      así no entra, se va la leyenda —los tres colores ya se ven en la demo—. */
 @media (max-height: 620px) {
-	#bdemo {
+	#bdemo,
+	.hdemo {
 		height: 104px;
 		gap: 6px;
 	}
@@ -589,20 +1063,24 @@ p.help {
 	}
 }
 @media (max-height: 480px) {
-	#brief > div {
+	#brief > div,
+	#hab > div {
 		padding: 14px 18px;
 	}
-	#bdemo {
+	#bdemo,
+	.hdemo {
 		height: 88px;
 		margin-bottom: 8px;
 	}
 	#bdseq b {
 		font-size: 20px;
 	}
-	#bleg {
+	#bleg,
+	.hleg {
 		display: none;
 	}
-	#brief p {
+	#brief p,
+	#hab p {
 		margin-bottom: 10px;
 		font-size: 12px;
 	}
@@ -631,6 +1109,41 @@ p.help {
 	}
 	#bdwin {
 		display: none;
+	}
+	/* las dos habilidades igual: el muro ya atravesado y una carga gastada, y
+       los dos gatos negros ya dados vuelta con la onda encima */
+	#hddet *,
+	#hddet::after,
+	#hdmeow * {
+		animation: none;
+	}
+	#hdcat {
+		transform: translateX(110px);
+	}
+	#hdwall {
+		opacity: 0.16;
+	}
+	#hdk {
+		opacity: 0;
+	}
+	#hdpips i:nth-child(3) {
+		opacity: 0.16;
+		text-shadow: none;
+	}
+	.hmring {
+		opacity: 1;
+		transform: scale(4.5);
+	}
+	#hmr2 {
+		transform: scale(2.4);
+	}
+	#hmf1 {
+		transform: translateX(-30px) scaleX(-1);
+		filter: brightness(0.85) drop-shadow(0 0 10px #9ff);
+	}
+	#hmf2 {
+		transform: translateX(30px) scaleX(1);
+		filter: brightness(0.85) drop-shadow(0 0 10px #9ff);
 	}
 }
 #baby {

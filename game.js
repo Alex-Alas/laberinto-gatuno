@@ -64,7 +64,9 @@ const cv = $("cv"),
 	tfill = $("tfill"),
 	tskip = $("tskip"),
 	brief = $("brief"),
-	bok = $("bok");
+	bok = $("bok"),
+	hab = $("hab"),
+	hok = $("hok");
 const RAGE = "assets/rage.gif";
 sgif.src = RAGE;
 
@@ -160,6 +162,10 @@ scare.style.backgroundImage = `url(${BIG.src})`;
 // la demo del cartel usa el MISMO gato del QTE, sin un byte extra: si lo que
 // se ve ahí no fuera el de la partida, la demo enseñaría otra cosa
 $("bdcat").src = BIG.src;
+// ...y por lo mismo las dos demos de habilidades usan el gato blanco y los
+// negros del tablero: son las imágenes que ya están cargadas
+$("hdcat").src = $("hmcat").src = PJ.src;
+$("hmf1").src = $("hmf2").src = FOE.src;
 const BOOM = "assets/boom.gif";
 const SCREAM = new Audio("assets/scream.mp3"),
 	BANG = new Audio("assets/bang.mp3");
@@ -173,7 +179,8 @@ const play = (a) => {
 };
 const GIF = new Image();
 GIF.src = BOOM; // gif de explosión ya decodificado
-const BGM = new Audio("assets/bgm.mp3");
+const BGM_SRC = "assets/bgm.mp3";
+const BGM = new Audio();
 BGM.loop = true;
 BGM.volume = 0.32;
 SCREAM.preload = BANG.preload = "auto"; // cortos: vale la pena tenerlos listos
@@ -183,11 +190,17 @@ const VIBE = new Audio();
 VIBE.loop = true;
 VIBE.volume = 0.34;
 VIBE.preload = PERF.pre;
-// el otro ~730KB: en el teléfono no se baja hasta que alguien pida EXTRA VIBES
-const vibeSrc = () => {
-	if (!VIBE.src) VIBE.src = VIBE_SRC;
+// Las dos pistas se crean VACÍAS: pasarle la URL al constructor arranca la descarga
+// ahí mismo, y ahí el preload="none" del teléfono llega tarde.  srcOn() se la pone a
+// la que va a sonar —el BGM con la 1ª tecla, las vibes recién al pedirlas—; en
+// escritorio las dos se cargan de entrada, como cuando iban embebidas.
+const srcOn = (a) => {
+	if (!a.src) a.src = a === VIBE ? VIBE_SRC : BGM_SRC;
 };
-if (!PERF.lazy) vibeSrc();
+if (!PERF.lazy) {
+	srcOn(BGM);
+	srcOn(VIBE);
+}
 mus.onclick = () => {
 	BGM.muted = !BGM.muted;
 	VIBE.muted = BGM.muted;
@@ -251,7 +264,7 @@ vibe.onclick = () => {
 	// de acá cuelgan TODAS las reglas del latido: sin la clase el CSS ni las mira
 	document.documentElement.classList[vibes ? "add" : "remove"]("vibes");
 	if (vibes) {
-		vibeSrc();
+		srcOn(VIBE);
 		bakeBop();
 	} // recién acá se pagan el mp3 y la capa del latido
 	const on = track(),
@@ -390,6 +403,8 @@ let tutOn = false,
 	tflag = 0,
 	tAt = 0, // estado del tutorial guiado
 	tpush = 0, // empujones dados en el paso actual (ver TUT_PUSH)
+	tthru = 0, // muros atravesados con DETERMINACIÓN en el paso actual
+	tmeow = 0, // maullidos soltados en el paso actual
 	briefSeen = 0; // el primer encuentro ya se explicó
 let g,
 	p,
@@ -434,6 +449,11 @@ let g,
 	radar = null,
 	stl = 0,
 	maxStl = 0, // el medidor de ESTILO y su tope de la partida
+	stlSum = 0,
+	stlT = 0, // integral del estilo y tiempo jugado: de ahí sale el promedio
+	stlAt = 0, // último cuadro contado (para el dt del promedio y del escurrido)
+	kills = 0, // gatos vencidos SEGUIDOS: la cadena que paga cada vez más
+	maxKills = 0, // ...y la cadena más larga de la partida, para el resumen
 	baby = 0,
 	paused = false,
 	pauseAt = 0,
@@ -445,23 +465,58 @@ const comboFill = () => Math.min(1, combo / COMBO_MAX);
 // ---- los dos medidores ------------------------------------------------------
 // COMBO es la racha: sube de a uno, manda la ventana de reacción y el tono del
 // blip, y CUALQUIER error lo borra entero.  ESTILO es el otro, el que da el
-// rango: sube igual pero un error apenas lo abolla (STYLE_ERR) y lo que de
-// verdad lo hunde es perder contra un gato (STYLE_LOSS).  Antes eran la misma
-// variable, así que una tecla mal tirada te bajaba de SSS a D: la racha se
-// pierde de una, el estilo se gasta de a poco.
-const STYLE_ERR = 2, // letra equivocada o tarde: un mordisco
-	STYLE_LOSS = 8, // perder el QTE: eso sí duele
-	STYLE_QTE = 2; // ganarlo suma más que una letra
+// rango: un error apenas lo abolla (STYLE_ERR) y lo que de verdad lo hunde es
+// perder contra un gato (STYLE_LOSS).  Antes eran la misma variable, así que una
+// tecla mal tirada te bajaba de SSS a D: la racha se pierde de una, el estilo se
+// gasta de a poco.
+//
+// Pero el estilo TAMPOCO se regala.  Tres reglas lo vuelven un juicio y no un
+// contador, y las tres se leen en la barra mientras se juega:
+//
+//   1. TECHO DE LAS LETRAS.  Teclear bien sube el medidor, pero sólo hasta un
+//      techo que sale del COMBO (styleCap): sin racha el techo es cero y con la
+//      racha llena llega justo a S.  Caminar el laberinto, por limpio que sea,
+//      no pasa de ahí: es el piso del estilo, no el techo.
+//   2. LOS GATOS SON EL RESTO.  SS y SSS salen de VENCER gatos, y encadenarlos
+//      sin perder ninguno paga cada vez más (STYLE_CHAIN).  Perder un QTE corta
+//      la cadena y hunde el medidor.
+//   3. LO QUE PASA DEL TECHO SE ESCURRE.  Cada segundo por encima de styleCap()
+//      se van STYLE_DECAY puntos, así que un rango alto no se guarda: o se
+//      sostiene la racha y se sigue cazando, o se cae solo.
+const STYLE_ERR = 3, // letra equivocada o tarde: un mordisco
+	STYLE_LOSS = 10, // perder el QTE: eso sí duele
+	STYLE_HIT = 0.5, // lo que suma una letra DENTRO del techo del combo
+	STYLE_QTE = 4, // vencer un gato vale ocho letras...
+	STYLE_CHAIN = 2, // ...y cada gato encadenado suma esto de más
+	STYLE_CHAIN_MAX = 4, // hasta el 5º seguido (+8): más sería infinito
+	STYLE_DECAY = 0.45; // puntos por segundo que se va lo que pasa del techo
 // el tope deja al SSS a cinco puntos de distancia: sin él, media partida buena
 // dejaba el medidor tan arriba que ningún castigo se notaba
 const STYLE_MAX = 26;
+// El techo que las letras solas pueden llenar.  Sale del combo y topa en S: de
+// ahí para arriba el estilo lo dan los gatos.  Con el combo roto el techo es 0 y
+// TODO el medidor queda escurriéndose: eso es lo que hace que la racha tenga que
+// ser constante y no un pico.
+const styleCap = () => RANKS[4].c * Math.sqrt(comboFill());
+// lo que paga vencer un gato, con la cadena de gatos seguidos encima
+const qteStyle = () =>
+	STYLE_QTE + Math.min(STYLE_CHAIN_MAX, kills - 1) * STYLE_CHAIN;
 const styleUp = (n) => {
 	stl = Math.min(STYLE_MAX, stl + n);
 	maxStl = Math.max(maxStl, stl);
 };
+// las letras no pasan del techo: si el medidor ya está arriba, teclear no suma
+const styleHit = () => styleUp(Math.max(0, Math.min(STYLE_HIT, styleCap() - stl)));
 const styleDown = (n) => {
 	stl = Math.max(0, stl - n);
 };
+// EL PROMEDIO.  El rango que te llevás no es el que tocaste un segundo ni el que
+// quedó al final: es la integral del medidor dividida por el tiempo jugado, o
+// sea el estilo PROMEDIO de la partida entera.  Un pico de SSS en el último
+// pasillo ya no tapa cuatro minutos en D, y sostener S de punta a punta vale más
+// que rozar SSS una vez.  Se acumula en frame() con el reloj del juego, así que
+// las pausas (menú, selector, carteles) no cuentan.
+const avgStl = () => (stlT ? stlSum / stlT : stl);
 // subir el combo es también lo que ARMA el maullido: se carga una vez y queda
 function comboUp() {
 	combo++;
@@ -585,6 +640,8 @@ function unpause() {
 	scareUntil += d;
 	meowAt += d; // ni el respiro, ni el maullido, ni su cooldown
 	tAt += d; // ni el empujón del tutorial, que si no salta al cerrar el panel
+	if (qte) qte.until += d; // ni el QTE, que si no se pierde solo al cerrar el panel
+	if (revealT) revealT += d; // ni el farol, que si no se gasta en la pausa
 	if (radar) radar.t += d;
 	if (resAt) resAt += d; // ni el resumen, que si no salta sobre el menú
 	paused = false;
@@ -644,6 +701,11 @@ function gen() {
 	maxCombo = 0;
 	stl = 0;
 	maxStl = 0;
+	stlSum = 0;
+	stlT = 0;
+	stlAt = 0;
+	kills = 0;
+	maxKills = 0;
 	hits = 0;
 	fails = 0;
 	pen = 0;
@@ -875,6 +937,7 @@ function meow() {
 	sfx(520, 240, "sawtooth", 0.055, 900);
 	setTimeout(() => sfx(900, 420, "sawtooth", 0.05, 280), 150);
 	shake = 13;
+	tmeow++; // el paso del tutorial que enseña el maullido espera esto
 	burst(p.x * S + S / 2, p.y * S + S / 2, "#9ff", 34);
 	say("¡MAULLIDO!", "LOS GATOS NEGROS SE ALEJAN", "#9ff");
 	return true;
@@ -909,8 +972,19 @@ function qteEnd(okAll) {
 	if (okAll) {
 		pen -= 500;
 		comboUp();
-		styleUp(STYLE_QTE);
+		// la CADENA: el 1º paga STYLE_QTE y cada gato seguido paga STYLE_CHAIN
+		// más, hasta el 5º.  Es la única forma de pasar de S, así que el rango
+		// alto no es "jugar prolijo": es haber estado cazando.
+		kills++;
+		maxKills = Math.max(maxKills, kills);
+		styleUp(qteStyle());
 		tflag++;
+		if (kills >= 2)
+			say(
+				`¡RACHA DE ${kills} GATOS!`,
+				`+${qteStyle()} DE ESTILO`,
+				"#4cf",
+			);
 		// Salís del QTE con la pantalla llena de secuencia y sin saber para dónde
 		// estabas yendo: el reloj de la letra arranca recién 2 s después, y en ese
 		// rato los gatos tampoco dan un paso.  Es tiempo para MIRAR, no para correr.
@@ -939,6 +1013,7 @@ function qteEnd(okAll) {
 		// se corta igual que con un error, pero acá el medidor de color se hunde
 		pen += 2000;
 		combo = 0;
+		kills = 0; // se corta la cadena: el gato siguiente vuelve a pagar el mínimo
 		styleDown(STYLE_LOSS);
 		flash = 1;
 		shake = 14;
@@ -957,6 +1032,39 @@ function qteEnd(okAll) {
 	if (okAll) deal();
 	else scareShow();
 }
+
+// ---- el cartel de las dos habilidades (tutorial) ---------------------------
+// La determinación y el maullido se contaban en un renglón del menú y nada más:
+// se leían, no se reconocían.  Ahora tienen el mismo trato que el QTE —primero
+// se MUESTRAN y después se cuentan—: el juego se congela, corre la escena en
+// chico (el gato blanco cruzando el muro por la letra violeta, o la onda del
+// maullido sacando a los gatos negros de encima) y recién al decir ENTENDIDO
+// arranca el paso donde hay que usarla.  Todo el movimiento lo hace el CSS: con
+// el cartel en display:none las animaciones no corren.
+//
+// Y no se cierra con el teclado, por lo mismo que el otro: el maullido SE SUELTA
+// con ESPACIO, así que un espacio ya en camino se llevaría puesta la explicación
+// de lo que estaba por leer.
+const HAB_LOCK = 1200;
+let habAt = 0;
+function habShow(k) {
+	habAt = now();
+	if (!paused) {
+		paused = true;
+		pauseAt = now();
+	}
+	if (MOBILE) kb.blur(); // el teclado del teléfono taparía medio cartel
+	hab.className = "on " + k;
+}
+const habOn = () => /(^| )on( |$)/.test(hab.className);
+const habReady = () => habOn() && now() - habAt >= HAB_LOCK;
+function habGo() {
+	if (!habReady()) return;
+	hab.className = "";
+	unpause();
+	if (MOBILE) kbFocus();
+}
+hok.onclick = habGo;
 
 // ---- la pausa del primer encuentro (tutorial) ------------------------------
 // El gato te alcanzó por primera vez.  En vez de tirarte el QTE encima, el juego
@@ -1312,6 +1420,24 @@ function frame() {
 	const respiro = live && !qte && T < graceT;
 	if (live && (tutHold() || respiro)) shownAt = T; // el 1er paso del tutorial va sin reloj
 	if (respiro) foeTick = T; // ...y al salir del respiro no se cobran los pasos
+	// ---- el estilo, cuadro a cuadro ------------------------------------------
+	// Dos cosas, las dos con el reloj DEL JUEGO (T), así que el menú, el selector
+	// y los carteles no cuentan: (1) lo que pasa del techo del combo se escurre,
+	// y (2) el medidor va sumando a la integral de la que sale el promedio.  El
+	// QTE y el respiro no escurren: ahí el jugador no puede teclear el laberinto.
+	const sdt = stlAt ? Math.min(250, T - stlAt) : 0; // el tope tapa el salto de una pestaña dormida
+	stlAt = T;
+	if (live && sdt > 0) {
+		if (!qte && !respiro)
+			styleDown(
+				Math.min(
+					Math.max(0, stl - styleCap()),
+					(STYLE_DECAY * sdt) / 1000,
+				),
+			);
+		stlSum += stl * sdt;
+		stlT += sdt;
+	}
 	const left = qte
 		? (qte.until - T) / qte.ms
 		: live
@@ -1880,6 +2006,7 @@ function frame() {
 	} else {
 		const sb =
 			`precisión ${Math.round(acc() * 100)}%  ·  pen +${fmt(pen)}  ·  teclas ${log.length}` +
+			`  ·  estilo promedio ${RANKS[rankI(avgStl())].k}` +
 			habTxt(T) +
 			(baby ? `  ·  BABY MODE ${baby}` : "");
 		if (sb !== lastSub) {
@@ -1908,10 +2035,12 @@ rst.onclick = () => {
 }; // reinicio sólo por botón
 
 function key(k) {
-	if (track().paused)
+	if (track().paused) {
+		srcOn(track()); // en el teléfono el mp3 se baja recién acá
 		track()
 			.play()
-			.catch(() => {}); // la música arranca con la 1ª tecla
+			.catch(() => {});
+	} // la música arranca con la 1ª tecla
 	if (win || frozen || paused || k.length != 1 || k < "a" || k > "z")
 		return;
 	if (!t0) {
@@ -1942,7 +2071,7 @@ function key(k) {
 	const react = now() - shownAt;
 	hits++;
 	comboUp();
-	styleUp(1);
+	styleHit(); // ...y el estilo sólo hasta donde lo deja el combo
 	push(k, "ok");
 	cpop = 1;
 	sfxOk();
@@ -1958,6 +2087,7 @@ function key(k) {
 	if (thru) {
 		// se gastó una carga de determinación
 		det--;
+		tthru++; // ...y el paso del tutorial que la enseña espera esto
 		shake = 7;
 		sfx(150, 260, "sine", 0.055, 620);
 		burst(p.x * S + S / 2, p.y * S + S / 2, "#c8f", 26);
@@ -2025,6 +2155,18 @@ onkeydown = (e) => {
 			return;
 		}
 		if (e.target === bok && (e.key === "Enter" || e.key === " ")) return;
+		e.preventDefault();
+		return;
+	}
+	// el cartel de las habilidades, igual: el maullido se suelta con ESPACIO y el
+	// que ya venía en camino no se puede llevar puesta la explicación
+	if (habOn()) {
+		if (e.key === "Tab") {
+			e.preventDefault();
+			hok.focus();
+			return;
+		}
+		if (e.target === hok && (e.key === "Enter" || e.key === " ")) return;
 		e.preventDefault();
 		return;
 	}
@@ -2143,7 +2285,7 @@ let menuOn = false,
 const stats = () =>
 	`precisión ${Math.round(acc() * 100)}%  ·  pen +${fmt(pen)}  ·  teclas ${log.length}` +
 	`  ·  combo x${combo} (récord x${maxCombo})` +
-	`  ·  estilo ${RANKS[rankI()].k} (tope ${RANKS[rankI(maxStl)].k})` +
+	`  ·  estilo ${RANKS[rankI()].k} (promedio ${RANKS[rankI(avgStl())].k}, pico ${RANKS[rankI(maxStl)].k})` +
 	habTxt(now()) +
 	(baby ? `  ·  BABY MODE ${baby}` : "") +
 	(bests[LV.id] ? `  ·  MEJOR ${fmt(bests[LV.id])}s` : "");
@@ -2286,22 +2428,29 @@ function resShow() {
 	resOn = true;
 	menuClose();
 	kb.blur(); // en el teléfono el teclado tapa medio panel
-	const top = RANKS[rankI(maxStl)],
+	const avg = RANKS[rankI(avgStl())],
+		top = RANKS[rankI(maxStl)],
 		nx = nextLv();
 	rtag.textContent = LV.tag;
 	rttl.textContent = LV.tut ? "TUTORIAL COMPLETADO" : "NIVEL COMPLETADO";
 	rtime.textContent = fmt(tEnd + pen);
 	rsub.textContent = `CRUDO ${fmt(tEnd)}  ·  ${pen < 0 ? "BONUS -" : "PENALIZACIÓN +"}${fmt(Math.abs(pen))}`;
-	// el rango que muestra es el MÁXIMO de la partida, no el que quedó: el estilo
-	// ya no se reinicia de un error, pero un mal final igual lo baja
+	// El rango grande es el PROMEDIO de toda la partida, no el pico ni el que quedó
+	// al final.  Antes mostraba el máximo: un solo momento bueno en cuatro minutos
+	// malos se llevaba el SSS, y el resumen mentía sobre cómo se había jugado.  El
+	// pico sigue estando, al lado, como el récord que es.
 	rgrid.innerHTML =
-		`<div><i class=rank style="--rc:${top.col}">${top.k}</i><small>${top.n}</small></div>` +
+		`<div><i class=rank style="--rc:${avg.col}">${avg.k}</i><small>ESTILO PROMEDIO</small></div>` +
+		`<div><b style="color:${top.col}">${top.k}</b><small>PICO DE ESTILO</small></div>` +
 		`<div><b>x${maxCombo}</b><small>COMBO MÁX.</small></div>` +
 		`<div><b>${Math.round(acc() * 100)}%</b><small>PRECISIÓN</small></div>` +
 		`<div><b>${got}/${LV.coins}</b><small>MONEDAS</small></div>` +
 		`<div><b>${hits + fails}</b><small>TECLAS</small></div>` +
 		(qteWins
 			? `<div><b>${qteWins}</b><small>GATOS</small></div>`
+			: "") +
+		(maxKills > 1
+			? `<div><b>x${maxKills}</b><small>RACHA DE GATOS</small></div>`
 			: "") +
 		(baby ? `<div><b>${baby}</b><small>BABY POINTS</small></div>` : "");
 	rpb.textContent = newPB
@@ -2390,8 +2539,37 @@ const TUT = [
 		ok: () => tflag > 0,
 	},
 	{
+		t: "Vencer gatos te da <b>DETERMINACIÓN</b>. Con una carga, los <b>MUROS</b> de tu celda también sacan letra —en <b>violeta</b>— y teclearla te <b>atraviesa la pared</b>. Gastá una.",
+		// el gato ya cumplió: se va del tablero para que este paso se practique
+		// tranquilo, y la carga se regala (en la partida son 3 gatos por carga)
+		enter: () => {
+			foes = [];
+			prevFoe = [];
+			det = Math.max(det, 1);
+			deal(); // las letras violetas salen recién en el reparto siguiente
+			habShow("det");
+		},
+		ok: () => tthru > 0,
+	},
+	{
+		t: "Y llenar el combo arma el <b>MAULLIDO</b> para toda la partida. <b>ESPACIO</b> —o el <b>&#9834;</b> de la barra— y los gatos cercanos salen corriendo. Probalo.",
+		// se arma a mano (en la partida lo arma llegar a COMBO_MAX) y entran dos
+		// gatos a media distancia: un maullido sin nadie a quien ahuyentar no
+		// enseña nada, lo que hay que ver es a los dos dando media vuelta
+		enter: () => {
+			meowOn = true;
+			meowAt = -1e9;
+			foes = [tutFoe(5), tutFoe(7)];
+			prevFoe = [];
+			habShow("meow");
+		},
+		ok: () => tmeow > 0,
+	},
+	{
 		t: "Juntá las <b>MONEDAS</b> amarillas: la salida está <b>cerrada con candado</b> hasta tenerlas todas.",
 		enter: () => {
+			foes = []; // los dos del paso anterior ya mostraron lo suyo
+			prevFoe = [];
 			spawn(coins, LV.coins);
 		},
 		ok: () => exitOpen(),
@@ -2429,6 +2607,8 @@ function tutStart() {
 	tutOn = !!LV.tut;
 	tstep = 0;
 	tflag = 0;
+	tthru = 0;
+	tmeow = 0;
 	tAt = now();
 	tpush = 0;
 	tut.className = tutOn ? "on" : "";
@@ -2455,6 +2635,8 @@ function tutCheck() {
 	}
 	if (++tstep >= TUT.length) return tutEnd();
 	tflag = 0;
+	tthru = 0;
+	tmeow = 0;
 	tAt = now();
 	tpush = 0;
 	const e = TUT[tstep].enter;
