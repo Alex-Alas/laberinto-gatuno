@@ -458,6 +458,11 @@ if(bopAt(KICK)<.999) throw new Error('el bop no cae sobre el bombo del mp3');
 if(Math.abs(bopAt(KICK)-bopAt(KICK+BEAT))>1e-9) throw new Error('el bop no es periodico');
 if(bopAt(KICK+BEAT/2)>.4) throw new Error('el bop no decae entre beats');
 if(bopAt(KICK+BEAT*.9)>.1) throw new Error('el bop llega alto al beat siguiente');
+// al CSS no se le pasa un valor por cuadro: se redondea a escalones (en un monitor
+// de 120Hz eran 120 escrituras por segundo, cada una un recalculo de estilo)
+if(!(BOP_STEPS>=8)) throw new Error('muy pocos escalones: el latido se ve a saltos');
+if(BOP_STR.length!==BOP_STEPS+1||BOP_STR[0]!=='0.000'||BOP_STR[BOP_STEPS]!=='1.000')
+  throw new Error('la tabla de escalones del bop esta mal');
 BGM.paused=false; vibe.onclick();
 if(!vibes||track()!==VIBE) throw new Error('no cambio a la pista de vibes');
 if(!document.documentElement.classList.contains('vibes'))
@@ -1120,6 +1125,34 @@ if(!/classList\[vibes\?'add':'remove'\]\('vibes'\)/.test(flat))
   throw new Error('el boton no enciende la clase .vibes');
 if(!/@keyframes rpopl/.test(style)) throw new Error('falta la entrada espejada del cartel del rango');
 if(/var\(--rc,#4cf\)22/.test(style)) throw new Error('quedo el degradado con el hex roto de 5 digitos');
+
+// ---- 24b) ...pero el latido tiene que salir BARATO ----
+// Animar un radio de desenfoque —box-shadow, text-shadow, un degradado de fondo—
+// obliga al navegador a volver a rasterizar la gaussiana entera en cada cuadro, y
+// con el fondo del body eso era rerasterizar la ventana COMPLETA: extra vibes bajaba
+// el juego de 60 a 26 cuadros por segundo.  Sobre las cajas GRANDES el beat solo
+// puede mover opacity/transform, y la punta del resplandor va horneada en una capa.
+if(/--bop/.test(bloque('canvas')))
+  throw new Error('el halo del canvas volvio a crecer con el beat');
+for(const d of style.match(/background[^;{}]*var\(--bop[^;{}]*/g)||[])
+  throw new Error('un degradado late con el beat (repinta la ventana entera): '+d);
+// solo lo CHICO —el reloj, la x del combo, su llenado, la barrita del tutorial—
+// puede seguir moviendo su sombra: ahi el area desenfocada son unos miles de pixeles
+const CHICO=['#bt','#bx','#bcfill','#tbar i'];
+for(const m of style.matchAll(/\.vibes ([^{,]*)\{([^}]*)\}/g))
+  if(/(box|text)-shadow[^;]*var\(--bop/.test(m[2])&&CHICO.indexOf(m[1])<0)
+    throw new Error('el desenfoque de "'+m[1]+'" late con el beat: repinta cada cuadro');
+// y las capas horneadas tienen que resolverse en el compositor, no repintandose
+const receta=bloque('.vibes #tut::after');
+if(!/opacity:var\(--bop/.test(receta)||!/will-change:opacity/.test(receta))
+  throw new Error('las capas del latido no se resuelven en el compositor');
+for(const sel of ['.vibes body::before','.vibes #bar::before','.vibes #bcombo::after',
+                  '.vibes #board::after'])
+  if(style.indexOf(sel)<0) throw new Error('falta la capa del latido de '+sel);
+if(!/const BOP_STEPS=\d+/.test(flat))
+  throw new Error('el --bop dejo de redondearse a escalones');
+if(!/setProperty\('--bop',BOP_STR\[/.test(flat))
+  throw new Error('el --bop se publica sin escalonar');
 
 // ---- 25) la GUI del telefono llego al escritorio ----
 // El escritorio no tenia identidad propia: un h2 + un p de texto centrado y una

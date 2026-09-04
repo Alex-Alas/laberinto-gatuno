@@ -94,8 +94,9 @@ function sizeCanvas() {
 sizeCanvas();
 
 // ---- perfil de rendimiento -------------------------------------------------
-// En el teléfono lo caro no es la lógica del juego: es shadowBlur en cada dibujo,
-// reescribir innerHTML 60 veces por segundo y animar box-shadow con --bop.
+// En el teléfono lo caro no es la lógica del juego: es shadowBlur en cada dibujo
+// y reescribir innerHTML 60 veces por segundo.  (El latido de extra vibes ya no
+// entra en esta lista: dejó de animar desenfoques y lo resuelve el compositor.)
 // TODO lo que se nota a la vista va detras de MOBILE; en escritorio PERF deja el
 // juego pixel por pixel como estaba.  Los numeros de gameplay no se tocan.
 const MOBILE = (() => {
@@ -255,6 +256,17 @@ const BPM = 120,
 let VIBE_OFF = 0.326;
 const bopAt = (t) =>
 	Math.pow(1 - (((((t + VIBE_OFF) / BEAT) % 1) + 1) % 1), 1.8);
+// Al CSS el bop se le pasa redondeado a BOP_STEPS escalones.  Cada escritura de
+// --bop obliga al navegador a recalcular el estilo de media pantalla, y como el
+// cuadro corre libre eso eran 60 escrituras por segundo —120 en un monitor de
+// 120Hz— para un latido que con 32 por segundo ya se ve continuo.  Redondear
+// desengancha el costo de los cuadros por segundo: el latido cuesta lo mismo en
+// una pantalla de 60 que en una de 144.  Los valores salen de una tabla para no
+// armar un string nuevo cada vez.
+const BOP_STEPS = 16;
+const BOP_STR = Array.from({ length: BOP_STEPS + 1 }, (_, i) =>
+	(i / BOP_STEPS).toFixed(3),
+);
 let vibes = false,
 	bop = 0;
 const track = () => (vibes ? VIBE : BGM);
@@ -1459,11 +1471,10 @@ function frame() {
 		moveFoes();
 	}
 
+	// el canvas dibuja con el bop entero; el CSS se conforma con el escalón
 	bop = vibes && !VIBE.paused ? bopAt(VIBE.currentTime) : 0;
-	if (bop !== lastBop) {
-		root.style.setProperty("--bop", bop.toFixed(3));
-		lastBop = bop;
-	}
+	const bq = Math.round(bop * BOP_STEPS);
+	if (bq !== lastBop) root.style.setProperty("--bop", BOP_STR[(lastBop = bq)]);
 
 	vis.x += (p.x - vis.x) * 0.35;
 	vis.y += (p.y - vis.y) * 0.35;

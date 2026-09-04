@@ -86,8 +86,11 @@ canvas {
 	background: #0b0b12;
 	border: 1px solid #1ff4;
 	border-radius: 4px;
+	/* el resplandor NO crece con el beat: un radio de desenfoque que cambia obliga
+	    a rerasterizar la gaussiana del tablero entero en cada cuadro.  Lo que late
+	    es la capa de #board, horneada una vez (ver "extra vibes: qué late"). */
 	box-shadow:
-		0 0 calc(24px + var(--bop, 0) * 34px) #0ff3,
+		0 0 24px #0ff3,
 		inset 0 0 40px #0ff1;
 	display: block;
 	width: 100%;
@@ -1421,6 +1424,7 @@ p.help {
 	padding: 0 11px 0 8px;
 	border-left: 1px solid #1ff4;
 	box-shadow: inset 0 0 22px -8px var(--rc, #4cf);
+	position: relative; /* ancla de la capa del latido */
 }
 #brank {
 	grid-row: 1/4;
@@ -1713,28 +1717,102 @@ p.help {
 }
 
 /* ---- extra vibes: qué late ------------------------------------------------
-    --bop va de 0 a 1 en cada bombo del mp3 y lo publica el JS en <html>.  Antes
-    lo leían tres cosas (el título, el resplandor del canvas y el medidor); ahora
-    lo lee toda la pantalla, pero SIEMPRE sobre propiedades que el compositor
-    resuelve solo —transform, opacity, filter— o sobre sombras de cajas chicas:
-    nada que obligue a rehacer el layout 60 veces por segundo.  La clase .vibes la
-    pone el botón; sin ella estas reglas ni se evalúan y el juego queda idéntico. */
+    --bop va de 0 a 1 en cada bombo del mp3 y lo publica el JS en <html>, y de acá
+    cuelga TODO el latido: sin la clase .vibes estas reglas ni se evalúan.
+
+    El latido llega a toda la pantalla, pero con UNA regla de oro: sobre las cajas
+    grandes el beat sólo puede mover OPACIDAD.  Animar un radio de desenfoque
+    —box-shadow, text-shadow, el degradado del fondo— obliga al navegador a volver
+    a rasterizar la gaussiana entera en cada cuadro, y con el fondo del body eso
+    era rerasterizar la ventana COMPLETA 60 (o 120, en un monitor de 120Hz) veces
+    por segundo: de ahí salía la caída de cuadros.
+    En vez de eso, lo que late se pinta UNA sola vez con su desenfoque al máximo en
+    una capa vacía encima del elemento; will-change: opacity la sube al compositor
+    y el beat sólo le sube y le baja la opacidad, que la GPU resuelve sin repintar
+    un píxel.  Las capas viven detrás de .vibes: apagado no cuestan ni memoria.
+    Lo chico —el reloj, la x del combo, la barrita del tutorial— sí sigue animando
+    su sombra: ahí el área desenfocada son unos pocos miles de píxeles.  Y lo que ya
+    latía en opacidad o en un color —el ♪, la hamburguesa, los bordes— queda como
+    estaba: eso nunca fue lo que costaba. */
+
+/* la receta compartida: una capa vacía, pegada al elemento, que sólo se enciende */
+.vibes body::before,
+.vibes #bar::before,
+.vibes #bcombo::after,
+.vibes #board::after,
+.vibes #tut::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	pointer-events: none;
+	opacity: var(--bop, 0);
+	will-change: opacity;
+}
+/* el resplandor de la sala: el piso del degradado queda fijo en el fondo del body
+    (se pinta una vez y no se toca más) y lo que late es la capa de encima */
 .vibes body {
 	background:
 		radial-gradient(
 			125% 85% at 50% 0%,
-			rgba(0, 180, 255, calc(0.045 + var(--bop, 0) * 0.075)),
+			rgba(0, 180, 255, 0.045),
 			#0000 62%
 		),
 		#08080c;
 }
+.vibes body::before {
+	position: fixed;
+	z-index: -1;
+	background: radial-gradient(
+		125% 85% at 50% 0%,
+		rgba(0, 180, 255, 0.08),
+		#0000 62%
+	);
+}
+/* el tablero: el halo del canvas queda estático (ver la regla de canvas) y el que
+    late es este, horneado en su punta.  Y el tablero entero respira un 0,7% */
+.vibes #board {
+	transform: scale(calc(1 + var(--bop, 0) * 0.007));
+	will-change: transform;
+}
+.vibes #board::after {
+	border-radius: 4px;
+	box-shadow: 0 0 58px #0ff3;
+}
+/* la barra tiene overflow:hidden (le recorta las puntas al llenado del estilo),
+    así que su capa no puede tirar luz hacia afuera: late por dentro, en el borde */
+.vibes #bar {
+	box-shadow:
+		0 0 20px #0ff3,
+		inset 0 1px 0 #9ef3;
+}
+.vibes #bar::before {
+	box-shadow: inset 0 0 26px -2px #0ff5;
+}
+.vibes #bcombo::after {
+	box-shadow: inset 0 0 30px -6px var(--rc, #4cf);
+}
+.vibes #tut::after {
+	box-shadow: 0 0 32px #0f93;
+}
+/* el log tiene overflow:hidden y tampoco puede llevar capa.  Late el color del
+    marco —repintar cuatro líneas de 1px no cuesta nada— y el resplandor, que sí
+    era una gaussiana de 550x90, se queda encendido fijo */
 .vibes #log {
 	border-color: rgba(70, 225, 255, calc(0.22 + var(--bop, 0) * 0.6));
-	box-shadow: 0 0 calc(4px + var(--bop, 0) * 18px) #0ff4;
+	box-shadow: 0 0 14px #0ff4;
+	opacity: calc(0.88 + var(--bop, 0) * 0.12);
+	will-change: opacity;
 }
-.vibes #log span {
-	opacity: calc(0.78 + var(--bop, 0) * 0.22);
+/* el llenado del estilo ya latía en opacidad: lo único que sobraba era el
+    desenfoque creciente, que acá es una franja de 510px de ancho */
+.vibes #bfill {
+	box-shadow:
+		0 0 12px currentColor,
+		0 0 26px currentColor;
+	will-change: opacity;
 }
+/* ---- lo chico: acá el desenfoque animado no se paga ---- */
 .vibes #bt {
 	text-shadow: 0 0 calc(6px + var(--bop, 0) * 18px) #0ff9;
 }
@@ -1744,36 +1822,14 @@ p.help {
 .vibes #bmeta {
 	border-color: rgba(60, 220, 255, calc(0.25 + var(--bop, 0) * 0.55));
 }
-.vibes #bfill {
-	box-shadow:
-		0 0 calc(9px + var(--bop, 0) * 16px) currentColor,
-		0 0 calc(20px + var(--bop, 0) * 22px) currentColor;
-}
 .vibes p.help {
 	opacity: calc(0.4 + var(--bop, 0) * 0.2);
-}
-.vibes #board {
-	transform: scale(calc(1 + var(--bop, 0) * 0.007));
-}
-.vibes #tut {
-	box-shadow: 0 0 calc(8px + var(--bop, 0) * 24px) #0f93;
 }
 .vibes #tbar i {
 	box-shadow: 0 0 calc(4px + var(--bop, 0) * 14px) #6f9;
 }
 .vibes #btns button {
 	border-color: rgba(60, 220, 255, calc(0.35 + var(--bop, 0) * 0.6));
-}
-.vibes #bar {
-	box-shadow:
-		0 0 calc(8px + var(--bop, 0) * 26px) #0ff3,
-		inset 0 1px 0 #9ef3;
-}
-.vibes #bcombo {
-	box-shadow:
-		inset 0 0 22px -8px var(--rc, #4cf),
-		inset 0 0 calc(var(--bop, 0) * 30px) calc(var(--bop, 0) * -6px)
-			var(--rc, #4cf);
 }
 .vibes #bx {
 	text-shadow: 0 0 calc(6px + var(--bop, 0) * 16px) currentColor;
@@ -1800,6 +1856,7 @@ p.help {
     perfiles) y va cambiando de paso a medida que el jugador usa cada sistema. */
 #tut {
 	display: none;
+	position: relative; /* ancla de la capa del latido */
 	margin-top: 6px;
 	border: 1px solid #0f96;
 	border-radius: 8px;
