@@ -2,9 +2,9 @@
 
 Speedrun de laberinto donde no te movés con flechas: cada salida abierta de tu celda
 muestra una letra y tecleás la que corresponde a la dirección que querés tomar.
-Un solo archivo HTML, sin dependencias — sprites, música y efectos van embebidos.
+Sin dependencias ni build step: `index.html`, `style.css`, `game.js` y `assets/`.
 
-**Jugar:** abrí `index.html` en cualquier navegador. En el teléfono, tocá el laberinto
+**Jugar:** <https://alex-alas.github.io/laberinto-gatuno/>, o abrí `index.html` en cualquier navegador. En el teléfono, tocá el laberinto
 o el botón **TECLADO** para abrir el teclado del sistema.
 
 La primera vez arranca un **tutorial guiado**: no es un cartel con cinco reglas, es el
@@ -43,7 +43,7 @@ casilla, justo en el paso que dice *miralo venir*.
 
 ## Niveles y modos
 
-Todo lo que cambia entre partidas vive en la tabla `LEVELS` del `<script>`: tamaño del
+Todo lo que cambia entre partidas vive en la tabla `LEVELS` de `game.js`: tamaño del
 tablero, monedas, gatos, ventana por letra y mecánicas. El resto del juego lee `LV` y
 nunca pregunta en qué nivel está, así que un nivel nuevo es un objeto más en la lista.
 
@@ -200,7 +200,7 @@ de que el maullido quedó armado. Al subir de rango la letra crece de golpe, la 
 destella y el nombre entra volando sobre el laberinto. En cada acierto la letra rebota con
 `cpop` (decae al 88% por cuadro).
 
-El Artifact es un solo archivo sin imports, así que no hay `@font-face`: la tipografía
+El juego no baja ni un byte de tipografía, así que no hay `@font-face`: la tipografía
 del rango es una pila de fuentes pesadas (`Impact`, `Franklin Gothic Heavy`, `Arial
 Black`, `Roboto Condensed`) más itálica, `skewX(-11deg)`, degradado metálico con
 `background-clip:text` y un halo con `drop-shadow`.
@@ -219,7 +219,7 @@ gato pegado a un borde— le caía encima: ahora `rpopPlace()` prueba las cuatro
 contra la celda del jugador y se queda en la primera libre (arriba-derecha primero, como
 siempre), y la entrada se espeja para que el cartel siempre venga desde afuera del tablero.
 
-Los efectos son osciladores de WebAudio, no más mp3 embebidos: el acierto es un blip de
+Los efectos son osciladores de WebAudio, no más mp3: el acierto es un blip de
 55 ms que **sube un semitono por punto de combo** (tope a los 12, para que no se vuelva
 chillón), el error un buzz descendente de sawtooth, el "tarde" uno más suave, la moneda
 dos notas y el desbloqueo un arpegio de cuatro. Todo entre 0.04 y 0.08 de ganancia para
@@ -292,8 +292,8 @@ abajo, donde el teclado lo va a tapar igual.
 - El alto lo resuelve el CSS: `--ar` (la proporción `C/R` del nivel) y `--vh` (el alto
   **visible**, de `visualViewport`) dejan que el tablero se achique sólo lo necesario para
   que la barra, el laberinto y el cartel del tutorial entren enteros arriba del teclado.
-  Si el navegador miente con `visualViewport` —puede pasar dentro del iframe del
-  Artifact— el `min()` con `100dvh` deja todo como estaba.
+  Si el navegador miente con `visualViewport` —puede pasar dentro de un
+  iframe— el `min()` con `100dvh` deja todo como estaba.
 - **Pantalla completa automática una sola vez:** el primer toque al entrar a la partida.
   De ahí en adelante se maneja sólo con el botón del menú, incluso entre partidas.
 
@@ -316,7 +316,7 @@ cierran:
    justamente dejar el tablero donde tiene que estar, no empujarlo fuera de pantalla.
    Los `focus()` van todos por `kbFocus()`, con `{preventScroll:true}`.
 4. **`unscroll()`**, el cinturón: si algo desplazó igual (el rebote de iOS, un
-   `scrollIntoView` ajeno, el iframe del Artifact donde la etiqueta viewport es inerte)
+   `scrollIntoView` ajeno, un iframe donde la etiqueta viewport es inerte)
    vuelve a `0,0`. Corre en `scroll`, `focusin`, el `scroll` del `visualViewport`, dentro
    de `fit()` y unas veces más después de enfocar, porque iOS desplaza **cuando termina
    de animar** el teclado.
@@ -383,8 +383,8 @@ Detalles que no se ven pero mandan:
 
 - Las reglas van con `:root:not(.lite)`, no con "todo lo que no sea móvil": una tablet
   táctil ancha entra igual en la consulta de ancho y ahí manda el perfil del teléfono.
-- La grilla vive dentro de `@media (min-width:860px)`. Debajo de eso —el iframe del
-  Artifact puede ser angosto— la barra apila sus tres renglones como en el teléfono, que
+- La grilla vive dentro de `@media (min-width:860px)`. Debajo de eso —una ventana
+  angosta— la barra apila sus tres renglones como en el teléfono, que
   es lo único que entra ahí sin recortarse, y todo vuelve a la columna centrada.
 - La columna del tablero mide **exactamente `--w`** (el ancho que calcula `fit()`): con
   `auto`, lo que cruza las dos columnas estira la del tablero con su ancho máximo y empuja
@@ -441,8 +441,8 @@ entera de la dificultad entre los dos.
 - **Los dos mp3 de ~1MB**: `preload=none`, y el de extra vibes ni siquiera recibe su `src`
   hasta que alguien toca el botón.
 - **Faltaba el `<meta name=viewport>`**: el teléfono maquetaba a 980px y después achicaba
-  la página entera. Dentro del iframe del Artifact la etiqueta es inerte; abriendo el
-  archivo directo, cambia todo.
+  la página entera. Dentro de un iframe la etiqueta es inerte; abriendo la página
+  directo, cambia todo.
 
 ### El horneado de paredes
 
@@ -496,7 +496,7 @@ Chromium, emulación de Pixel 5 y escritorio de 1280px, con extra vibes prendido
 node test.js
 ```
 
-`index.html` pasa por un formateador (comillas dobles, saltos de línea, un espacio
+El fuente pasa por un formateador (comillas dobles, saltos de línea, un espacio
 después de cada `:`), así que los tests que buscan **formas** —reglas de CSS, markup,
 patrones de código— no leen el archivo crudo: lo aplastan primero a la forma compacta
 (`squash`, `mk`, `flat`). Así el test puede seguir escrito como `const CF=` o
@@ -551,7 +551,7 @@ que el tutorial termine en ella y **no** en el selector, y que sus tres salidas 
 nivel siguiente, al mismo de nuevo y al selector (con el `SIGUIENTE` escondido en el
 último nivel).
 
-El 17 y el 18 son el perfil de rendimiento: corren el mismo `index.html` en dos contextos
+El 17 y el 18 son el perfil de rendimiento: corren el mismo `game.js` en dos contextos
 —uno con `pointer:fine` y otro con `pointer:coarse`— y verifican que el lite prenda sólo
 en el segundo, que ahí los mp3 grandes no se precarguen, que el tope de cuadros saltee el
 cuadro repetido, y que la foto de la dificultad (`snap()`: `foeMs`, `chaseP`, `qteLen`,
@@ -564,7 +564,7 @@ Del 19 al 22 va la GUI del teléfono: que la barra no se mude de borde, que el a
 rango se festeje (y bajar no), que los dos medidores se dibujen por separado y el `♪`
 pase por sus tres estados (apagado, cooldown a media asta, listo), que el bloque del rango
 y el `♪` sean los dos botones del maullido, que el menú devuelva el tiempo pausado, que la pantalla completa automática sea de **una sola
-vez**, y —leyendo el `<style>` directo— que el perfil móvil quede alineado arriba, que la
+vez**, y —leyendo `style.css` directo— que el perfil móvil quede alineado arriba, que la
 barra siga estando antes del tablero en el markup y que las cuatro capas que impiden que
 el laberinto se esconda sigan puestas: `interactive-widget` en el viewport, el `<body>`
 limitado a `--vh`, el `#kb` anclado arriba y `unscroll()` + `preventScroll` en el script.
@@ -596,9 +596,8 @@ todo el movimiento lo haga el CSS —ningún timer en el JS, así se apaga sola 
 cerrado— y que con `prefers-reduced-motion` quede en un cuadro fijo. Una demo que enseña
 algo distinto de lo que va a pasar es peor que no tenerla.
 
-> Los `grep` sobre el `<script>` van contra `code`, que es el `src` con los `data:` URI
-> afuera: los assets van embebidos en base64 y ahí cualquier palabra corta aparece por
-> azar (`subt`, `clab`, lo que sea).
+> Los `grep` de código van contra `src` (el `game.js` crudo) y contra `flat`, que es el
+> mismo fuente sin los espacios que el formateador mete alrededor de la puntuación.
 
 > Ojo al escribir tests: los harness se pasan como *template literals*, así que ahí adentro
 > una barra invertida no sobrevive (`\b` es un backspace, `\s` es una "s"). Nada de regex

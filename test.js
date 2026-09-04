@@ -1,8 +1,8 @@
-// Tests del juego sin navegador: se extrae el <script> de index.html y se corre
-// en un vm con stubs mínimos de DOM/Audio/Image.  node test.js
+// Tests del juego sin navegador: se corre game.js en un vm con stubs mínimos de
+// DOM/Audio/Image, y se leen style.css e index.html como texto.  node test.js
 const fs=require('fs'), vm=require('vm'), path=require('path');
 const html=fs.readFileSync(path.join(__dirname,'index.html'),'utf8');
-const src=html.match(/<script>([\s\S]*)<\/script>/)[1];
+const src=fs.readFileSync(path.join(__dirname,'game.js'),'utf8');
 
 const noop=new Proxy(function(){},{get:()=>noop,apply:()=>noop,set:()=>true});
 const el=()=>({getContext:()=>noop,style:{},value:'',className:'',
@@ -220,9 +220,9 @@ juega('tutorial'); nextAsk=0; hits=20; fails=20; checkSkill();
 if(paused) throw new Error('el dialogo interrumpio el tutorial');
 juega('clasico'); baby=0;
 
-// 8) assets embebidos + preload
-if(!PJ.src.startsWith('data:image/webp')||!FOE.src.startsWith('data:image/webp')) throw new Error('sprites');
-if(!GIF.src.startsWith('data:image/gif')||!sgif.src.startsWith('data:image/gif')) throw new Error('gifs');
+// 8) assets externos + preload
+if(!PJ.src.endsWith('assets/jugador.webp')||!FOE.src.endsWith('assets/gato.webp')) throw new Error('sprites');
+if(!GIF.src.endsWith('.gif')||!sgif.src.endsWith('.gif')) throw new Error('gifs');
 if(!BGM.loop||!(BGM.volume>0&&BGM.volume<1)) throw new Error('musica mal configurada');
 if([SCREAM,BANG,BGM].some(a=>a.preload!=='auto')) throw new Error('falta preload de audio');
 BGM.paused=true; press('a'); if(BGM.paused) throw new Error('la musica no arranco con la 1a tecla');
@@ -713,7 +713,7 @@ if(!PERF.scan||PERF.glow!==1||PERF.fps||PERF.hudMs||PERF.dust!==1)
   throw new Error('el perfil lite se colo en escritorio');
 if(document.documentElement.cls) throw new Error('escritorio no lleva la clase lite');
 if(BGM.preload!=='auto'||VIBE.preload!=='auto') throw new Error('escritorio sin preload de audio');
-if(!VIBE.src.startsWith('data:audio')) throw new Error('escritorio ya deberia tener el mp3 de vibes');
+if(!VIBE.src.endsWith('.mp3')) throw new Error('escritorio ya deberia tener el mp3 de vibes');
 // el horneado de paredes no depende del perfil
 if(!baked||!mz[0]) throw new Error('escritorio no horneo las paredes');
 if(BLUR[0]!==10||BLUR[1]!==26) throw new Error('las capas no cubren el rango del latido');
@@ -749,13 +749,13 @@ if(PERF.scan||!(PERF.glow<1)||!PERF.fps||!PERF.hudMs||!(PERF.dust<1))
   throw new Error('perfil lite incompleto');
 if(document.documentElement.cls!=='lite') throw new Error('falta la clase lite en <html>');
 
-// los dos mp3 de ~1MB no se tocan hasta que hagan falta
+// los dos mp3 de ~730KB no se tocan hasta que hagan falta
 if(BGM.preload!=='none'||VIBE.preload!=='none') throw new Error('movil precargando los mp3 grandes');
 if(VIBE.src) throw new Error('el mp3 de vibes no debe cargarse sin pedirlo');
 if(mz[1]) throw new Error('la capa del latido no se hornea hasta prender extra vibes');
 vibe.onclick();
 if(!mz[1]) throw new Error('extra vibes no horneo la capa del latido');
-if(!VIBE.src.startsWith('data:audio')) throw new Error('EXTRA VIBES no cargo la pista');
+if(!VIBE.src.endsWith('.mp3')) throw new Error('EXTRA VIBES no cargo la pista');
 if(!vibes||track()!==VIBE) throw new Error('no cambio a la pista de vibes en movil');
 vibe.onclick();
 if(vibes||track()!==BGM) throw new Error('no volvio a la pista normal en movil');
@@ -882,18 +882,16 @@ if(!ctx.SNAP||ctx.SNAP!==mctx.SNAP)
 // comentarios, que si no hacen aparecer reglas que ya no existen).
 const squash=t=>t.replace(/\/\*[\s\S]*?\*\//g,'')
                  .replace(/\s+/g,' ').replace(/ *([{};:,>]) */g,'$1');
-const style=squash(html.match(/<style>([\s\S]*?)<\/style>/)[1]);
+const style=squash(fs.readFileSync(path.join(__dirname,'style.css'),'utf8'));
 // El markup salio del mismo formateador: etiquetas partidas en varios renglones y
 // atributos entre comillas.  `mk` lo devuelve a la forma compacta —un renglon, sin
 // comillas simples de atributo— para que los patrones de abajo sigan como estaban.
 const mk=html.replace(/\s*\n\s*/g,' ').replace(/\s+>/g,'>').replace(/="([^"\s>]*)"/g,'=$1');
-// Y con el <script> igual: `code` es el fuente sin los data: URI (megabytes de
-// base64 que hacen aparecer cualquier palabra por casualidad) y `flat` es ademas
-// sin los espacios que el formateador mete alrededor de la puntuacion, para que un
-// test pueda pedir `const CF=` sin depender de si el dia de manana se escribe
-// `const CF =`.  Los dos son para BUSCAR formas de codigo, no para leer textos.
-const code=src.replace(/(['"])data:[\s\S]*?\1/g,"'#'");
-const flat=code.replace(/"/g,"'").replace(/ *([=?:,;{}()[\]]) */g,'$1');
+// Y con el JS igual: `flat` es el fuente sin los espacios que el formateador mete
+// alrededor de la puntuacion, para que un test pueda pedir `const CF=` sin depender
+// de si el dia de manana se escribe `const CF =`.  Es para BUSCAR formas de codigo,
+// no para leer textos.
+const flat=src.replace(/"/g,"'").replace(/ *([=?:,;{}()[\]]) */g,'$1');
 const bloque=sel=>{const i=style.indexOf(sel+'{');
   if(i<0) throw new Error('falta la regla '+sel);
   return style.slice(i+sel.length+1,style.indexOf('}',i))};
@@ -961,12 +959,10 @@ if(/var\(--rc,#4cf\)22/.test(style)) throw new Error('quedo el degradado con el 
 // El escritorio no tenia identidad propia: un h2 + un p de texto centrado y una
 // barrita de combo con la etiqueta adentro.  Ahora usa LA MISMA barra que el
 // telefono y gasta el ancho de mas en lo que alla no entraba.
-// los assets van embebidos en base64: cualquier palabra corta aparece ahi por azar,
-// asi que estos grep miran el codigo con los data: URI afuera
 // con \b, porque el medidor de combo NUEVO se llama #bcbar y contiene 'cbar'
-if(/#cmeter\b|#cbar\b|#clab\b/.test(style)||/\b(cmeter|cbar|clab)\b/.test(code))
+if(/#cmeter\b|#cbar\b|#clab\b/.test(style)||/\b(cmeter|cbar|clab)\b/.test(src))
   throw new Error('quedo el medidor de combo viejo del escritorio');
-if(/id=hud|id=sub[>\s]/.test(mk.slice(0,mk.indexOf('<script>')))||/hudt|hudx|subt|babyEl/.test(code))
+if(/id=hud|id=sub[>\s]/.test(mk)||/hudt|hudx|subt|babyEl/.test(src))
   throw new Error('quedo el HUD suelto viejo (h2 + p) del escritorio');
 // la lista de selectores que esconde cosas en escritorio: la que nombra a
 // #mstats, desde la llave de cierre anterior hasta la suya
@@ -979,7 +975,7 @@ for(const id of ['bmeta','bname','bpb','bstat','bmax'])
   if(barm.indexOf('id='+id)<0) throw new Error('la barra no trae la zona de escritorio '+id);
 for(const sel of [':root:not(.lite) #bmeta',':root:not(.lite) #bstat',':root:not(.lite) #bmax'])
   if(!/display:(flex|block)/.test(bloque(sel))) throw new Error(sel+' no se muestra en escritorio');
-if(!/bstat\.textContent/.test(code)||!/bname\.textContent/.test(code)||!/bmax\.textContent/.test(code))
+if(!/bstat\.textContent/.test(src)||!/bname\.textContent/.test(src)||!/bmax\.textContent/.test(src))
   throw new Error('el HUD de escritorio no escribe en la barra');
 // y el tablero deja de estar solo en el medio: log y ayuda pasan a la columna de al lado
 const dsk=bloque(':root:not(.lite) body');
@@ -1020,11 +1016,11 @@ if(!/#bcbar.full/.test(style)) throw new Error('el medidor de combo lleno no se 
 for(const sel of ['#bmeow.ready','#bmeow.cd'])
   if(style.indexOf(sel+'{')<0) throw new Error('al ♪ le falta el estado '+sel);
 if(!/opacity:\.?\d/.test(bloque('#bmeow'))) throw new Error('el ♪ sin armar tiene que verse apagado');
-if(!/bmeow\.className/.test(code)||!/bmfill\.style\.width/.test(code))
+if(!/bmeow\.className/.test(src)||!/bmfill\.style\.width/.test(src))
   throw new Error('el cuadro no escribe la disponibilidad ni el cooldown del maullido');
-if(!/bcfill\.style\.width/.test(code)) throw new Error('el cuadro no dibuja el medidor de combo');
+if(!/bcfill\.style\.width/.test(src)) throw new Error('el cuadro no dibuja el medidor de combo');
 // el ♪ es tambien boton: en el telefono no hay barra espaciadora
-if(!/bmeow\.onclick/.test(code)) throw new Error('el ♪ no es boton');
+if(!/bmeow\.onclick/.test(src)) throw new Error('el ♪ no es boton');
 
 // ---- 27) la pantalla de resultados existe y esta cableada ----
 for(const id of ['res','rtag','rttl','rtime','rsub','rgrid','rpb','rnext','ragain','rlvls'])
@@ -1032,7 +1028,7 @@ for(const id of ['res','rtag','rttl','rtime','rsub','rgrid','rpb','rnext','ragai
 if(style.indexOf('#res.open{')<0) throw new Error('el resumen no se abre con .open');
 if(!/#res button/.test(style)) throw new Error('los botones del resumen no heredan el estilo del resto');
 for(const m of ['rtime.textContent','rgrid.innerHTML','rnext.onclick','rlvls.onclick'])
-  if(code.indexOf(m)<0) throw new Error('el resumen no escribe '+m);
+  if(src.indexOf(m)<0) throw new Error('el resumen no escribe '+m);
 
 // ---- 28) el cartel del primer encuentro MUESTRA el QTE, no solo lo cuenta ----
 // Un cartel de puro texto se lee y no se reconoce, y lo que hay que reconocer
@@ -1040,7 +1036,7 @@ for(const m of ['rtime.textContent','rgrid.innerHTML','rnext.onclick','rlvls.onc
 // escena en chico, y el test la ata a la del canvas: si manana cambian los
 // colores de la secuencia o el gato del overlay, la demo tiene que cambiar con
 // ellos o esto se cae —una demo que ensena otra cosa es peor que no tenerla—.
-const brf=mk.match(/<div id=brief>[\s\S]*?<script>/)[0];
+const brf=mk.match(/<div id=brief>[\s\S]*?<script/)[0];
 for(const id of ['bdemo','bdcat','bdttl','bdseq','bdbar','bdwin'])
   if(!new RegExp('id='+id+'[ >]').test(brf))
     throw new Error('a la demo del cartel le falta '+id);
