@@ -1,4 +1,7 @@
-<!doctype html> <meta charset="utf-8" /><title>Laberinto</title>
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8" /><title>Laberinto</title>
+<meta name="theme-color" content="#08080c" />
 <!-- sin esto el telefono maqueta a 980px y despues achica la pagina entera:
      texto ilegible y el compositor rasterizando de mas.  Dentro de un iframe
      la etiqueta es inerte, y en escritorio se ignora.
@@ -122,7 +125,7 @@
 </div>
 <div id="skill">
 	<div>
-		<img id="sgif" alt="" />
+		<img id="sgif" width="150" decoding="async" alt="" />
 		<h3>SKILL ISSUE DETECTADO &#128680;&#128680;&#128680;</h3>
 		<p>
 			Tu precisión va en <b id="sacc">-</b>. ¿Te damos más tiempo de
@@ -143,7 +146,7 @@
          corriendo sola en loop (el gato, la secuencia y la barra roja son los
          mismos del juego).  Todo el movimiento lo hace el CSS: ver #bdemo. -->
 		<div id="bdemo" aria-hidden="true">
-			<img id="bdcat" alt="" />
+			<img id="bdcat" width="62" height="62" decoding="async" alt="" />
 			<div id="bdttl">! ENEMIGO &mdash; TECLEA LA SECUENCIA !</div>
 			<div id="bdseq"><b>K</b><b>J</b><b>P</b></div>
 			<div id="bdbar"><i></i></div>
@@ -178,7 +181,14 @@
 			<div id="hddet" class="hdemo" aria-hidden="true">
 				<div id="hdpips"><i>&#9672;</i><i>&#9672;</i><i>&#9672;</i></div>
 				<div id="hdrow">
-					<b id="hdwall"></b><b id="hdk">V</b><img id="hdcat" alt="" />
+					<b id="hdwall"></b><b id="hdk">V</b
+					><img
+						id="hdcat"
+						width="40"
+						height="40"
+						decoding="async"
+						alt=""
+					/>
 				</div>
 			</div>
 			<ul class="hleg">
@@ -198,11 +208,27 @@
 			<div id="hdmeow" class="hdemo" aria-hidden="true">
 				<div id="hmrow">
 					<i id="hmr1" class="hmring"></i><i id="hmr2" class="hmring"></i
-					><img id="hmf1" class="hmf" alt="" /><img
+					><img
+						id="hmf1"
+						class="hmf"
+						width="30"
+						height="30"
+						decoding="async"
+						alt=""
+					/><img
 						id="hmf2"
 						class="hmf"
+						width="30"
+						height="30"
+						decoding="async"
 						alt=""
-					/><img id="hmcat" alt="" />
+					/><img
+						id="hmcat"
+						width="38"
+						height="38"
+						decoding="async"
+						alt=""
+					/>
 				</div>
 				<span id="hmkey">ESPACIO</span>
 			</div>
@@ -226,3 +252,4 @@
 	</div>
 </div>
 <script src="game.js"></script>
+</html>
