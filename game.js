@@ -305,7 +305,7 @@ const sfxUnlock = () =>
 // nada más: dreadOn/dreadSet/dreadOff ya manejan las dos formas.  El mp3 del
 // latido trae su propio ritmo, así que ahí el sintetizado no suena.
 const DREAD_SRC = { heart: "", noise: "" }; // p.ej. assets/latido.mp3
-const DREAD_NOISE = 0.055, // volumen tope del ruido blanco
+const DREAD_NOISE = 0.11, // volumen tope del ruido blanco
 	DREAD_HEART = 0.14, // ...y del latido
 	DREAD_LP = 900, // el ruido va filtrado: siseo de sótano, no de tele vieja
 	HEART_SLOW = 900, // ms entre latidos al empezar el QTE
