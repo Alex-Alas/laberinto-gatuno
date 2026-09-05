@@ -93,7 +93,8 @@ function snap(){
   return JSON.stringify([C,R,S,POOL,COMBO_MAX,MS_LETRA,BEAT,VIBE_OFF,q,
                          [STYLE_ERR,STYLE_LOSS,STYLE_QTE,STYLE_HIT,STYLE_CHAIN,
                           STYLE_CHAIN_MAX,STYLE_DECAY,STYLE_MAX,
-                          GRACE_MS,MEOW_MS,MEOW_CD,MEOW_R,RADAR_MS,RES_MS],
+                          GRACE_MS,MEOW_MS,MEOW_CD,MEOW_ARM,MEOW_KILL,MEOW_R,RADAR_MS,RES_MS,
+                          STALK_N,STALK_R0,STALK_RMAX,STALK_PAY],
                          LEVELS.map(l=>[l.id,l.C,l.R,l.coins,l.foes,l.dur0,l.durMin,l.foe0,l.foeMin]),
                          RANKS.map(r=>[r.c,r.k]),
                          [0,.1,.174,.25,.5].map(bopAt)]);
@@ -617,11 +618,11 @@ if(log.length!==nlv) throw new Error('acepta teclas con el selector abierto');
 lvlPick('sotano');
 if(pick!=='sotano'||lgo.disabled) throw new Error('no marco el nivel elegido');
 // cada nivel muestra SU foto en la ficha; los modos que no tienen la esconden
-if(!lpic.src.endsWith('assets/nivel3.webp')||lpic.style.display==='none') throw new Error('el sotano no mostro su foto');
+if(!lpic.src.endsWith('assets/nivel3.png')||lpic.style.display==='none') throw new Error('el sotano no mostro su foto');
 lvlPick('tutorial');
-if(!lpic.src.endsWith('assets/nivel1.webp')) throw new Error('el tutorial no mostro su foto');
+if(!lpic.src.endsWith('assets/nivel1.png')) throw new Error('el tutorial no mostro su foto');
 lvlPick('clasico');
-if(!lpic.src.endsWith('assets/nivel2.webp')) throw new Error('el laberinto no mostro su foto');
+if(!lpic.src.endsWith('assets/nivel2.png')) throw new Error('el laberinto no mostro su foto');
 lvlPick('contra');
 if(lpic.style.display!=='none') throw new Error('un modo sin foto dejo a la vista la del nivel anterior');
 if(!lgo.disabled) throw new Error('un modo PROXIMAMENTE no se deberia poder jugar');
@@ -726,17 +727,22 @@ for(let i=0;i<DET_EVERY*(DET_MAX+1);i++){ qteStart(); qte.seq.slice().forEach(k=
 if(det!==DET_MAX) throw new Error('las cargas no toparon en DET_MAX');
 gen(); if(det||qteWins) throw new Error('la partida nueva arranco con determinacion');
 
-// 16d) AHUYENTADOR: se ARMA al llenar el combo una vez y despues solo espera el
-// cooldown.  Pedirlo al tope EN EL MOMENTO lo volvia inservible: justo cuando un
-// gato te alcanza es cuando el combo se esta por romper.
+// 16d) AHUYENTADOR: se ARMA a MITAD de combo y despues solo espera el cooldown.
+// Pedirlo al tope (x15) EN EL MOMENTO lo volvia inservible: justo cuando un gato
+// te alcanza es cuando el combo se esta por romper, y llegar a x15 sin errarle a
+// nada es no necesitarlo mas.
 juega('clasico'); gen(); foes=[]; coins=[]; combo=0; meowAt=-1e9; scareUntil=0; nextAsk=1e9;
-if(MEOW_CD!==45000||MEOW_MS!==2500) throw new Error('el maullido cambio de numeros');
+if(MEOW_CD!==25000||MEOW_MS!==2500) throw new Error('el maullido cambio de numeros');
+if(!(MEOW_ARM<COMBO_MAX)) throw new Error('el maullido tiene que armarse antes del tope del combo');
+if(!(MEOW_KILL>0&&MEOW_KILL<MEOW_CD)) throw new Error('el descuento por gato no tiene sentido');
 step();
 if(meowOn) throw new Error('el maullido no deberia arrancar armado');
 if(meow()) throw new Error('maullo sin haber cargado nunca el combo');
-for(let i=0;i<COMBO_MAX;i++) step();          // el combo toca el tope: queda armado
-if(combo<COMBO_MAX) throw new Error('el bot no llego al tope del combo');
-if(!meowOn) throw new Error('llenar el combo no armo el maullido');
+for(let i=2;i<MEOW_ARM;i++) step();           // un teclazo antes de MEOW_ARM
+if(combo!==MEOW_ARM-1) throw new Error('el bot no dejo el combo justo abajo de MEOW_ARM');
+if(meowOn) throw new Error('el maullido se armo antes de MEOW_ARM');
+step();                                       // ...y con este llega
+if(!meowOn) throw new Error('llegar a MEOW_ARM no armo el maullido');
 if(!meowReady()) throw new Error('armado y sin cooldown deberia estar listo');
 const cA=combo;
 if(!meow()) throw new Error('no maullo con el maullido armado');
@@ -744,9 +750,15 @@ if(combo!==cA) throw new Error('el maullido no deberia gastar el combo');
 if(!(scareUntil>now())||scareUntil-now()>MEOW_MS+60) throw new Error('el susto no dura 2.5s');
 if(meow()) throw new Error('maullo dos veces sin esperar el cooldown');
 meowAt=now()-MEOW_CD+1000;
-if(meowReady()) throw new Error('el cooldown de 45s se corto antes');
+if(meowReady()) throw new Error('el cooldown se corto antes');
 meowAt=now()-MEOW_CD-1;
 if(!meowReady()) throw new Error('el cooldown no se cumplio');
+// y cada gato vencido le come MEOW_KILL al cooldown: el maullido se recupera
+// jugando, no esperando
+meowAt=now(); foes=[cell()]; qteStart(); const cd0=meowCd(now());
+qte.seq.slice().forEach(k=>press(k));
+if(!(cd0-meowCd(now())>=MEOW_KILL-60)) throw new Error('vencer un gato no le descuento nada al cooldown');
+foes=[]; meowAt=-1e9; scareUntil=0;
 // y ESTA es la gracia: sigue disponible con el combo roto
 combo=0; wrong();
 if(!meowOn||!meowReady()) throw new Error('romper el combo no deberia desarmar el maullido');
@@ -942,6 +954,73 @@ scareShow(false);
 if(scareA!==SCREAM) throw new Error('un gato comun no puede robarle el grito al acechador');
 if(scare.className==='fade'||scareFade) throw new Error('el susto de siempre corta, no se desvanece');
 scareHide();
+
+// 32b) LA TANDA DEL ACECHADOR: varios QTE cortos, mas rondas segun avanza la
+// partida, y el pago recien al ganarlas TODAS
+juega('sotano'); gen(); foes=[]; got=0; combo=0; stl=0; kills=0; qteWins=0; det=0;
+if(!(STALK_R0>=2&&STALK_RMAX>STALK_R0)) throw new Error('la tanda tiene que ser de varias rondas');
+let sPrev=0;
+for(let n=0;n<=LV.coins;n++){ got=n; const r=stalkRounds();
+  if(r<sPrev) throw new Error('la tanda se acorta al avanzar la partida');
+  sPrev=r }
+got=0; if(stalkRounds()!==STALK_R0) throw new Error('la tanda no arranca en STALK_R0');
+got=LV.coins; if(stalkRounds()!==STALK_RMAX) throw new Error('la tanda no llega a STALK_RMAX con todas las monedas');
+// un gato comun del sotano sigue siendo UN QTE largo; el acechador, rondas cortas
+got=0; foes=[far(),cell()]; qteStart();
+if(qte.rounds!==1||qte.seq.length!==qteLen()) throw new Error('un gato comun no puede traer tanda');
+qte=null;
+const aceCel=cell(); foes=[aceCel,far()]; qteStart();
+if(!qte.st) throw new Error('el acechador no marco el QTE como suyo');
+if(qte.rounds!==stalkRounds()||qte.round!==1) throw new Error('el acechador no abrio su tanda');
+if(qte.seq.length!==STALK_N||!(STALK_N<qteLen())) throw new Error('las rondas del acechador tienen que ser CORTAS');
+// ganar una ronda no paga NADA y encadena la siguiente sin soltar al enemigo
+const sTot=qte.rounds;
+qte.seq.slice().forEach(k=>press(k));
+if(!qte||qte.round!==2||!qte.st) throw new Error('la ronda ganada no encadeno la siguiente');
+if(combo||stl||kills) throw new Error('una ronda suelta de la tanda no deberia pagar nada');
+if(foes[0]!==aceCel) throw new Error('el acechador se solto en medio de la tanda');
+// ...y ganarlas todas paga por todas: combo, determinacion y MUCHO mas estilo
+while(qte) qte.seq.slice().forEach(k=>press(k));
+if(combo!==sTot) throw new Error('la tanda no subio el combo una vez por ronda');
+if(qteWins!==sTot) throw new Error('la tanda no conto una victoria por ronda');
+if(kills!==1) throw new Error('la tanda es UN enemigo vencido, no varios');
+if(det!==Math.min(DET_MAX,(sTot/DET_EVERY)|0)) throw new Error('la tanda no repartio la determinacion por ronda');
+if(!meowOn||meowCd(now())) throw new Error('vencer al acechador tiene que devolver el maullido entero');
+if(foes[0]===aceCel) throw new Error('el acechador no se reubico al terminar la tanda');
+const stlTanda=stl;
+// el mismo gato, uno solo: la tanda tiene que pagar MUCHO mas
+juega('sotano'); gen(); foes=[]; got=0; combo=0; stl=0; kills=0; qteWins=0; det=0;
+foes=[far(),cell()]; qteStart(); qte.seq.slice().forEach(k=>press(k));
+if(!(stlTanda>stl*1.5)) throw new Error('ganar la tanda entera tiene que valer mucho mas que un gato');
+// y errarle a una ronda del medio pierde la tanda ENTERA, con el grito del acechador
+juega('sotano'); gen(); got=0; combo=0; stl=10; kills=3; foes=[cell(),far()]; qteStart();
+qte.seq.slice().forEach(k=>press(k));
+if(!qte||qte.round!==2) throw new Error('no se llego a la segunda ronda');
+press([...POOL].find(c=>c!==qte.seq[0]));
+if(qte) throw new Error('fallar una ronda no corto la tanda');
+if(combo!==0||kills!==0||stl!==10-STYLE_LOSS) throw new Error('fallar la tanda no cobro como una derrota');
+if(scareA!==LOBO) throw new Error('la tanda perdida no grito con la voz del acechador');
+scareHide();
+
+// 32c) EL TERROR DEL QTE: el latido y el ruido blanco ENTRAN con el mismo muf
+// que hunde la musica, y se van con el (o de golpe si arranca el jumpscare)
+juega('clasico'); gen(); foes=[]; muf=0; dreadOff(); BGM.muted=false;
+foes=[cell()]; qteStart(); lastDraw=0; frame();
+if(!dreadAt) throw new Error('el QTE no encendio el latido');
+if(!(muf>0)) throw new Error('el QTE no empezo a hundir la musica');
+qte.seq.slice().forEach(k=>press(k)); foes=[];
+muf=.5; lastDraw=0; frame();     // el QTE se gano pero la musica todavia esta abajo
+if(!dreadAt) throw new Error('el terror se corto de golpe con la musica todavia abajo');
+muf=0; lastDraw=0; frame();
+if(dreadAt) throw new Error('el terror no se fue con la musica de vuelta');
+// el jumpscare lo corta en seco: ahi ya grita el gato
+foes=[cell()]; qteStart(); lastDraw=0; frame(); frozen=true; lastDraw=0; frame();
+if(dreadAt) throw new Error('el latido siguió sonando abajo del jumpscare');
+frozen=false; qte=null; foes=[]; muf=0; dreadOff();
+// y el ♫ del menu lo apaga tambien
+BGM.muted=true; dreadOn();
+if(dreadAt) throw new Error('el latido sono con la musica muteada');
+BGM.muted=false;
 juega('clasico');
 
 // 33) LA MUSICA SE HUNDE EN EL QTE Y VUELVE DE A POCO
@@ -1563,6 +1642,11 @@ if(!/ready\(STALK\) \? STALK : FOE/.test(src))
 // ~270KB que en los niveles 1 y 2 no se miran nunca
 if(/^STALK\.src *=/m.test(src)||/^LOBO\.src *=/m.test(src))
   throw new Error('la cara y el grito del acechador se bajan al abrir la pagina');
+// el terror del QTE: el latido y el ruido tienen que ir pegados al MISMO muf que
+// hunde la musica (si no, son dos fades sueltos que no se cruzan), y tiene que
+// quedar el enchufe para los mp3 propios del dia que existan
+if(!/dreadSet\(muf\)/.test(flat)) throw new Error('el terror del QTE no va pegado al fade-out de la musica');
+if(!/DREAD_SRC=\{heart:'',noise:''\}/.test(flat)) throw new Error('no quedo donde enchufar los mp3 del latido y el ruido');
 // la cuenta de monedas se lee en el tablero, no solo arriba.  Va DESPUES de la
 // niebla: si no, en el sotano —donde mas hace falta— queda tapada.
 const iFog=src.indexOf('if (LV.fog) {'), iCoin=src.indexOf('las monedas, en el tablero');

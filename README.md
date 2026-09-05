@@ -137,6 +137,21 @@ el `soon`.
 - Los gatos oscuros te persiguen. Al alcanzarte se abre un QTE: tecleás la secuencia
   completa antes de que se acabe la barra. Fallarlo cuesta +2 s, **3 pasos atrás** y
   **−8 de estilo**: perder contra un gato es lo único que se lleva el medidor puesto.
+- **El acechador no abre un QTE: abre una TANDA.** En el sótano, el que te agarra no te
+  pide una secuencia larga sino **varias cortas seguidas** (`STALK_N`, 2 letras), cada una
+  con su propio reloj y una atrás de la otra, sin devolverte la pantalla ni soltarte del
+  lugar. Son **2 rondas** al empezar el nivel y **5** con la última moneda encima
+  (`STALK_R0` → `STALK_RMAX`, según la fracción de monedas): cuanto más avanzada va la
+  partida, más larga es la pelea. **No hay crédito parcial** —errarle a cualquier ronda
+  pierde la tanda entera, con su jumpscare— y por eso ganarla completa paga por **todas**:
+  el combo sube una vez por ronda, la determinación cuenta una victoria por ronda, la
+  penalización descuenta 500 ms por ronda, el estilo sale multiplicado
+  (`1 + 0.75·(rondas−1)`: más del **triple** de lo que paga un gato suelto), el respiro
+  post-QTE va **doble** y el maullido vuelve **armado y sin espera**. Es el único enemigo
+  del juego que se *pelea* en vez de resolverse. La pantalla lo dice mientras pasa: el
+  cartel es `ACECHADOR — RONDA 2 DE 4`, debajo de la barra hay una ficha por ronda
+  (verdes las ganadas, blanca la que estás jugando) y la cara que se te viene encima es
+  **la suya**, no la del gato común.
 - **La cuenta de monedas se lee en el tablero.** Arriba del laberinto (o abajo, si el
   gato está en la primera fila, que es donde arranca) hay una fila de fichas: llenas las
   que juntaste, huecas las que faltan, todas verdes cuando la salida ya abrió. Estaba sólo
@@ -197,19 +212,23 @@ animada, en los pasos 5 y 6 (arriba).
   partida. Antes el castigo por equivocarse justo después de cruzar era el peor del juego
   —te dejaba del lado equivocado **y sin carga** con qué volver—, y encima la
   determinación es un atajo de ida, no un pasillo abierto.
-- **AHUYENTADOR.** Se **arma** la primera vez que llenás el combo (`COMBO_MAX`, x15) y de
-  ahí en más lo único que lo frena es el **cooldown de 45 s**. Antes se pedía el combo al
-  tope *en el momento de maullar*, y eso lo volvía inservible: cuando un gato te alcanza
-  es justo cuando el combo se está por romper, así que la habilidad nunca estaba
-  disponible cuando hacía falta. **ESPACIO** o **ENTER** sueltan el maullido: los gatos a
+- **AHUYENTADOR.** Se **arma** la primera vez que el combo llega a **x8** (`MEOW_ARM`, la
+  mitad de `COMBO_MAX`) y de ahí en más lo único que lo frena es el **cooldown de 25 s**
+  —menos **6 s** (`MEOW_KILL`) por cada gato que vencés en un QTE, así que se recupera
+  jugando y no esperando; vencer al acechador entero lo devuelve **listo de una**—. Antes
+  se pedía el combo al tope *en el momento de maullar*, y eso lo volvía inservible: cuando
+  un gato te alcanza es justo cuando el combo se está por romper. Después se arregló a
+  medias —armarlo al tope y 45 s de espera—, y el problema seguía siendo el mismo de otra
+  forma: llegar a x15 sin errarle a nada es no necesitar ya el ahuyentador, y 45 s son
+  media partida. Es una herramienta, no un premio. **ESPACIO** o **ENTER** sueltan el maullido: los gatos a
   **7 celdas o menos** dan media vuelta y corren para el otro lado durante **2,5 s**
   —hasta el acechador del sótano, que no despista nunca— y mientras huyen no abren QTE. Es
   el mismo campo de flujo del BFS, leído al revés. En el sótano, además, deja el **radar**
   (arriba). En el teléfono no hay barra espaciadora a mano: el botón es el `♪` y también
   el bloque del rango de combo.
 
-  El estado se lee en el `♪` de la barra, sin texto: apagado = todavía no cargaste el
-  combo ni una vez; con la barrita llenándose = esperando los 45 s; prendido y latiendo =
+  El estado se lee en el `♪` de la barra, sin texto: apagado = todavía no llegaste a x8;
+  con la barrita llenándose = esperando el cooldown; prendido y latiendo =
   listo. En escritorio la línea de la barra lo dice además con palabras
   (`MAULLIDO EN 27s`, `MAULLIDO LISTO [ESPACIO]`).
 
@@ -343,6 +362,22 @@ que cuanto menos tiempo te queda, menos se escucha. Ganarlo la devuelve enseguid
 por `dt` de cuadro, con el mismo tope de 250 ms que usa el estilo, así que una pestaña
 dormida no lo salta de golpe; y el volumen sólo se escribe en la pista cuando de verdad
 cambió.
+
+**Y lo que entra en el lugar que deja.** El silencio no asusta: lo que asusta es lo que lo
+ocupa. Con la misma curva —el mismo `muf`, no un fade aparte— entran un **latido de
+corazón** y un **ruido blanco** filtrado (`dreadOn`/`dreadSet`/`dreadOff`): la música se va
+y ellos llegan, en un solo movimiento. El latido además **se acelera** según se hunde la
+música (900 ms → 330 ms entre golpes), así que el reloj del QTE se siente sin mirarlo, y
+en la tanda del acechador sigue acelerando ronda tras ronda, porque `muf` no se reinicia
+entre rondas: la tanda entera es un solo hundimiento. Se van con la música al volver, o de
+golpe si arranca el jumpscare, que ya trae su propio grito.
+
+Los dos van **sintetizados con WebAudio** —un `BufferSource` de ruido en loop por un
+lowpass, y el latido en dos golpes de seno—: cero bytes de descarga y suenan aunque no haya
+mp3. Si algún día hay archivos propios, el enchufe ya está puesto: las URLs van en
+`DREAD_SRC` (`{heart, noise}`) y se usan ésos, en loop y con este mismo fade-in, sin tocar
+nada más — con el mp3 del latido el sintetizado no suena, porque el archivo ya trae su
+propio ritmo. El `♫` del menú los apaga junto con la música.
 
 > **ponytail:** es un *ducking*, no un filtro. Un lowpass de verdad pide meter las dos
 > pistas en un `MediaElementSource` de WebAudio, y un `AudioContext` suspendido —que en el
@@ -769,9 +804,9 @@ Del 16b al 16f van las dos habilidades, el radar y el cartel del rango: que gana
 congele 2 s la ventana **y** el paso de los gatos (y perderlo no dé respiro), que la carga
 de determinación llegue recién al tercer gato y tope en `DET_MAX`, que las letras de muro
 nunca caigan fuera del canvas ni pisen una salida abierta, que teclearlas atraviese el
-muro y gaste la carga, que el maullido **se arme** al llenar el combo por primera vez y de
-ahí sólo dependa de los 45 s (y siga disponible con el combo roto, que es la razón del
-cambio), que los gatos cercanos se alejen y los lejanos ni se enteren, que ESPACIO y ENTER
+muro y gaste la carga, que el maullido **se arme** al llegar a `MEOW_ARM` por primera vez
+—ni antes— y de ahí sólo dependa del cooldown, que cada gato vencido le descuente
+`MEOW_KILL` (y que siga disponible con el combo roto, que es la razón del cambio), que los gatos cercanos se alejen y los lejanos ni se enteren, que ESPACIO y ENTER
 lo disparen sin robarle el Enter a un botón del menú, que en el sótano —y sólo ahí— deje
 un radar con una marca por moneda y por gato, corrida pero nunca más de `RADAR_J` celdas y
 sin encender la niebla, y que el cartel del rango no tape al gato en ninguna de las cuatro
@@ -861,6 +896,15 @@ Del **30** al **34** va lo de esta tanda que es gameplay:
   acepte un valor suelto sin dejar de leer `baby` cuando no se le pasa ninguno, que entrar
   al nivel los aplique, y que valgan lo mismo que los que regala el cartel (más ventana
   por letra **y** más margen en el QTE).
+- **32b**, la tanda del acechador: que las rondas crezcan con las monedas y no se acorten
+  nunca, que un gato común siga trayendo **un** QTE largo y el acechador rondas **cortas**,
+  que ganar una ronda no pague nada y encadene la siguiente sin soltar al enemigo, que
+  ganarlas todas pague por todas (combo, determinación, maullido listo, y más del 50% de
+  estilo que un gato suelto) y que errarle a una del medio pierda la tanda entera con el
+  grito del acechador.
+- **32c**, el terror del QTE: que el latido vaya pegado al mismo `muf` que hunde la música
+  —no a un fade suyo—, que siga sonando con la música todavía abajo y se vaya con ella, que
+  el jumpscare lo corte en seco y que el `♫` del menú lo apague.
 - **32**, el acechador: que el sótano baje su cara y su grito (y sólo el sótano), que el
   QTE se acuerde de **quién** te alcanzó —los acechadores son los primeros de `foes`— y
   que un gato común no pueda pasar por acechador, que su jumpscare use su propio audio y

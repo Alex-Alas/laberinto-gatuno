@@ -290,6 +290,115 @@ const sfxUnlock = () =>
 		setTimeout(() => sfx(f, 140, "triangle", 0.07), i * 90),
 	);
 
+// ---- EL TERROR DEL QTE: latido y ruido blanco ENTRANDO con la música yéndose ----
+// El ducking de arriba deja el QTE casi en silencio, y el silencio no asusta: lo
+// que asusta es lo que ocupa ese lugar.  Estos dos suben con la MISMA curva con
+// la que `muf` hunde la música —frame() les pasa el propio `muf`—, así que no es
+// un fade y después el otro: es un REEMPLAZO.  El latido además se acelera según
+// se hunde la música, que es lo que hace que el reloj del QTE se sienta sin
+// mirarlo, y sigue acelerando ronda tras ronda en la tanda del acechador (`muf`
+// no se reinicia entre rondas: la tanda entera es un solo hundimiento).
+//
+// Van SINTETIZADOS con WebAudio: cero bytes de descarga y suenan aunque no haya
+// mp3.  Si algún día hay archivos propios, poné las URLs en DREAD_SRC —un loop
+// de latidos, un loop de ruido— y se usan ésos con este mismo fade-in, sin tocar
+// nada más: dreadOn/dreadSet/dreadOff ya manejan las dos formas.  El mp3 del
+// latido trae su propio ritmo, así que ahí el sintetizado no suena.
+const DREAD_SRC = { heart: "", noise: "" }; // p.ej. assets/latido.mp3
+const DREAD_NOISE = 0.055, // volumen tope del ruido blanco
+	DREAD_HEART = 0.14, // ...y del latido
+	DREAD_LP = 900, // el ruido va filtrado: siseo de sótano, no de tele vieja
+	HEART_SLOW = 900, // ms entre latidos al empezar el QTE
+	HEART_FAST = 330; // ...y con la música ya hundida del todo
+let NOISE = null, // el buffer de ruido, horneado una sola vez
+	dreadN = null, // el ruido sonando: {s,g} de WebAudio o el <audio> del mp3
+	dreadH = null, // el <audio> del latido, si hay mp3
+	dreadAt = 0, // 0 = el terror no está sonando
+	heartAt = 0; // cuándo toca el próximo latido
+function dreadOn() {
+	if (dreadAt || BGM.muted) return;
+	dreadAt = now();
+	heartAt = 0;
+	try {
+		if (DREAD_SRC.noise) {
+			dreadN = dreadN || new Audio(DREAD_SRC.noise);
+			dreadN.loop = true;
+			dreadN.volume = 0;
+			dreadN.play().catch(() => {});
+		} else {
+			AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+			if (AC.state === "suspended") AC.resume();
+			if (!NOISE) {
+				// 2 s de ruido en loop: se hornea una vez y se reusa toda la partida
+				NOISE = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
+				const d = NOISE.getChannelData(0);
+				for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+			}
+			const so = AC.createBufferSource(),
+				g = AC.createGain(),
+				f = AC.createBiquadFilter();
+			so.buffer = NOISE;
+			so.loop = true;
+			f.type = "lowpass";
+			f.frequency.value = DREAD_LP;
+			g.gain.value = 0; // entra desde cero: el fade-in lo hace dreadSet
+			so.connect(f).connect(g).connect(AC.destination);
+			so.start();
+			dreadN = { s: so, g };
+		}
+		if (DREAD_SRC.heart) {
+			dreadH = dreadH || new Audio(DREAD_SRC.heart);
+			dreadH.loop = true;
+			dreadH.volume = 0;
+			dreadH.play().catch(() => {});
+		}
+	} catch (e) {} // sin WebAudio el QTE se juega igual, mudo
+}
+// k = 0..1, el MISMO `muf` que está hundiendo la música
+function dreadSet(k) {
+	if (!dreadAt) return;
+	if (BGM.muted) return dreadOff(); // el ♫ del menú apaga esto también
+	try {
+		if (dreadN) {
+			if (dreadN.g) dreadN.g.gain.value = DREAD_NOISE * k;
+			else dreadN.volume = Math.min(1, k);
+		}
+		if (dreadH) {
+			dreadH.volume = Math.min(1, k);
+			return; // el mp3 late solo: no hay que marcarle el pulso
+		}
+		const T = now();
+		if (!heartAt) heartAt = T;
+		if (T >= heartAt) {
+			heartAt = T + (HEART_SLOW + (HEART_FAST - HEART_SLOW) * k);
+			const v = DREAD_HEART * (0.25 + 0.75 * k);
+			sfx(58, 120, "sine", v, 34); // lub...
+			setTimeout(() => sfx(46, 170, "sine", v * 0.7, 26), 155); // ...dub
+		}
+	} catch (e) {}
+}
+function dreadOff() {
+	if (!dreadAt) return;
+	dreadAt = 0;
+	heartAt = 0;
+	try {
+		if (dreadN) {
+			if (dreadN.g) {
+				dreadN.g.gain.value = 0;
+				dreadN.s.stop();
+				dreadN = null; // un BufferSource no se vuelve a arrancar
+			} else {
+				dreadN.pause();
+				dreadN.volume = 0;
+			}
+		}
+		if (dreadH) {
+			dreadH.pause();
+			dreadH.volume = 0;
+		}
+	} catch (e) {}
+}
+
 // ---- extra vibes: sólo estética, el bop sale del reloj del propio mp3 ----
 const BPM = 120,
 	BEAT = 60 / BPM;
@@ -398,7 +507,7 @@ const LEVELS = [
 		pts: [
 			"<b>NIEBLA</b>: el mapa te lo acordás vos",
 			"<b>FAROLES</b>: pisá uno y el sótano se enciende 5 segundos",
-			"<b>ACECHADOR</b>: nunca despista; es lento pero no para",
+			"<b>ACECHADOR</b>: nunca despista, y te agarra con una tanda de QTEs cortos",
 			"<b>MAULLIDO</b>: acá además es radar de monedas y gatos",
 			"Siete monedas: partida larga de verdad",
 		],
@@ -571,7 +680,7 @@ const avgStl = () => (stlT ? stlSum / stlT : stl);
 function comboUp() {
 	combo++;
 	maxCombo = Math.max(maxCombo, combo);
-	if (combo >= COMBO_MAX && !meowOn) {
+	if (combo >= MEOW_ARM && !meowOn) {
 		meowOn = true;
 		sfxUnlock();
 		say(
@@ -615,14 +724,22 @@ const comboCol = () => RANKS[rankI()].col;
 // de tu celda también muestran letra (en violeta) y teclearla te cruza el muro.
 // AHUYENTADOR: ESPACIO o ENTER sueltan un maullido que pone a los gatos cercanos
 // a correr para el otro lado (y en el sótano deja un radar).  Se ARMA la primera
-// vez que el combo llega al tope y queda armado toda la partida: el costo no es
-// el combo sino el cooldown de 45 s desde el último maullido.
+// vez que el combo llega a MEOW_ARM y queda armado toda la partida: el costo no
+// es el combo sino el cooldown desde el último maullido.
+//
+// Pedía el combo AL TOPE (x15) para armarlo y 45 s de espera entre uno y otro, y
+// las dos cosas lo dejaban afuera de la partida justo cuando hacía falta: llegar
+// a x15 sin errarle a nada es no necesitar ya el ahuyentador, y 45 s son media
+// partida.  Ahora se arma a la mitad del combo, espera la mitad, y cada gato
+// vencido le come otro tajo al cooldown: es una herramienta, no un premio.
 const GRACE_MS = 2000, // respiro sin reloj al ganar un QTE
 	TUT_GRACE_MS = 5000, // en el tutorial el respiro es más largo (ver qteEnd)
 	DET_EVERY = 3,
 	DET_MAX = 3,
 	MEOW_MS = 2500,
-	MEOW_CD = 45000,
+	MEOW_ARM = 8, // combo que lo ARMA (de COMBO_MAX = 15)
+	MEOW_CD = 25000,
+	MEOW_KILL = 6000, // lo que cada gato vencido le descuenta al cooldown
 	MEOW_R = 7; // MEOW_R: "cercano" en celdas de laberinto
 // el eco del maullido en el sótano: cuánto dura y cuánto miente (en celdas)
 const RADAR_MS = 4500,
@@ -636,15 +753,15 @@ const DV = { n: [0, -1], e: [1, 0], s: [0, 1], w: [-1, 0] };
 const meowCd = (T) => Math.max(0, MEOW_CD - (T - meowAt));
 // pedía el combo AL TOPE en el momento de maullar, y eso lo volvía inservible:
 // justo cuando un gato te alcanza es cuando el combo se está por romper.  Ahora
-// se ARMA la primera vez que lo llenás y de ahí en más sólo lo frena el cooldown.
+// se ARMA la primera vez que llega a MEOW_ARM y de ahí sólo lo frena el cooldown.
 const meowReady = (T) => meowOn && meowCd(T === undefined ? now() : T) <= 0;
 // cómo se leen las dos habilidades: entero en escritorio y en el menú, en iconos
 // en la barra del teléfono, donde no hay renglón para una frase
 const habTxt = (T) =>
 	(det ? `  ·  DETERMINACIÓN ${"\u25C8".repeat(det)}` : "") +
 	(!meowOn
-		? comboFill() >= 0.6
-			? `  ·  MAULLIDO A x${COMBO_MAX}`
+		? combo >= MEOW_ARM - 4
+			? `  ·  MAULLIDO A x${MEOW_ARM}`
 			: "" // callado si falta mucho
 		: meowCd(T)
 			? `  ·  MAULLIDO EN ${Math.ceil(meowCd(T) / 1000)}s`
@@ -813,6 +930,7 @@ function gen() {
 	foeBeat = 0;
 	log = [];
 	logEl.innerHTML = "";
+	dreadOff(); // partida nueva: sin latido colgado de la anterior
 	trail = [];
 	frozen = false;
 	clearTimeout(scareT);
@@ -1043,7 +1161,7 @@ function moveFoes() {
 }
 
 // ---- el maullido -----------------------------------------------------------
-// Pide el combo AL TOPE siempre (no lo gasta: el precio es el cooldown de 45 s).
+// No gasta combo (el precio es el cooldown, ver MEOW_CD arriba).
 // Devuelve true sólo si salió, para que quien lo llame sepa si hacer otra cosa.
 function meow() {
 	if (win || frozen || paused || qte || tutHold()) return false;
@@ -1083,61 +1201,120 @@ function meow() {
 // ser el fácil.
 const TUT_QTE_N = 3,
 	TUT_QTE_MS = 1500;
-function qteStart() {
+// EL ACECHADOR no abre UN QTE: abre una TANDA de QTEs cortos, uno atrás del otro
+// y cada uno con su propio reloj.  Arranca en STALK_R0 rondas y llega a
+// STALK_RMAX con la última moneda, así que cuanto más avanzada va la partida más
+// larga es la pelea.  No hay crédito parcial: errarle a cualquier ronda pierde la
+// tanda ENTERA (ver qteEnd), y por eso ganarla completa paga mucho más que un
+// gato suelto —es el único enemigo del juego que se pelea, no que se resuelve—.
+const STALK_N = 2, // letras por ronda: cortas a propósito
+	STALK_R0 = 2, // rondas con el tablero recién empezado
+	STALK_RMAX = 5, // ...y con todas las monedas encima
+	STALK_PAY = 0.75; // lo que suma cada ronda extra sobre el pago de un gato
+const stalkRounds = () =>
+	STALK_R0 +
+	Math.round((STALK_RMAX - STALK_R0) * Math.min(1, got / LV.coins));
+// `chain` = {round, rounds}: la ronda siguiente de una tanda del acechador, que
+// la encadena qteEnd sin soltar la pantalla ni reubicar al enemigo
+function qteStart(chain) {
 	if (qte || win || frozen) return;
 	// ...y antes de ese primero el juego se frena y lo explica (ver briefShow)
 	if (tutOn && !briefSeen) return briefShow();
 	const primero = tutOn && !qteWins,
 		free = [...POOL].sort(() => Math.random() - 0.5),
-		n = primero ? TUT_QTE_N : qteLen(),
-		ms = n * (primero ? TUT_QTE_MS : MS_LETRA) * babyK(),
 		// los acechadores son los primeros de `foes` (ver moveFoes): quién te
 		// alcanzó decide qué cara y qué grito trae el jumpscare si se pierde
-		fi = foes.indexOf(p.y * C + p.x);
+		fi = foes.indexOf(p.y * C + p.x),
+		st = chain ? true : fi > -1 && fi < (LV.stalk || 0),
+		rounds = chain ? chain.rounds : st ? stalkRounds() : 1,
+		n = st ? STALK_N : primero ? TUT_QTE_N : qteLen(),
+		ms = n * (primero ? TUT_QTE_MS : MS_LETRA) * babyK();
 	qte = {
 		seq: [...Array(n)].map((_) => free.pop()),
 		i: 0,
 		ms,
 		until: now() + ms,
-		st: fi > -1 && fi < (LV.stalk || 0),
+		st,
+		round: chain ? chain.round : 1,
+		rounds,
 	};
 	shake = 10;
 }
 function qteEnd(okAll) {
 	const cell = p.y * C + p.x,
-		st = !!(qte && qte.st); // te alcanzó el acechador del sótano
+		st = !!(qte && qte.st), // te alcanzó el acechador del sótano
+		round = qte ? qte.round || 1 : 1,
+		rounds = qte ? qte.rounds || 1 : 1;
+	// Ronda ganada de la tanda del acechador que todavía no es la última: no paga
+	// NADA todavía y encadena la siguiente sin devolver la pantalla.  El enemigo
+	// tampoco se reubica: te tiene agarrado hasta la última letra de la última
+	// ronda, y hasta ahí no hay ni combo ni estilo que cobrar.
+	if (okAll && round < rounds) {
+		qte = null;
+		shake = 12;
+		sfx(880, 60, "square", 0.05, 640);
+		burst(p.x * S + S / 2, p.y * S + S / 2, "#f4a", 12);
+		// sin cartel: el overlay de la ronda que viene ya dice por dónde va la tanda
+		// (título y una ficha por ronda), y un banner encima taparía las letras
+		qteStart({ round: round + 1, rounds });
+		return;
+	}
 	if (okAll) {
-		pen -= 500;
-		comboUp();
+		// la tanda del acechador paga por TODAS sus rondas: la penalización, el
+		// combo y la determinación se cobran una vez por ronda ganada, y el estilo
+		// sale multiplicado.  Contra un gato común rounds es 1 y todo esto es lo
+		// que era.
+		pen -= 500 * rounds;
+		for (let i = 0; i < rounds; i++) comboUp();
 		// la CADENA: el 1º paga STYLE_QTE y cada gato seguido paga STYLE_CHAIN
 		// más, hasta el 5º.  Es la única forma de pasar de S, así que el rango
 		// alto no es "jugar prolijo": es haber estado cazando.
 		kills++;
 		maxKills = Math.max(maxKills, kills);
-		styleUp(qteStyle());
+		const pay = Math.round(qteStyle() * (1 + STALK_PAY * (rounds - 1)));
+		styleUp(pay);
 		tflag++;
-		if (kills >= 2)
-			say(
-				`¡RACHA DE ${kills} GATOS!`,
-				`+${qteStyle()} DE ESTILO`,
-				"#4cf",
-			);
 		// Salís del QTE con la pantalla llena de secuencia y sin saber para dónde
 		// estabas yendo: el reloj de la letra arranca recién 2 s después, y en ese
 		// rato los gatos tampoco dan un paso.  Es tiempo para MIRAR, no para correr.
 		// en el tutorial el respiro va más largo: se gana el encuentro, recién
 		// ahí aparecen las monedas y hay un cartel nuevo que leer.  Con dos
 		// segundos el gato reubicado ya venía de vuelta antes de terminar.
-		graceT = now() + (tutOn ? TUT_GRACE_MS : GRACE_MS);
-		if (++qteWins % DET_EVERY === 0 && det < DET_MAX) {
-			// tres gatos = una carga
-			det++;
-			sfxUnlock();
+		// y después de una tanda entera el respiro va doble: fueron varias rondas
+		// seguidas sin ver el laberinto.
+		graceT = now() + (tutOn ? TUT_GRACE_MS : GRACE_MS) * (rounds > 1 ? 2 : 1);
+		let carga = false; // tres gatos = una carga (la tanda cuenta por ronda)
+		for (let i = 0; i < rounds; i++)
+			if (++qteWins % DET_EVERY === 0 && det < DET_MAX) {
+				det++;
+				carga = true;
+			}
+		if (carga) sfxUnlock();
+		// un solo cartel, y el de la tanda manda: tres avisos encimados no se leen
+		if (rounds > 1) {
+			// ...y con el acechador abajo el maullido vuelve entero: armado y sin
+			// espera, que es lo que te deja seguir moviéndote después de la pelea
+			meowOn = true;
+			meowAt = -1e9;
 			say(
-				"DETERMINACIÓN",
-				"LA LETRA VIOLETA ATRAVIESA EL MURO",
-				"#c8f",
+				`¡ACECHADOR VENCIDO! ${rounds} RONDAS`,
+				`+${pay} DE ESTILO · MAULLIDO LISTO`,
+				"#f4a",
 			);
+		} else {
+			if (meowOn) meowAt -= MEOW_KILL; // un gato común sólo le come un tajo
+			if (carga)
+				say(
+					"DETERMINACIÓN",
+					"LA LETRA VIOLETA ATRAVIESA EL MURO",
+					"#c8f",
+				);
+			else if (kills >= 2)
+				say(
+					`¡RACHA DE ${kills} GATOS!`,
+					`+${pay} DE ESTILO`,
+					"#4cf",
+				);
 		}
 		burst(p.x * S + S / 2, p.y * S + S / 2, "#4cf", 26);
 		play(BANG).catch(() => {});
@@ -1265,6 +1442,7 @@ function scareShow(st) {
 }
 function scareHide() {
 	clearTimeout(scareT);
+	dreadOff();
 	SCREAM.onended = null;
 	scare.style.display = "none";
 	scare.className = "";
@@ -1600,6 +1778,14 @@ function frame() {
 		tv = +((trk.v0 || 0.32) * (1 - MUF_MAX * muf)).toFixed(3);
 	if (tv !== mufV) {
 		trk.volume = mufV = tv; // sólo se escribe cuando de verdad cambió
+	}
+	// ...y lo que entra en el lugar que deja la música: el latido y el ruido suben
+	// con el mismo `muf` (ver dreadOn).  Se van con él cuando la música vuelve, o
+	// de golpe si arrancó el jumpscare, que ya trae su propio grito.
+	if (qte && !frozen) dreadOn();
+	if (dreadAt) {
+		if (frozen || (!qte && muf <= 0.02)) dreadOff();
+		else dreadSet(muf);
 	}
 	// y el grito del acechador baja con su imagen: el mismo perfil que el CSS de
 	// #scare.fade (pleno hasta el 32%, y de ahí a cero), sin un timer más
@@ -2079,11 +2265,14 @@ function frame() {
 		x.fillRect(0, 0, BW, BH);
 		// el enemigo se te viene encima según se acaba el tiempo
 		const gr = Math.min(1, Math.max(0, 1 - left)),
-			sz = 70 + gr * gr * (BW * 1.5 - 70);
-		if (ready(BIG)) {
+			sz = 70 + gr * gr * (BW * 1.5 - 70),
+			// el que se te viene encima es el que te agarró: el acechador trae su
+			// cara también acá, no sólo en el jumpscare
+			cara = qte.st && ready(STALK) ? STALK : BIG;
+		if (ready(cara)) {
 			x.globalAlpha = 0.35 + 0.5 * gr;
 			x.drawImage(
-				BIG,
+				cara,
 				BW / 2 - sz / 2,
 				BH / 2 - sz / 2,
 				sz,
@@ -2096,7 +2285,9 @@ function frame() {
 		x.shadowBlur = 12 * GLOW;
 		x.fillStyle = "#f9a";
 		x.fillText(
-			"! ENEMIGO — TECLEA LA SECUENCIA !",
+			qte.rounds > 1
+				? `! ACECHADOR — RONDA ${qte.round} DE ${qte.rounds} !`
+				: "! ENEMIGO — TECLEA LA SECUENCIA !",
 			BW / 2,
 			BH / 2 - 52,
 		);
@@ -2124,6 +2315,17 @@ function frame() {
 			240 * Math.max(0, left),
 			5,
 		);
+		// la tanda del acechador se cuenta debajo de la barra: cuántas rondas van
+		// y cuántas faltan, que es lo único que no se puede deducir de la pantalla
+		if (qte.rounds > 1) {
+			const pw = 14,
+				px0 = BW / 2 - ((qte.rounds - 1) * (pw + 5)) / 2;
+			for (let i = 0; i < qte.rounds; i++) {
+				x.fillStyle =
+					i < qte.round - 1 ? "#6f9" : i === qte.round - 1 ? "#fff" : "#503";
+				x.fillRect(px0 + i * (pw + 5) - pw / 2, BH / 2 + 54, pw, 4);
+			}
+		}
 	}
 
 	if (flash > 0.01) {
@@ -2817,8 +3019,8 @@ const TUT = [
 		ok: () => tthru > 0,
 	},
 	{
-		t: "Y llenar el combo arma el <b>MAULLIDO</b> para toda la partida. <b>ESPACIO</b> —o el <b>&#9834;</b> de la barra— y los gatos cercanos salen corriendo. Probalo.",
-		// Se arma a mano (en la partida lo arma llegar a COMBO_MAX) y vuelve EL
+		t: "Y con el combo a la mitad se arma el <b>MAULLIDO</b> para toda la partida. <b>ESPACIO</b> —o el <b>&#9834;</b> de la barra— y los gatos cercanos salen corriendo. Probalo.",
+		// Se arma a mano (en la partida lo arma llegar a MEOW_ARM) y vuelve EL
 		// gato del tutorial, el único con el que se jugó en todo el nivel, a media
 		// distancia: un maullido sin nadie a quien ahuyentar no enseña nada, y dos
 		// gatos desconocidos tampoco —lo que hay que ver es a ÉSE dando media
