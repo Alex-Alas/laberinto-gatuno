@@ -57,6 +57,7 @@ const cv = $("cv"),
 	ldesc = $("ldesc"),
 	lpts = $("lpts"),
 	lmeta = $("lmeta"),
+	lpic = $("lpic"),
 	lgo = $("lgo"),
 	tut = $("tut"),
 	tmsg = $("tmsg"),
@@ -332,6 +333,7 @@ vibe.onclick = () => {
 const LEVELS = [
 	{
 		id: "tutorial",
+		pic: "assets/nivel1.webp",
 		name: "PRIMEROS PASOS",
 		tag: "NIVEL 1 · TUTORIAL",
 		col: "#6f9",
@@ -354,6 +356,7 @@ const LEVELS = [
 	},
 	{
 		id: "clasico",
+		pic: "assets/nivel2.webp",
 		name: "EL LABERINTO",
 		tag: "NIVEL 2 · CLÁSICO",
 		col: "#4cf",
@@ -375,6 +378,7 @@ const LEVELS = [
 	},
 	{
 		id: "sotano",
+		pic: "assets/nivel3.webp",
 		name: "EL SÓTANO",
 		tag: "NIVEL 3 · PESADILLA",
 		col: "#f4a",
@@ -2585,6 +2589,10 @@ function lvlPick(id) {
 	ltag.textContent = l.tag;
 	lname.textContent = l.name;
 	lname.style.color = l.col;
+	// la foto sólo la tienen los niveles: los modos PRÓXIMAMENTE no, y sin esto
+	// se quedaba a la vista la del nivel anterior
+	lpic.style.display = l.pic ? "" : "none";
+	if (l.pic) lpic.src = l.pic;
 	ldesc.textContent = l.desc;
 	lpts.innerHTML = l.pts.map((t) => `<li>${t}</li>`).join("");
 	lmeta.innerHTML = meta(l)
