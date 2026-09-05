@@ -66,7 +66,13 @@ const cv = $("cv"),
 	brief = $("brief"),
 	bok = $("bok"),
 	hab = $("hab"),
-	hok = $("hok");
+	hok = $("hok"),
+	skb = $("skb"),
+	lskb = $("lskb"),
+	lbm = $("lbm"),
+	lbv = $("lbv"),
+	lbp = $("lbp"),
+	lbh = $("lbh");
 const RAGE = "assets/rage.gif";
 // el gif del diálogo (158KB) no se baja al abrir la página: se carga la primera
 // vez que el diálogo aparece (ver checkSkill) y ahí queda para las siguientes
@@ -166,7 +172,13 @@ FOE.src = "assets/gato.webp";
 const ready = (i) => i.complete && i.naturalWidth > 0;
 const BIG = new Image();
 BIG.src = "assets/gato-qte.webp"; // enemigo a pantalla completa
-scare.style.backgroundImage = `url(${BIG.src})`;
+// El ACECHADOR del sótano es el ÚNICO enemigo que no se juega en ningún otro
+// nivel, así que no puede tener la misma cara ni el mismo grito que el resto:
+// sprite propio en el tablero y jumpscare propio (ver scareShow).  La cara y el
+// grito los baja gen() al generar el primer sótano y no antes —son ~270KB que en
+// los niveles 1 y 2 no se miran nunca—, y hasta que estén ready() da false y se
+// dibuja el gato negro de siempre.
+const STALK = new Image();
 // la demo del cartel usa el MISMO gato del QTE, sin un byte extra: si lo que
 // se ve ahí no fuera el de la partida, la demo enseñaría otra cosa
 $("bdcat").src = BIG.src;
@@ -177,6 +189,10 @@ $("hmf1").src = $("hmf2").src = FOE.src;
 const BOOM = "assets/boom.gif";
 const SCREAM = new Audio("assets/scream.mp3"),
 	BANG = new Audio("assets/bang.mp3");
+// el grito del acechador: ~120KB que sólo hacen falta en el sótano, así que la
+// URL se la pone gen() al generar un nivel que tenga acechador
+const LOBO = new Audio();
+LOBO.preload = "none";
 const play = (a) => {
 	try {
 		a.currentTime = 0;
@@ -190,13 +206,13 @@ GIF.src = BOOM; // gif de explosión ya decodificado
 const BGM_SRC = "assets/bgm.mp3";
 const BGM = new Audio();
 BGM.loop = true;
-BGM.volume = 0.32;
+BGM.v0 = BGM.volume = 0.32; // v0: el volumen "normal" al que vuelve el ducking
 SCREAM.preload = BANG.preload = "auto"; // cortos: vale la pena tenerlos listos
 BGM.preload = PERF.pre; // ~730KB de mp3: en móvil se baja al tocar
 const VIBE_SRC = "assets/vibes.mp3";
 const VIBE = new Audio();
 VIBE.loop = true;
-VIBE.volume = 0.34;
+VIBE.v0 = VIBE.volume = 0.34;
 VIBE.preload = "none"; // las vibes se bajan al pedirlas, también en escritorio
 // Las dos pistas se crean VACÍAS: pasarle la URL al constructor arranca la descarga
 // ahí mismo, y ahí el preload="none" del teléfono llega tarde.  srcOn() se la pone a
@@ -212,6 +228,27 @@ mus.onclick = () => {
 	mus.textContent = (BGM.muted ? "♫̸" : "♫") + " MUSICA";
 	mus.blur();
 };
+// ---- la música durante el QTE y el jumpscare --------------------------------
+// Un QTE es el momento en que el laberinto deja de existir, así que la música se
+// HUNDE mientras dura: arranca en su volumen y baja sin parar hasta quedar casi
+// muda justo cuando el gato ya te tiene encima.  Ganarlo la devuelve enseguida;
+// terminar en jumpscare la deja abajo y la trae de vuelta de a poco, con el
+// silencio del susto todavía puesto.
+//
+// ponytail: esto es un ducking, no un filtro.  Un lowpass de verdad ("muffled" en
+// serio) pide meter las dos pistas en un MediaElementSource de WebAudio, y un
+// AudioContext suspendido —que en el teléfono es lo normal hasta el primer
+// gesto— deja la música MUDA en vez de apagada.  Si algún día vale la pena, el
+// enganche es acá: BGM/VIBE -> BiquadFilter(lowpass) -> destination, y `muf`
+// pasa a manejar la frecuencia de corte en vez del volumen.
+const MUF_MAX = 0.88, // cuánto se hunde, como fracción del volumen normal
+	MUF_IN = 2600, // fade-in largo: el de después del jumpscare
+	MUF_OUT = 650; // y el corto, el de un QTE ganado
+let muf = 0, // 0 = volumen normal · 1 = hundida del todo
+	mufAt = 0, // último cuadro contado
+	mufV = -1, // volumen ya escrito en la pista (para no tocarla por gusto)
+	mufSlow = 0; // el fade-in que viene es el largo (hubo jumpscare)
+
 // ---- SFX sintetizados con WebAudio: cortos y bajitos, sin embeber otro mp3 ----
 let AC = null;
 function sfx(f, ms, type = "square", vol = 0.06, to = 0) {
@@ -275,6 +312,7 @@ vibe.onclick = () => {
 	const on = track(),
 		off = vibes ? BGM : VIBE,
 		sonaba = !off.paused;
+	mufV = -1; // la pista nueva no hereda el volumen cacheado de la otra
 	off.pause();
 	if (sonaba) on.play().catch(() => {});
 	vibe.blur();
@@ -460,6 +498,9 @@ let g,
 	kills = 0, // gatos vencidos SEGUIDOS: la cadena que paga cada vez más
 	maxKills = 0, // ...y la cadena más larga de la partida, para el resumen
 	baby = 0,
+	noes = 0, // cuántas veces se dijo "así está bien" (ver checkSkill)
+	dodges = 0, // gatos esquivados al cruce
+	pfrom = null, // la celda que el jugador acaba de dejar, y cuándo
 	paused = false,
 	pauseAt = 0,
 	nextAsk = 12;
@@ -609,12 +650,21 @@ const habTxt = (T) =>
 const habIco = () => (det ? "  " + "\u25C8".repeat(det) : "");
 
 const exitOpen = () => got >= LV.coins; // única condición para escapar: las monedas
-const babyK = () => 1 + 0.35 * baby; // cada baby point = 35% más de tiempo
+// cada baby point = 35% más de tiempo.  Toma un valor suelto para que el selector
+// de nivel pueda mostrar lo que van a valer los que todavía no se aplicaron.
+const babyK = (n) => 1 + 0.35 * (n === undefined ? baby : n);
 const dur = () => durBase * babyK();
 const acc = () => (hits + fails ? hits / (hits + fails) : 1);
+// Decir "NO, ASÍ ESTÁ BIEN" y que el cartel vuelva a los 25 teclazos es no haber
+// escuchado la respuesta.  Cada NO hace las dos cosas: alarga la espera (60 teclas
+// por cada uno) y baja el umbral de precisión con el que el cartel se anima a
+// aparecer, así que al segundo NO prácticamente hay que jugar el doble de mal para
+// volver a verlo.  El SÍ sigue con el cooldown corto de siempre: ése lo pidió.
+const skillAcc = () => Math.max(0.45, 0.8 - 0.12 * noes);
 function checkSkill() {
 	const n = hits + fails;
 	if (
+		skillOff ||
 		paused ||
 		qte ||
 		frozen ||
@@ -622,7 +672,7 @@ function checkSkill() {
 		tutOn ||
 		n < 12 ||
 		n < nextAsk ||
-		acc() >= 0.8
+		acc() >= skillAcc()
 	)
 		return;
 	paused = true;
@@ -652,13 +702,50 @@ function unpause() {
 }
 function babyEnd(yes) {
 	if (yes) baby++;
-	nextAsk = hits + fails + 25; // cooldown: 25 teclas antes de volver a preguntar
+	else noes++;
+	nextAsk = hits + fails + (yes ? 25 : 60 * noes);
 	skill.style.display = "none";
 	unpause();
 	if (MOBILE) kbFocus(); // devolver el teclado que cerró el diálogo
 }
 byes.onclick = () => babyEnd(true);
 bno.onclick = () => babyEnd(false);
+
+// ...y para el que no lo quiere ver NUNCA, el interruptor.  Vive en los dos
+// lugares donde se decide cómo se va a jugar —el menú de ESC y el selector de
+// nivel— y es el mismo estado en los dos, así que da igual dónde se toque.  Se
+// recuerda entre partidas, como el tutorial ya visto.
+let skillOff = (() => {
+	try {
+		return localStorage.getItem("lg.skill") === "0";
+	} catch (e) {
+		return false;
+	}
+})();
+function skillSync() {
+	const t = (skillOff ? "\u2610" : "\u2611") + " SKILL ISSUE";
+	skb.textContent = t;
+	skb.className = skillOff ? "" : "on";
+	lskb.textContent = t;
+	lskb.className = skillOff ? "" : "on";
+}
+function skillSet(v) {
+	skillOff = v;
+	try {
+		localStorage.setItem("lg.skill", v ? "0" : "1");
+	} catch (e) {}
+	if (v && skill.style.display === "grid") {
+		skill.style.display = "none"; // si justo estaba abierto, se va con su pausa
+		unpause();
+	}
+	skillSync();
+}
+skb.onclick = () => {
+	skillSet(!skillOff);
+	skb.blur();
+};
+lskb.onclick = () => skillSet(!skillOff);
+skillSync();
 
 function gen() {
 	g = [...Array(C * R)].map((_) => ({ n: 1, e: 1, s: 1, w: 1, v: 0 }));
@@ -732,6 +819,8 @@ function gen() {
 	skill.style.display = "none"; // el baby mode sí se conserva
 	graceT = 0;
 	qteWins = 0;
+	dodges = 0;
+	pfrom = null;
 	det = 0;
 	scareUntil = 0;
 	meowAt = -1e9;
@@ -754,6 +843,11 @@ function gen() {
 		for (let i = 0; i < LV.foes; i++) foes.push(far());
 	}
 	prevFoe = [];
+	// la cara y el grito del acechador se bajan al generar el primer sótano
+	if (LV.stalk) {
+		if (!STALK.src) STALK.src = "assets/acechador.png";
+		if (!LOBO.src) LOBO.src = "assets/lobotomy.mp3";
+	}
 	bakeMaze(); // el laberinto nuevo se hornea una sola vez
 	deal();
 	tutStart(); // arma (o apaga) el tutorial del nivel
@@ -886,6 +980,35 @@ function flow() {
 	}
 	return d;
 }
+// ESQUIVE AL CRUCE.  El gato venía desde `f` hacia tu casilla y vos, casi en el
+// mismo instante —normalmente por equivocarte y retroceder justo ahí—, saliste
+// hacia la suya: se cruzan de frente, cada uno se queda con la casilla del otro y
+// el gato pasa de largo sin tocarte.  Ninguna de las dos comprobaciones de choque
+// lo agarra (stepBack no mira gatos, y moveFoes mira tu casilla DESPUÉS de que se
+// movió), así que hasta ahora era un agujero que el jugador descubría solo y no
+// pagaba nada.  Es la jugada más difícil que tiene el juego: ahora paga.
+const DODGE_MS = 1200, // "casi al mismo tiempo": el margen entre las dos movidas
+	STYLE_DODGE = 9; // más que vencer un gato de QTE (STYLE_QTE), y con razón
+function dodge(f, next) {
+	if (
+		!pfrom ||
+		next !== pfrom.c || // el gato entra justo a la casilla que dejaste...
+		f !== p.y * C + p.x || // ...y vos te quedaste con la que él dejó
+		now() - pfrom.t > DODGE_MS
+	)
+		return;
+	dodges++;
+	styleUp(STYLE_DODGE);
+	shake = 11;
+	sfx(300, 90, "square", 0.05, 900);
+	setTimeout(() => sfx(1200, 240, "triangle", 0.06, 700), 90);
+	burst(p.x * S + S / 2, p.y * S + S / 2, "#9ff", 26);
+	say(
+		"¡LO ESQUIVASTE AL CRUCE!",
+		`+${STYLE_DODGE} DE ESTILO · ESO NO SE APRENDE`,
+		"#9ff",
+	);
+}
 function moveFoes() {
 	const d = flow();
 	foeBeat++;
@@ -909,6 +1032,7 @@ function moveFoes() {
 				? nb.reduce((a, b) => (d[b] < d[a] ? b : a)) // baja por el campo de flujo
 				: nb[(Math.random() * nb.length) | 0]; // despista
 		prevFoe[i] = f;
+		dodge(f, next); // ¿se cruzaron sin tocarse? eso se paga
 		return next;
 	});
 	if (!huyen && foes.includes(p.y * C + p.x)) qteStart();
@@ -962,17 +1086,22 @@ function qteStart() {
 	const primero = tutOn && !qteWins,
 		free = [...POOL].sort(() => Math.random() - 0.5),
 		n = primero ? TUT_QTE_N : qteLen(),
-		ms = n * (primero ? TUT_QTE_MS : MS_LETRA) * babyK();
+		ms = n * (primero ? TUT_QTE_MS : MS_LETRA) * babyK(),
+		// los acechadores son los primeros de `foes` (ver moveFoes): quién te
+		// alcanzó decide qué cara y qué grito trae el jumpscare si se pierde
+		fi = foes.indexOf(p.y * C + p.x);
 	qte = {
 		seq: [...Array(n)].map((_) => free.pop()),
 		i: 0,
 		ms,
 		until: now() + ms,
+		st: fi > -1 && fi < (LV.stalk || 0),
 	};
 	shake = 10;
 }
 function qteEnd(okAll) {
-	const cell = p.y * C + p.x;
+	const cell = p.y * C + p.x,
+		st = !!(qte && qte.st); // te alcanzó el acechador del sótano
 	if (okAll) {
 		pen -= 500;
 		comboUp();
@@ -1034,7 +1163,7 @@ function qteEnd(okAll) {
 	}
 	qte = null;
 	if (okAll) deal();
-	else scareShow();
+	else scareShow(st);
 }
 
 // ---- el cartel de las dos habilidades (tutorial) ---------------------------
@@ -1105,19 +1234,42 @@ function briefGo() {
 }
 bok.onclick = briefGo;
 
-// el enemigo te come la pantalla mientras suena el grito
-function scareShow() {
+// El enemigo te come la pantalla mientras suena el grito.  El ACECHADOR del
+// sótano trae los suyos —su cara y su grito— y encima sale distinto: el resto
+// corta de golpe cuando el mp3 termina, y él se DESVANECE.  La imagen la apaga el
+// CSS (#scare.fade) y el audio baja con el mismo perfil desde frame(), así que el
+// susto no termina, se disuelve: es lo que lo deja pegado un rato más.
+const SCARE_FADE = 2200; // lo que tarda en irse el del acechador
+let scareA = null, // el audio que está sonando ahora
+	scareFade = 0; // cuándo arrancó su desvanecido (0 = no se desvanece)
+function scareShow(st) {
 	frozen = true;
+	mufSlow = 1; // hubo jumpscare: la música vuelve por el camino largo
+	const ace = !!st;
+	scareA = ace ? LOBO : SCREAM;
+	scare.style.backgroundImage = `url(${(ace && ready(STALK) ? STALK : BIG).src})`;
+	scare.className = ace ? "fade" : "";
 	scare.style.display = "block";
-	SCREAM.onended = scareHide;
-	play(SCREAM).catch(scareHide);
+	scareFade = ace ? now() : 0;
+	if (scareA.volume !== undefined) scareA.volume = 1;
+	SCREAM.onended = ace ? null : scareHide;
+	play(scareA).catch(scareHide);
 	clearTimeout(scareT);
-	scareT = setTimeout(scareHide, 8000); // ponytail: red por si el audio no suena
+	// el acechador se va con su fade; el resto, cuando el grito termina (y a los
+	// 8 s igual, ponytail: red por si el audio no suena)
+	scareT = setTimeout(scareHide, ace ? SCARE_FADE : 8000);
 }
 function scareHide() {
 	clearTimeout(scareT);
 	SCREAM.onended = null;
 	scare.style.display = "none";
+	scare.className = "";
+	if (scareA) {
+		if (scareA.volume !== undefined) scareA.volume = 1;
+		if (!scareA.paused) scareA.pause();
+	}
+	scareA = null;
+	scareFade = 0;
 	frozen = false;
 	deal();
 }
@@ -1184,6 +1336,7 @@ function burst(cx, cy, col, n = 14) {
 function stepBack() {
 	const c = trail.pop();
 	if (c !== undefined) {
+		pfrom = { c: p.y * C + p.x, t: now() }; // ver dodge()
 		p = { x: c % C, y: (c / C) | 0 };
 	}
 }
@@ -1310,24 +1463,26 @@ function rpopPlace() {
 
 // Un ascenso de rango tiene que VERSE: la letra crece de golpe, la barra
 // destella y el nombre del rango entra volando sobre el laberinto.
+//
+// Reiniciar una animación de CSS pide apagar la clase, forzar el layout y volver
+// a prenderla.  Eran TRES layouts sincrónicos seguidos —uno por elemento—, y un
+// layout sincrónico frena el hilo hasta que el navegador termina de recalcular la
+// página entera.  Un solo `void offsetWidth` los cubre a los tres: la lectura
+// vacía el estilo pendiente de todo el documento, no del elemento que se lee.
 function rankShow(i, up) {
 	const r = RANKS[i];
 	root.style.setProperty("--rc", r.col); // de acá lo toman la letra, la barra y el cartel
 	brank.textContent = r.k;
-	brank.className = "rank";
-	void brank.offsetWidth; // reiniciar la animación
-	brank.className = up ? "rank up" : "rank";
-	bar.className = "";
-	void bar.offsetWidth;
-	bar.className = up ? "up" : "";
 	bfill.style.color = r.col;
-	if (up) {
-		rpop.textContent = r.n + "!";
-		const base = "rank" + (rpopPlace() === "l" ? " l" : "");
-		rpop.className = base;
-		void rpop.offsetWidth;
-		rpop.className = base + " show";
-	}
+	if (up) rpop.textContent = r.n + "!";
+	const base = up ? "rank" + (rpopPlace() === "l" ? " l" : "") : "";
+	brank.className = "rank"; // las tres clases apagadas...
+	bar.className = "";
+	if (up) rpop.className = base;
+	void bar.offsetWidth; // ...un layout para las tres...
+	brank.className = up ? "rank up" : "rank"; // ...y las tres prendidas
+	bar.className = up ? "up" : "";
+	if (up) rpop.className = base + " show";
 }
 
 // ---- capa de paredes horneada ---------------------------------------------
@@ -1424,6 +1579,30 @@ function frame() {
 	// pantallas de 120Hz pedían el doble de cuadros por el mismo juego
 	if (PERF.fps && RT - lastDraw < 1000 / PERF.fps) return;
 	lastDraw = RT;
+	// ---- la música, cuadro a cuadro ------------------------------------------
+	// Va con el reloj REAL: el susto y el QTE tienen que sonar igual con la pestaña
+	// al frente que con el menú encima.  Durante el QTE (o el jumpscare) `muf` sube
+	// hasta 1 —el QTE entero para hundirse del todo, así que cuanto menos tiempo
+	// queda, menos se escucha— y después baja: rápido si el QTE se ganó, lento si
+	// terminó en susto.
+	const mdt = mufAt ? Math.min(250, RT - mufAt) : 0;
+	mufAt = RT;
+	if (qte || frozen) muf = Math.min(1, muf + mdt / (qte ? qte.ms : 700));
+	else if (muf > 0) {
+		muf = Math.max(0, muf - mdt / (mufSlow ? MUF_IN : MUF_OUT));
+		if (!muf) mufSlow = 0;
+	}
+	const trk = track(),
+		tv = +((trk.v0 || 0.32) * (1 - MUF_MAX * muf)).toFixed(3);
+	if (tv !== mufV) {
+		trk.volume = mufV = tv; // sólo se escribe cuando de verdad cambió
+	}
+	// y el grito del acechador baja con su imagen: el mismo perfil que el CSS de
+	// #scare.fade (pleno hasta el 32%, y de ahí a cero), sin un timer más
+	if (scareFade && scareA) {
+		const q = (RT - scareFade) / SCARE_FADE;
+		scareA.volume = Math.max(0, Math.min(1, (1 - q) / 0.68));
+	}
 	const T = paused ? pauseAt : RT,
 		live = t0 && !win && !frozen && !paused; // en pausa el reloj se congela
 	// Respiro post-QTE: durante GRACE_MS la ventana de la letra no corre y los gatos
@@ -1586,11 +1765,13 @@ function frame() {
 	x.shadowColor = asustados ? "#9ff" : "#f36";
 	x.shadowBlur = (16 + bop * 14) * GLOW;
 	if (asustados) x.globalAlpha = 0.72;
-	foes.forEach((f) => {
+	const nst = LV.stalk || 0; // los acechadores son los primeros de la lista
+	foes.forEach((f, i) => {
 		const X = (f % C) * S + S / 2,
 			Y = ((f / C) | 0) * S + S / 2,
-			s = S - 8 + 2 * Math.sin(T / 150 + f);
-		if (ready(FOE)) x.drawImage(FOE, X - s / 2, Y - s / 2, s, s);
+			s = S - 8 + 2 * Math.sin(T / 150 + f),
+			im = i < nst && ready(STALK) ? STALK : FOE;
+		if (ready(im)) x.drawImage(im, X - s / 2, Y - s / 2, s, s);
 		else {
 			x.fillStyle = "#f57";
 			x.fillRect(X - 6, Y - 6, 12, 12);
@@ -1810,6 +1991,36 @@ function frame() {
 	}
 	x.globalAlpha = 1;
 	x.shadowBlur = 0;
+
+	// ---- las monedas, en el tablero ------------------------------------------
+	// Llevar la cuenta obligaba a soltar el laberinto y leer la barra de arriba, y
+	// eso es justo lo que no se puede hacer con un gato encima.  Las mismas fichas
+	// que la barra, pero acá: llenas las que ya juntaste, huecas las que faltan, y
+	// todas verdes cuando la salida ya abrió.  Va DESPUÉS de la niebla, así que en
+	// el sótano —donde no se ve nada y la cuenta importa más— se lee igual.  Se
+	// muda abajo si el gato está en la primera fila, que es donde arranca.
+	if (!win) {
+		const gap = 13,
+			wc = LV.coins * gap,
+			X0 = (BW - wc) / 2 + gap / 2,
+			Y0 = p.y === 0 ? BH - 15 : 15;
+		x.fillStyle = "rgba(4,6,12,.82)";
+		x.fillRect(X0 - gap / 2 - 6, Y0 - 10, wc + 12, 20);
+		x.strokeStyle = ab ? "#0f96" : "#1ff5";
+		x.lineWidth = 1;
+		x.strokeRect(X0 - gap / 2 - 5.5, Y0 - 9.5, wc + 11, 19);
+		for (let i = 0; i < LV.coins; i++) {
+			const lleno = i < got,
+				c = lleno ? (ab ? "#0f9" : "#fe4") : "#4a5a72";
+			x.strokeStyle = x.fillStyle = c;
+			x.shadowColor = c;
+			x.shadowBlur = MOBILE || !lleno ? 0 : 9 * GLOW;
+			x.beginPath();
+			x.arc(X0 + i * gap, Y0, 4.2, 0, 6.283);
+			lleno ? x.fill() : x.stroke();
+		}
+		x.shadowBlur = 0;
+	}
 
 	// letras de las salidas: SIEMPRE al final, encima de todo
 	if (!win && !qte) {
@@ -2093,11 +2304,18 @@ function key(k) {
 	}
 	const d = DV[dir];
 	trail.push(p.y * C + p.x); // migaja para el castigo
+	pfrom = { c: p.y * C + p.x, t: now() }; // ...y la marca del esquive (ver dodge)
 	p.x += d[0];
 	p.y += d[1];
 	if (thru) {
 		// se gastó una carga de determinación
 		det--;
+		// Y del otro lado del muro se empieza de cero: la determinación no es un
+		// atajo de ida y vuelta.  Un error no puede devolverte por una pared que
+		// no se cruza sin otra carga —te dejaría del lado equivocado y sin nada
+		// con qué volver—, así que ESTA celda pasa a ser tu punto de partida y el
+		// camino de migas de antes se borra.
+		trail = [];
 		tthru++; // ...y el paso del tutorial que la enseña espera esto
 		shake = 7;
 		sfx(150, 260, "sine", 0.055, 620);
@@ -2377,6 +2595,30 @@ function lvlPick(id) {
 	lgo.style.opacity = l.soon ? ".4" : "1";
 	lgo.style.color = l.soon ? "#9ef" : l.col;
 }
+// ---- BABY POINTS de arranque -----------------------------------------------
+// El cartel de skill issue los regala de a uno EN MEDIO de la partida, que es el
+// peor momento posible para decidir una dificultad: te lo pregunta justo cuando la
+// estás pasando mal.  Acá se eligen ANTES de entrar, con la ficha del nivel a la
+// vista.  Es el mismo babyK que usa el cartel —35% más de ventana por letra y de
+// margen por letra en el QTE, por punto— y se aplican al apretar JUGAR.
+const BABY_MAX = 5;
+let startBaby = 0;
+function babySync() {
+	lbv.textContent = startBaby;
+	lbh.textContent = startBaby
+		? `+${Math.round(babyK(startBaby) * 100 - 100)}% de tiempo para reaccionar`
+		: "reacción normal";
+	lbm.disabled = !startBaby;
+	lbp.disabled = startBaby >= BABY_MAX;
+}
+const babyStep = (d) => {
+	startBaby = Math.max(0, Math.min(BABY_MAX, startBaby + d));
+	babySync();
+};
+lbm.onclick = () => babyStep(-1);
+lbp.onclick = () => babyStep(1);
+babySync();
+
 function lvlShow() {
 	if (lvlOn) return;
 	lvlOn = true;
@@ -2404,6 +2646,7 @@ function lvlPlay() {
 	if (!l || l.soon) return;
 	lvlHide();
 	setLevel(l.id);
+	baby = startBaby; // la dificultad que se eligió antes de entrar
 	gen();
 	autoFS();
 	kbFocus();
@@ -2462,6 +2705,9 @@ function resShow() {
 			: "") +
 		(maxKills > 1
 			? `<div><b>x${maxKills}</b><small>RACHA DE GATOS</small></div>`
+			: "") +
+		(dodges
+			? `<div><b>${dodges}</b><small>ESQUIVES AL CRUCE</small></div>`
 			: "") +
 		(baby ? `<div><b>${baby}</b><small>BABY POINTS</small></div>` : "");
 	rpb.textContent = newPB
@@ -2564,13 +2810,15 @@ const TUT = [
 	},
 	{
 		t: "Y llenar el combo arma el <b>MAULLIDO</b> para toda la partida. <b>ESPACIO</b> —o el <b>&#9834;</b> de la barra— y los gatos cercanos salen corriendo. Probalo.",
-		// se arma a mano (en la partida lo arma llegar a COMBO_MAX) y entran dos
-		// gatos a media distancia: un maullido sin nadie a quien ahuyentar no
-		// enseña nada, lo que hay que ver es a los dos dando media vuelta
+		// Se arma a mano (en la partida lo arma llegar a COMBO_MAX) y vuelve EL
+		// gato del tutorial, el único con el que se jugó en todo el nivel, a media
+		// distancia: un maullido sin nadie a quien ahuyentar no enseña nada, y dos
+		// gatos desconocidos tampoco —lo que hay que ver es a ÉSE dando media
+		// vuelta, el mismo que te alcanzó hace dos pasos.
 		enter: () => {
 			meowOn = true;
 			meowAt = -1e9;
-			foes = [tutFoe(5), tutFoe(7)];
+			foes = [tutFoe(5)];
 			prevFoe = [];
 			habShow("meow");
 		},
@@ -2578,9 +2826,11 @@ const TUT = [
 	},
 	{
 		t: "Juntá las <b>MONEDAS</b> amarillas: la salida está <b>cerrada con candado</b> hasta tenerlas todas.",
+		// El gato NO se borra acá.  Lo AHUYENTASTE, no lo hiciste desaparecer: el
+		// maullido lo puso a correr para el otro lado y sigue en el laberinto,
+		// donde tiene que estar.  Borrarlo era desmentir en el paso siguiente lo
+		// que el paso anterior acababa de enseñar.
 		enter: () => {
-			foes = []; // los dos del paso anterior ya mostraron lo suyo
-			prevFoe = [];
 			spawn(coins, LV.coins);
 		},
 		ok: () => exitOpen(),

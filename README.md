@@ -59,10 +59,17 @@ usó de verdad:
   demo muestra al gato blanco cruzando la pared por la letra violeta, con una de las tres
   cargas apagándose. El paso se cierra cuando **atravesaste un muro**; teclear letras
   normales no alcanza.
-- **MAULLIDO.** El paso lo arma a mano y suelta **dos gatos negros** a media distancia
-  —un maullido sin nadie a quien ahuyentar no enseña nada—, y la demo muestra la onda
-  saliendo del gato blanco y a los dos negros dando media vuelta, con el halo pasando del
+- **MAULLIDO.** El paso lo arma a mano y trae de vuelta **al gato del tutorial** a media
+  distancia —un maullido sin nadie a quien ahuyentar no enseña nada—, y la demo muestra la
+  onda saliendo del gato blanco y al negro dando media vuelta, con el halo pasando del
   rojo de caza al celeste del maullido. El paso se cierra cuando **maullaste**.
+
+  Y ahí el gato **se queda**. Antes eran dos gatos desconocidos y el paso siguiente los
+  borraba del tablero: maullabas, los veías arrancar, y un segundo después no existían.
+  Eso no enseña *ahuyentar*, enseña *desaparecer*, y desmiente en el paso siguiente lo que
+  el paso anterior acaba de mostrar. Ahora es **el mismo gato con el que se jugó todo el
+  nivel**, sale corriendo para el otro lado sus 2,5 s y sigue en el laberinto: si vuelve,
+  ya sabés qué hacer con él.
 
 Los dos carteles se cierran con **ENTENDIDO** y nada más, por la misma razón que el del
 QTE: el maullido se suelta con **ESPACIO**, y el espacio que ya venía en camino se llevaba
@@ -93,7 +100,13 @@ El **sótano** es el que suma mecánicas nuevas, pensadas para una partida larga
   poco, hasta que la niebla se vuelve a cerrar. Con la salida abierta, la casilla verde
   también se ve desde lejos.
 - **Acechador.** El primer gato del sótano nunca despista (persecución 100%, no el 70-95%
-  del resto), pero se mueve a medio paso. No lo perdés: lo administrás.
+  del resto), pero se mueve a medio paso. No lo perdés: lo administrás. Y como es el
+  **único enemigo que no se juega en ningún otro nivel**, tiene cara y grito propios: su
+  sprite en el tablero no es el gato negro de siempre, y si te gana el QTE el jumpscare
+  viene con su propio audio. Ése además **no corta: se disuelve** —la cara se va con un
+  fade de 2,2 s y el grito baja con ella, con el mismo perfil—, que es lo que lo deja
+  pegado un rato más que un susto que se apaga de golpe. Los dos archivos (~270KB) se
+  bajan al generar el primer sótano y no al abrir la página.
 - **Radar.** A oscuras el maullido vuelve con algo más que gatos asustados: durante 4,5 s
   quedan flotando unos anillos flojos —amarillos las monedas que faltan, rosados los
   gatos que **había** cuando maullaste—. No enciende nada: la niebla se dibuja antes y
@@ -124,6 +137,21 @@ el `soon`.
 - Los gatos oscuros te persiguen. Al alcanzarte se abre un QTE: tecleás la secuencia
   completa antes de que se acabe la barra. Fallarlo cuesta +2 s, **3 pasos atrás** y
   **−8 de estilo**: perder contra un gato es lo único que se lleva el medidor puesto.
+- **La cuenta de monedas se lee en el tablero.** Arriba del laberinto (o abajo, si el
+  gato está en la primera fila, que es donde arranca) hay una fila de fichas: llenas las
+  que juntaste, huecas las que faltan, todas verdes cuando la salida ya abrió. Estaba sólo
+  en la barra de arriba, y levantar la vista para contar es exactamente lo que no se puede
+  hacer con un gato encima. Se dibuja **después de la niebla**, así que en el sótano
+  —donde más hace falta— se lee igual.
+- **Esquive al cruce.** Si te equivocás justo cuando un gato estaba por tocarte, el
+  retroceso te mete en **su** casilla y él entra en la que vos dejaste: se cruzan de
+  frente y ninguno toca al otro. Ninguna de las dos comprobaciones de choque lo agarra
+  —`stepBack()` no mira gatos, y `moveFoes()` mira tu casilla *después* de moverse—, así
+  que era un agujero que el jugador descubría solo y no pagaba nada. Ahora paga: **+9 de
+  estilo** (más que vencer un gato en un QTE) y un cartel que lo reconoce. Sólo cuenta el
+  **cruce**, y sólo si las dos movidas pasaron con menos de 1,2 s de diferencia: que un
+  gato que te viene siguiendo de atrás pise la casilla que dejaste es lo que hace un gato
+  todo el tiempo, no una jugada.
 - **Respiro:** ganar un QTE congela **2 s** la ventana de reacción *y* el paso de los
   gatos (en el tutorial, **5 s**). Salís del QTE con la pantalla llena de secuencia y sin
   saber para dónde ibas: ese rato es para mirar el laberinto de nuevo, no para correr. El
@@ -163,6 +191,12 @@ animada, en los pasos 5 y 6 (arriba).
   círculo punteado, y teclear una te **atraviesa el muro** y gasta la carga. Sólo entran
   los muros que dan a una celda del tablero — los del borde no llevan a ningún lado. El
   gato lleva una órbita violeta con una pastilla por carga.
+
+  **Del otro lado del muro se arranca de cero.** Cruzar borra el camino de migas, así que
+  un error ya no te devuelve *atravesando la pared*: esa celda pasa a ser tu punto de
+  partida. Antes el castigo por equivocarse justo después de cruzar era el peor del juego
+  —te dejaba del lado equivocado **y sin carga** con qué volver—, y encima la
+  determinación es un atajo de ida, no un pasillo abierto.
 - **AHUYENTADOR.** Se **arma** la primera vez que llenás el combo (`COMBO_MAX`, x15) y de
   ahí en más lo único que lo frena es el **cooldown de 45 s**. Antes se pedía el combo al
   tope *en el momento de maullar*, y eso lo volvía inservible: cuando un gato te alcanza
@@ -205,7 +239,7 @@ Son **dos medidores distintos**, y ésa es la regla que más se nota al jugar:
 | | qué es | lo sube | lo baja |
 |---|---|---|---|
 | **COMBO** (`combo`) | la racha de aciertos seguidos | +1 por letra y por QTE ganado | **cualquier error lo borra entero** |
-| **ESTILO** (`stl`) | el grado, lo que se ve como rango | +0,5 por letra **hasta el techo del combo**; +4 el primer gato vencido y +2 más por cada gato encadenado | −3 un error, **−10 perder contra un gato**, y **−0,45 por segundo** todo lo que pase del techo |
+| **ESTILO** (`stl`) | el grado, lo que se ve como rango | +0,5 por letra **hasta el techo del combo**; +4 el primer gato vencido y +2 más por cada gato encadenado; **+9 un esquive al cruce** | −3 un error, **−10 perder contra un gato**, y **−0,45 por segundo** todo lo que pase del techo |
 
 Antes eran la misma variable: una tecla mal tirada te bajaba de SSS a D de una, y con ella
 se iba el maullido, el color de la GUI y las ganas. Ahora la **racha** se pierde de una
@@ -299,6 +333,24 @@ dos notas y el desbloqueo un arpegio de cuatro. Todo entre 0.04 y 0.08 de gananc
 que no canse. El botón **MUSICA** silencia también los efectos. Sin WebAudio disponible,
 `sfx()` no hace nada y el juego sigue igual.
 
+### La música se hunde en el QTE
+
+Un QTE es el momento en que el laberinto deja de existir, así que la música se va con él:
+mientras dura, el volumen baja **sin parar** —el QTE entero para hundirse del todo—, así
+que cuanto menos tiempo te queda, menos se escucha. Ganarlo la devuelve enseguida
+(`MUF_OUT`, 0,65 s). Terminar en jumpscare no: ahí vuelve por el camino largo
+(`MUF_IN`, 2,6 s), con el silencio del susto todavía puesto. Todo va con el reloj real y
+por `dt` de cuadro, con el mismo tope de 250 ms que usa el estilo, así que una pestaña
+dormida no lo salta de golpe; y el volumen sólo se escribe en la pista cuando de verdad
+cambió.
+
+> **ponytail:** es un *ducking*, no un filtro. Un lowpass de verdad pide meter las dos
+> pistas en un `MediaElementSource` de WebAudio, y un `AudioContext` suspendido —que en el
+> teléfono es lo normal hasta el primer gesto— deja la música **muda** en vez de apagada.
+> Si alguna vez vale la pena, el enganche está marcado en el código: `BGM`/`VIBE` →
+> `BiquadFilter(lowpass)` → `destination`, y `muf` pasa a manejar la frecuencia de corte
+> en vez del volumen.
+
 ## Extra vibes
 
 Botón que cambia la música por `Before_the_Iron_Bell` (120 BPM) y pone a latir **toda** la
@@ -327,10 +379,29 @@ el offset que maximiza el flujo espectral sobre la rejilla de 0.5 s, la grilla r
 
 ## Baby mode
 
-Si tu precisión cae debajo del 80% (con al menos 12 teclas de muestra), el juego se
-pausa —el cronómetro también— y ofrece más tiempo de reacción a cambio de un baby point.
-Cada punto suma 35% a la ventana y a la duración del QTE. Cualquiera sea la respuesta,
-no vuelve a preguntar hasta 25 teclas después, para no spamear.
+Cada baby point suma **35%** a la ventana de reacción y a la duración del QTE (`babyK`).
+Hay dos formas de tenerlos, y las dos importan:
+
+**Elegidos antes de entrar.** En la ficha del nivel, debajo de los datos, hay un contador
+de `− 0 +` que dice cuánto tiempo de más vas a tener (`+70% de tiempo para reaccionar`), y
+lo elegido se aplica al apretar **JUGAR**. Era lo que faltaba: la dificultad se decidía
+sólo desde un cartel que aparece **en mitad de la partida**, que es el peor momento
+posible para decidir cuánta ayuda querés.
+
+**Ofrecidos en la partida.** Si tu precisión cae debajo del 80% (con al menos 12 teclas de
+muestra), el juego se pausa —el cronómetro también— y el cartel de *skill issue detectado*
+ofrece un punto. Decir que **sí** lo da y vuelve a preguntar 25 teclas después.
+
+Decir que **no** ya no es lo mismo. Antes el cartel volvía a los 25 teclazos igual que con
+el sí, o sea que "así está bien" no se escuchaba: cada **NO** ahora hace las dos cosas,
+alargar la espera (60 teclas por cada uno, acumulativo) y **bajar el umbral de precisión**
+con el que el cartel se anima a aparecer (12 puntos por NO, con piso en 45%). Al segundo
+NO hay que jugar prácticamente el doble de mal para volver a verlo.
+
+Y para el que no lo quiere ver nunca, está el **interruptor**: `☑ SKILL ISSUE`, en el menú
+de **ESC** y en el selector de nivel. Es el mismo estado en los dos lugares, se recuerda
+entre partidas (`localStorage`) y con él apagado `checkSkill()` no hace nada, por mal que
+se juegue.
 
 ## Pantalla de resultados
 
@@ -472,6 +543,43 @@ Detalles que no se ven pero mandan:
   medidor viejo, ahora laten el reloj, la línea de precisión, la placa del nivel y el
   llenado del rango.
 
+## La GUI es chapa, no tarjetas
+
+La barra de arriba y los paneles eran **tarjetas**: esquina redonda de 10-11px, borde de
+un pelo y una sombra blanda alrededor. Eso es lenguaje de aplicación —el botón que tiene
+cualquier página— y desentonaba con un laberinto de neón lleno de scanlines. Ahora todo lo
+que es GUI está hecho de la misma chapa, con tres tokens en `:root` y nada más:
+
+- **`--mar`** es el color del marco, y de ahí salen bordes `ridge` (paneles, barra,
+  divisiones) y `outset` (botones). Son los biselados **del navegador**: cuestan cero y no
+  piden una sola sombra de más.
+- **`--bev`** es el bisel de un píxel —luz arriba a la izquierda, sombra abajo a la
+  derecha—, que es lo que hace que una caja se lea como una pieza y no como un rectángulo
+  pintado.
+- **`--grid`** es la trama de líneas horizontales, la misma idea que las scanlines del
+  tablero, para que la GUI parezca estar detrás del mismo vidrio.
+
+Las esquinas bajan a 2-3px: nada cuadrado del todo, que se ve accidental, pero lo justo
+para que deje de ser una tarjeta. Encima de eso:
+
+- **El reloj tiene su placa.** Es el dato que más se mira de toda la barra, así que dejó
+  de ser texto suelto y pasó a ser una **lectura**: marco propio, fondo hundido y el
+  número adentro.
+- **Los medidores se leen segmentados.** El de estilo, el de combo y el del cooldown del
+  maullido llevan una capa de segmentos encima del color: una barra que crece lisa es una
+  barra de progreso de navegador, la misma barra partida en segmentos es un medidor de
+  máquina —y encima se puede contar—. El ancho lo sigue moviendo el JS igual que antes.
+- **Los botones son teclas.** `outset` en reposo, `inset` + un píxel de desplazamiento al
+  apretarlos: el gesto de un botón de consola, sin una animación de por medio.
+- **Los paneles tienen barra de título.** El menú de ESC y el selector de nivel llevan una
+  placa rayada arriba, y en la lista de niveles el elegido se **señala** con un `▸` en vez
+  de sombrearse.
+
+Todo esto es `background-image` y `border`: ni una propiedad que anime ni que se salga de
+su caja, así que no cuesta un cuadro más que el look anterior. El único cuidado es que el
+latido de extra vibes pisa el `box-shadow` **entero** de la barra, así que `--bev` viaja
+también en las reglas `.vibes #bar` y `.lite.vibes #bar` (y hay un test que lo mira).
+
 ## Rendimiento
 
 Hay dos capas de optimización, y conviene no mezclarlas.
@@ -502,6 +610,21 @@ entera de la dificultad entre los dos.
 - **`shadowBlur` en las ~660 líneas del laberinto**, redibujadas en cada cuadro y sin
   cambiar hasta el próximo `gen()`. Ahora se hornean a un canvas aparte y el cuadro es un
   `drawImage` (ver abajo).
+- **El destello del ascenso de rango**, que era lo más caro que pasaba en un momento en
+  que además entra volando el cartel del rango. `#bar.up` animaba `background` **y**
+  `box-shadow` sobre una caja del ancho de la pantalla: dos propiedades que el compositor
+  no sabe animar, así que el navegador repintaba toda la barra —más un difuminado de 34px
+  que se sale de su caja— en cada cuadro de la animación. Y el `background` iba de un
+  color sólido a un degradado, que **no interpola**: saltaba a la mitad, o sea que ni
+  siquiera se pagaba por lo que se veía. Ahora el fogonazo es una capa blanca fija
+  (`#bar.up::after`) que se va con `opacity`, que sí se anima en el compositor: mismo
+  golpe de luz, cero repintados. La letra del rango perdió el `filter` animado
+  (`drop-shadow` + `brightness` encima de un texto que ya lleva degradado recortado y dos
+  drop-shadows fijos: cada cuadro rehacía el filtro y volvía a rasterizar el texto) y se
+  quedó sólo con el `transform`; el pico de escala bajó de 2,2 a 1,8 por lo mismo. Y
+  reiniciar las tres animaciones costaba **tres layouts sincrónicos seguidos** —un
+  `void offsetWidth` por elemento—: ahora es uno solo, porque la lectura vacía el estilo
+  pendiente de todo el documento, no del elemento que se lee.
 - **Una sombra difuminada por partícula** (hasta 34). En el teléfono el halo se finge con
   un cuadrado más grande y transparente, sin blur.
 - **Dos `innerHTML` por cuadro en el encabezado**: el navegador reparseaba HTML y
@@ -623,7 +746,8 @@ le cobra al jugador lo que tardó en leer, el QTE que sale es el corto y el resp
 deja es el largo), que los pasos de las **dos habilidades** abran su cartel con la escena
 que les toca y no avancen hasta usarlas de verdad —el de determinación regala la carga,
 deja el tablero sin gatos y espera a que se atraviese un muro (una letra normal no lo
-cierra); el del maullido lo deja armado, suelta dos gatos y espera a que se maulle— y que
+cierra); el del maullido lo deja armado, suelta **el** gato del tutorial y espera a que se
+maulle, y el paso siguiente **no** se lo lleva puesto— y que
 esos carteles tampoco se cierren con una tecla (14b y 14c),
 que el selector pause el reloj y no deje jugar un modo que no existe, que el sótano
 conserve niebla, faroles y acechador (y se pueda terminar), que su ventana por letra sea
@@ -726,6 +850,43 @@ en un cuadro fijo con `prefers-reduced-motion`. Y algo que no se ve hasta que se
 que el bloque de CSS del cartel esté **antes** de los `@media` que lo pisan —tienen la
 misma especificidad, así que ganan por orden, y declarado después ni la pantalla baja ni
 *menos movimiento* hacían nada—.
+
+Del **30** al **34** va lo de esta tanda que es gameplay:
+
+- **30**, el aviso de skill issue: que el **SÍ** siga con su cooldown corto y no toque el
+  umbral, que cada **NO** espere más que el anterior *y* baje el umbral de precisión (con
+  su piso), y que con el interruptor apagado el cartel no salga por mal que se juegue.
+  Los dos botones —el del menú y el del selector— son el mismo estado.
+- **31**, los baby points de arranque: que no bajen de cero ni pasen su tope, que `babyK`
+  acepte un valor suelto sin dejar de leer `baby` cuando no se le pasa ninguno, que entrar
+  al nivel los aplique, y que valgan lo mismo que los que regala el cartel (más ventana
+  por letra **y** más margen en el QTE).
+- **32**, el acechador: que el sótano baje su cara y su grito (y sólo el sótano), que el
+  QTE se acuerde de **quién** te alcanzó —los acechadores son los primeros de `foes`— y
+  que un gato común no pueda pasar por acechador, que su jumpscare use su propio audio y
+  se vaya con fade, que el del resto siga cortando, y que cerrarlo limpie todo.
+- **33**, la música: con un reloj de mentira, que a mitad del QTE vaya por la mitad y al
+  final esté casi muda, que perderlo pida el fade-in largo y ganarlo el corto, y que
+  termine volviendo **exactamente** a su volumen de siempre. Los cuadros se dan de a
+  100 ms a propósito: el `dt` está topado en 250, así que un único salto grande no vale.
+- **34**, el esquive al cruce, de las dos maneras: llamando a `dodge()` con el cruce
+  armado a mano, y —esto es lo que importa— **saliendo de `moveFoes()`**, en un pasillo de
+  dos salidas con el gato viniendo de una, así que la única que le queda es la casilla que
+  dejó el jugador. Sin la segunda mitad, desconectar el bonus de `moveFoes` pasaba el test
+  igual. Y que no cuente lo que no es: ni un gato que va a otro lado, ni el mismo cruce
+  dos minutos después (si no, perseguirte de atrás pagaría siempre).
+
+Del **35** al **38** se lee el CSS y el markup de lo nuevo: que el destello del rango
+**no** anime pintura y viva en su propia capa, que la letra no anime un `filter` y que
+`rankShow` fuerce **un** layout y no tres (35); que la GUI sea chapa y no tarjetas —los
+tres tokens, marco biselado, esquina de 0-3px y trama en la barra y los tres paneles, las
+teclas que se hunden, los tres medidores segmentados, la placa del reloj, y que el bisel
+sobreviva al latido que le pisa el `box-shadow` entero— (36); que los dos interruptores y
+el contador de baby points estén en el markup, que la dificultad se elija **antes** de
+JUGAR, que el interruptor se recuerde y que `checkSkill` lo mire (37); y que el fade del
+acechador exista de los dos lados —CSS y JS—, que su sprite no sea el de los otros gatos,
+que sus dos archivos **no** se bajen al abrir la página, y que la cuenta de monedas se
+dibuje **después** de la niebla y se corra cuando el gato está en la primera fila (38).
 
 > Los `grep` de código van contra `src` (el `game.js` crudo) y contra `flat`, que es el
 > mismo fuente sin los espacios que el formateador mete alrededor de la puntuación.
