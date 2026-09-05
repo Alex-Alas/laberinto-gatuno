@@ -6,7 +6,11 @@ const src=fs.readFileSync(path.join(__dirname,'game.js'),'utf8');
 
 const noop=new Proxy(function(){},{get:()=>noop,apply:()=>noop,set:()=>true});
 const el=()=>({getContext:()=>noop,style:{},value:'',className:'',
-  set textContent(v){},set innerHTML(v){},
+  // textContent se puede LEER: hay pantallas cuyo unico resultado visible es el
+  // texto que dejan (el titulo del resumen, el renglon de la barra), y sin getter
+  // eso no se puede afirmar desde un test
+  set textContent(v){this._t=String(v)},get textContent(){return this._t},
+  set innerHTML(v){},
   set src(v){this._s=v},get src(){return this._s},
   insertAdjacentHTML(){},blur(){},focus(){},addEventListener(){},width:0,height:0});
 
@@ -67,15 +71,50 @@ function botGame(id){
   // se puede ganar antes de tachar la lista: yendo por una moneda se pisan otras
   // y, con todas juntas, cruzar la casilla de salida ya termina la partida
   for(const t of [...coins,C*R-1]){ let guard=0;
-    while(!win && cell()!==t && guard++<400){
+    while(!win && !hunt && cell()!==t && guard++<400){
       if(paused){ babyEnd(false); continue }
       if(qte){ qte.seq.slice().forEach(k=>press(k)); continue }
       press(letters[path(cell(),t)[0]]);
     }
     if(guard>=400) throw new Error('el bot se atoro');
-    if(win) break;
+    if(win||hunt) break;   // pisar la puerta del sotano arranca la cacería
   }
+  // EL SOTANO NO TERMINA EN LA PUERTA: pisarla con todas las monedas arranca la
+  // cacería, y el nivel recién se da por jugado cuando no queda una presa viva.
+  if(hunt) botHunt();
   if(!win) throw new Error('no gano');
+}
+// La cacería, jugada por el bot.  fallar = cuántos anillos errarle a propósito,
+// que es la prueba de que dejar escapar presas la hace mas facil y no la traba.
+function botHunt(fallar){
+  if(!hunt) throw new Error('no hay cacería');
+  hunt.t0-=HUNT_BUILD; huntStep(now());          // el buildup no se juega a 12s reales
+  if(!huntOn()) throw new Error('el buildup no dio paso a la cacería');
+  let guard=0, fall=fallar|0, tgt=-1;
+  while(foes.length && guard++<6000){
+    if(paused){ babyEnd(false); continue }
+    if(qte){
+      if(!qte.ring) throw new Error('la cacería abrio un QTE que no es de anillo');
+      tgt=-1;
+      if(fall>0){ fall--; press([...POOL].find(c=>!qte.eat.has(c))); continue }
+      // A PROPOSITO en orden inverso: si el anillo respetara un orden, esto falla
+      [...qte.eat].reverse().forEach(k=>press(k));
+      continue;
+    }
+    // Se fija UNA presa y no la suelta hasta morderla.  Recalcular la mas cercana a
+    // cada paso hace zigzaguear al bot entre dos presas equidistantes y no llega a
+    // ninguna: eso seria un bug del bot, no de la cacería.
+    if(tgt<0||tgt>=foes.length){
+      let bd=1e9;
+      foes.forEach((f,i)=>{ if(i<(LV.stalk||0)&&foes.length>1) return;
+        const q=path(cell(),f).length; if(q<bd){bd=q;tgt=i} });
+    }
+    if(tgt<0) throw new Error('no quedan presas alcanzables y la cacería sigue');
+    const w=path(cell(),foes[tgt])[0];
+    if(w!==undefined) press(letters[w]);
+    if(!qte){ foeTick=0; moveFoes() }            // y las presas dan su paso
+  }
+  if(foes.length) throw new Error('la cacería no termino: quedaron '+foes.length);
 }
 // foto de TODO lo que define la dificultad: tiene que dar igual en los dos perfiles
 function snap(){
@@ -94,7 +133,12 @@ function snap(){
                          [STYLE_ERR,STYLE_LOSS,STYLE_QTE,STYLE_HIT,STYLE_CHAIN,
                           STYLE_CHAIN_MAX,STYLE_DECAY,STYLE_MAX,
                           GRACE_MS,MEOW_MS,MEOW_CD,MEOW_ARM,MEOW_KILL,MEOW_R,RADAR_MS,RES_MS,
-                          STALK_N,STALK_R0,STALK_RMAX,STALK_PAY],
+                          STALK_N,STALK_R0,STALK_RMAX,STALK_PAY,
+                          QS_MIN,QS_MAX,QS_T0,QS_T1,
+                          HUNT_PREY,HUNT_BUILD,HUNT_EAT,HUNT_DROP,HUNT_SKIP_AT,HUNT_FOE_MS,
+                          HUNT_RING,HUNT_RING_MIN,HUNT_RING_MS,HUNT_ACE_N,HUNT_ACE_ROUNDS,
+                          HUNT_REACH,HUNT_FOG0,HUNT_FOG_STEP,HUNT_STYLE],
+                         [1400,2800,4200,5600,9000].map(qsCap),
                          LEVELS.map(l=>[l.id,l.C,l.R,l.coins,l.foes,l.dur0,l.durMin,l.foe0,l.foeMin]),
                          RANKS.map(r=>[r.c,r.k]),
                          [0,.1,.174,.25,.5].map(bopAt)]);
@@ -732,7 +776,7 @@ gen(); if(det||qteWins) throw new Error('la partida nueva arranco con determinac
 // te alcanza es cuando el combo se esta por romper, y llegar a x15 sin errarle a
 // nada es no necesitarlo mas.
 juega('clasico'); gen(); foes=[]; coins=[]; combo=0; meowAt=-1e9; scareUntil=0; nextAsk=1e9;
-if(MEOW_CD!==25000||MEOW_MS!==2500) throw new Error('el maullido cambio de numeros');
+if(MEOW_CD!==32000||MEOW_MS!==2500) throw new Error('el maullido cambio de numeros');
 if(!(MEOW_ARM<COMBO_MAX)) throw new Error('el maullido tiene que armarse antes del tope del combo');
 if(!(MEOW_KILL>0&&MEOW_KILL<MEOW_CD)) throw new Error('el descuento por gato no tiene sentido');
 step();
@@ -1090,6 +1134,249 @@ if(stl!==STYLE_DODGE) throw new Error('el esquive desde moveFoes no pago estilo'
 // el resumen tiene que poder contarlos sin romperse
 dodges=3; win=true; tEnd=1000; resShow(); resHide(); win=false; dodges=0;
 
+// 35) EL ACECHADOR ES INMUNE AL MAULLIDO
+// El maullido es un susto, y a el los sustos no le hacen nada.  Se comprueban las
+// tres mitades del cambio: no huye, no se acelera mientras dura, y te alcanza igual.
+juega('sotano'); gen(); combo=0; det=0; nextAsk=1e9;
+const rnd2=Math.random; Math.random=()=>.99;    // cualquier gato normal despistaria
+// los dos CERCA: el maullido no llega al otro lado del laberinto (MEOW_R), asi que
+// con far() el gato comun tampoco huiria y la prueba no probaria nada
+const dM=flow(), cercas=[...Array(C*R).keys()].filter(i=>dM[i]>2&&dM[i]<=MEOW_R-2);
+if(cercas.length<2) throw new Error('no hay dos celdas al alcance del maullido');
+foes=[cercas[0],cercas[cercas.length-1]]; prevFoe=[]; foeBeat=0; qte=null;
+meowOn=true; meowAt=-1e9; scareUntil=0;
+if(!meow()) throw new Error('el maullido no salio');
+if(!(now()<scareUntil)) throw new Error('el ahuyentador no quedo activo');
+// el acechador (indice 0) SIGUE bajando por el campo de flujo; el gato comun sube
+const dA0=flow()[foes[0]], dB0=flow()[foes[1]];
+foeBeat=1; moveFoes(); qte=null;                 // foeBeat=2: le toca al acechador
+const dA1=flow()[foes[0]], dB1=flow()[foes[1]];
+if(!(dA1<dA0)) throw new Error('el acechador se dejo ahuyentar por el maullido');
+if(!(dB1>dB0)) throw new Error('el gato comun no huyo con el maullido');
+// ...y sigue yendo a MEDIO paso: inmune no puede significar tambien al doble
+foes=[far()]; prevFoe=[]; foeBeat=0; scareUntil=now()+MEOW_MS;
+const aceQ=foes[0]; moveFoes(); qte=null;
+if(foes[0]!==aceQ) throw new Error('el acechador se acelero con el maullido encima');
+// Y EL CONTACTO: pegado a vos y con el maullido sonando, el acechador te alcanza
+// igual (da el paso que le falta y abre su tanda) y el gato comun se va corriendo.
+// Esa es la diferencia entera, y es la que se ve en la partida.
+const alado=open(cell())[0];
+foes=[alado,far()]; prevFoe=[]; foeBeat=1; scareUntil=now()+MEOW_MS; qte=null;
+moveFoes();
+if(!qte||!qte.st) throw new Error('el acechador no te alcanzo con el maullido encima');
+if(foes[0]!==cell()) throw new Error('el acechador no llego a tu casilla');
+qte=null;
+foes=[far(),alado]; prevFoe=[]; foeBeat=1; scareUntil=now()+MEOW_MS; qte=null;
+moveFoes();
+if(qte) throw new Error('un gato comun te alcanzo con el maullido encima');
+if(foes[1]===cell()) throw new Error('el gato comun no huyo estando pegado a vos');
+qte=null; Math.random=rnd2; scareUntil=0; meowAt=-1e9;
+// y el cartel del maullido lo dice, que si no se lee como un bug
+juega('sotano'); meowOn=true; meowAt=-1e9; note=null; meow();
+if(!/ACECHADOR/.test(String(note&&note.b))) throw new Error('el maullido no avisa que el acechador no se ahuyenta');
+juega('clasico'); meowOn=true; meowAt=-1e9; note=null; meow();
+if(/ACECHADOR/.test(String(note&&note.b))) throw new Error('el clasico habla de un acechador que no existe');
+note=null; scareUntil=0;
+
+// 36) EL TEMBLOR DEL QTE: crece con el reloj, y su TECHO depende de la duracion
+// Un temporizador corto no puede llegar a sacudir como uno largo: si sacudieran
+// igual, la pantalla estaria diciendo lo mismo en los dos casos.
+juega('clasico'); gen(); foes=[]; qte=null;
+if(qShake(now())!==0) throw new Error('sin QTE no hay temblor');
+if(!(qsCap(QS_T0)<qsCap(QS_T1))) throw new Error('el techo no crece con la duracion');
+if(qsCap(QS_T0-5000)!==QS_MIN||qsCap(QS_T1+5000)!==QS_MAX)
+  throw new Error('el techo no queda topado entre QS_MIN y QS_MAX');
+// dentro de un mismo QTE, la sacudida CRECE segun se vacia el reloj
+const T0=now(); qte={seq:['a'],i:0,ms:4000,until:T0+4000};
+const q25=qShake(T0+1000), q75=qShake(T0+3000), q99=qShake(T0+3990);
+if(!(q25<q75&&q75<q99)) throw new Error('el temblor no crece con el reloj del QTE');
+if(!(qShake(T0)<0.001)) throw new Error('el QTE tiene que arrancar casi quieto');
+if(qShake(T0+4000)>qsCap(4000)+1e-9) throw new Error('el temblor paso su propio techo');
+// y a la MISMA altura del reloj, el QTE largo sacude mas que el corto
+const ms1=1400, ms2=5600;
+qte={seq:['a'],i:0,ms:ms1,until:T0+ms1}; const corto=qShake(T0+ms1*0.9);
+qte={seq:['a'],i:0,ms:ms2,until:T0+ms2}; const largo=qShake(T0+ms2*0.9);
+if(!(corto<largo)) throw new Error('el reloj corto sacude tanto como el largo');
+qte=null;
+// ...y el frame publica la amplitud en el CSS con la clase que prende la animacion
+// a mitad del reloj: recien empezado el temblor es cero y no habria clase que ver
+qte={seq:['a'],i:0,ms:4000,until:now()+1400}; lastDraw=0; frame();
+if(!document.documentElement.classList.contains('shk')) throw new Error('el QTE no prendio el temblor de la GUI');
+if(!(parseFloat(css['--qs'])>0)) throw new Error('el CSS no recibio la amplitud del temblor');
+qte=null; lastDraw=0; frame();
+if(document.documentElement.classList.contains('shk')) throw new Error('el temblor no se apago al cerrarse el QTE');
+if(parseFloat(css['--qs'])!==0) throw new Error('la amplitud no volvio a cero');
+
+// 37) LA CACERÍA: el sotano no termina en la puerta
+juega('sotano'); gen(); foes=[]; got=LV.coins; coins=[]; t0=now(); win=false;
+p={x:C-1,y:R-1}; deal();
+if(exitOpen()!==true) throw new Error('con todas las monedas la salida deberia estar abierta');
+key('~');                                     // una tecla cualquiera no dispara nada
+p={x:C-2,y:R-1}; trail=[]; deal();
+// se entra a la casilla de salida de verdad, por la letra que corresponda
+juega('sotano'); gen(); foes=[]; coins=[]; got=LV.coins; t0=now();
+p={x:C-1,y:R-1}; deal(); huntStart();
+if(!hunt||hunt.ph!=='build') throw new Error('la puerta no arranco el buildup');
+if(win) throw new Error('la cacería no puede empezar con el nivel ya ganado');
+if(foes.length!==HUNT_PREY) throw new Error('la horda no es de HUNT_PREY presas: '+foes.length);
+if(exitOpen()) throw new Error('en la cacería no puede haber salida');
+if(coins.length||lamps.length) throw new Error('la primera mitad no se limpio');
+if(track()!==HUNT) throw new Error('la cacería no se llevo la pista');
+// durante el buildup el laberinto esta congelado
+const celdaB=cell(); Object.keys(letters).forEach(d=>press(letters[d]));
+if(cell()!==celdaB) throw new Error('el buildup deberia congelar al jugador');
+// ...y a los HUNT_EAT muta: sprite, paleta y tema del CSS, todo de golpe
+if(hunt.bit) throw new Error('muto antes de comerse la torre');
+hunt.t0=now()-HUNT_EAT; huntStep(now());
+if(!hunt.bit) throw new Error('no se comio la torre a los HUNT_EAT');
+if(PAL!==PALS.hunt) throw new Error('la paleta del canvas no cambio');
+if(!document.documentElement.classList.contains('hunt')) throw new Error('el CSS no se entero de la cacería');
+if(hunt.ph!=='hunt') 0; else throw new Error('la cacería arranco antes del drop');
+hunt.t0=now()-HUNT_BUILD; huntStep(now());
+if(!huntOn()) throw new Error('el drop no dio paso a la cacería');
+lastDraw=0; frame();                          // y el cuadro entero se dibuja sin romperse
+
+// 37b) las presas huyen SI TE SIENTEN, y el ZARPAZO alcanza sin pisarlas
+// Una presa CERCA sale corriendo; una LEJOS ni se entera, y esa es toda la
+// diferencia entre una ráfaga de QTEs y una caminata de cuarenta pasos por presa.
+const dH=flow(), hLejos=[...Array(C*R).keys()].filter(i=>dH[i]>HUNT_SENSE+2);
+// ...y para el que huye, una celda que TENGA para dónde huir: en un laberinto
+// perfecto un callejon sin salida solo puede moverse hacia vos, y eso no seria un
+// bug de la cacería sino la unica salida que le queda
+const hCerca=[...Array(C*R).keys()].filter(i=>dH[i]>2&&dH[i]<=HUNT_SENSE
+  &&open(i).some(n=>dH[n]>dH[i]));
+if(!hLejos.length||!hCerca.length) throw new Error('el sotano no da para probar HUNT_SENSE');
+foes=[far(),hCerca[hCerca.length-1]]; hunt.slow=[0,0]; prevFoe=[]; foeBeat=0; qte=null;
+const hd0=flow()[foes[1]];
+foeBeat=1; moveFoes(); qte=null;
+if(!(flow()[foes[1]]>hd0)) throw new Error('una presa cerca no huyo');
+// ...y la que esta lejos no puede estar huyendo: no sabe que existis
+foes=[far(),hLejos[0]]; hunt.slow=[0,0]; prevFoe=[]; foeBeat=0; qte=null;
+if(huntSees(1,false,flow(),foes[1])) throw new Error('una presa lejos no deberia sentirte');
+if(!huntSees(1,false,flow(),hCerca[0])) throw new Error('una presa cerca tiene que sentirte');
+if(!(huntPace(1,false,false)>huntPace(1,false,true)))
+  throw new Error('la presa que pasea tendria que ir mas lenta que la que huye');
+// ...y la que no te siente SE ACERCA: es lo que hace que la cacería sea una rafaga
+// y no una caminata por un sotano de 17x13
+foes=[far(),hLejos[0]]; hunt.slow=[0,0]; prevFoe=[]; foeBeat=0; qte=null;
+const dLejos=flow()[foes[1]];
+for(let n=0;n<8;n++){ foeBeat=n*3+2; moveFoes(); qte=null }
+if(!(flow()[foes[1]]<dLejos)) throw new Error('la presa que no te siente no se acerca');
+// el zarpazo: una presa a un par de celdas ya se puede morder, sin pisarla
+const vec=open(cell())[0];
+foes=[far(),vec]; hunt.slow=[0,0]; hunt.prey=-1; qte=null;
+huntGrab(flow());
+if(!qte) throw new Error('el zarpazo no alcanza a la presa de al lado');
+if(!(HUNT_REACH>=1)) throw new Error('sin alcance el zarpazo no existe');
+if(!qte.ring) throw new Error('la cacería tiene que abrir un QTE de anillo');
+// 37c) EL ANILLO NO TIENE ORDEN: se muerde por donde se puede
+const anillo=[...qte.seq];
+if(qte.eat.size!==anillo.length) throw new Error('el anillo no arranco entero');
+[...anillo].reverse().forEach(k=>{ const n0=qte&&qte.eat.size; press(k);
+  if(qte&&qte.eat.size!==n0-1) throw new Error('el anillo rechazo una letra por el orden') });
+if(qte) throw new Error('morder todas las letras no cerro el anillo');
+if(hunt.eaten!==1) throw new Error('la presa devorada no se conto');
+if(foes.length!==1) throw new Error('la presa devorada no se fue de foes');
+
+// 37d) dejar escapar una presa la hace MAS LENTA y con MENOS letras: la cacería
+// converge sola, y ese es el unico motivo por el que no se puede trabar
+juega('sotano'); gen(); foes=[]; coins=[]; got=LV.coins; t0=now();
+p={x:C-1,y:R-1}; deal(); huntStart(); hunt.t0=now()-HUNT_BUILD; huntStep(now());
+foes=[far(),far()]; hunt.slow=[0,0]; prevFoe=[]; hunt.prey=1; qte=null;
+qteStart(); const n1=qte.seq.length, p1=huntPace(1,false);
+press([...POOL].find(c=>!qte.eat.has(c)));    // se le erra a proposito
+if(qte) throw new Error('errarle al anillo no lo cerro');
+if(hunt.esc!==1) throw new Error('el escape no se conto');
+if(hunt.slow[1]!==1) throw new Error('la presa que se escapo no quedo mas lenta');
+if(!(huntPace(1,false)>p1)) throw new Error('el lastre no la frena de verdad');
+hunt.prey=1; qteStart();
+if(!(qte.seq.length<n1)) throw new Error('el anillo no se acorto tras el escape');
+if(qte.seq.length<HUNT_RING_MIN) throw new Error('el anillo bajo del piso');
+qte=null;
+// ...y el piso aguanta por muchos escapes que se le regalen
+hunt.slow[1]=99; hunt.prey=1; qteStart();
+if(qte.seq.length!==HUNT_RING_MIN) throw new Error('el piso del anillo no aguanta');
+qte=null;
+
+// 37d-bis) EL RUGIDO: en la cacería el mismo boton deja de ahuyentar y PARALIZA
+foes=[far(),far()]; hunt.slow=[0,0]; prevFoe=[]; foeBeat=0; qte=null;
+meowOn=true; meowAt=-1e9; scareUntil=0; note=null;
+if(!meow()) throw new Error('el rugido no salio');
+if(!/RUGIDO/.test(String(note&&note.a))) throw new Error('en la cacería el cartel tiene que decir RUGIDO');
+if(!(now()<scareUntil)) throw new Error('el rugido no dejo su ventana');
+// una presa dentro del alcance no se mueve mientras dura
+const dR=flow(), rCerca=[...Array(C*R).keys()].find(i=>dR[i]>1&&dR[i]<=MEOW_R);
+foes=[far(),rCerca]; hunt.slow=[0,0]; prevFoe=[]; foeBeat=1; qte=null;
+moveFoes(); qte=null;
+if(foes[1]!==rCerca) throw new Error('el rugido no paralizo a la presa cercana');
+scareUntil=0; foeBeat=1; moveFoes(); qte=null;
+if(foes[1]===rCerca) throw new Error('sin rugido la presa tendria que haberse movido');
+scareUntil=0; meowAt=-1e9; note=null;
+
+// 37e) EL ACECHADOR CIERRA: se guarda para el final, carga en vez de huir, y se
+// come en varias rondas
+juega('sotano'); gen(); foes=[]; coins=[]; got=LV.coins; t0=now();
+p={x:C-1,y:R-1}; deal(); huntStart(); hunt.t0=now()-HUNT_BUILD; huntStep(now());
+const vec2=open(cell())[0];
+foes=[vec2,far()]; hunt.slow=[0,0]; hunt.prey=-1; qte=null;
+huntGrab(flow());
+if(qte) throw new Error('el acechador se dejo agarrar con presas todavia vivas');
+if(huntCharge(0,true)) throw new Error('el acechador carga antes de ser el ultimo');
+foes=[vec2]; hunt.slow=[0]; prevFoe=[];
+if(!huntCharge(0,true)) throw new Error('el ultimo acechador tiene que cargar');
+huntGrab(flow());
+if(!qte) throw new Error('el acechador ultimo no se dejo morder');
+if(!qte.st) throw new Error('el anillo del acechador no trae su cara');
+if(qte.rounds!==HUNT_ACE_ROUNDS) throw new Error('el acechador se come de un bocado');
+[...qte.eat].forEach(k=>press(k));
+if(!qte||qte.round!==2) throw new Error('la primera ronda no encadeno la segunda');
+if(foes.length!==1) throw new Error('el acechador se fue antes de la ultima ronda');
+[...qte.eat].forEach(k=>press(k)); [...qte.eat].forEach(k=>press(k));
+if(foes.length) throw new Error('el acechador sobrevivio a sus tres rondas');
+if(!win) throw new Error('devorar a la ultima presa no desbloqueo el final');
+if(hunt.ph!=='end') throw new Error('la cacería no llego a su fase final');
+// el resumen del final se llama distinto y trae sus fichas
+resAt=now()-1; lastDraw=0; frame();
+if(!resOn) throw new Error('el final no mostro su resumen');
+if(rttl.textContent!=='FINAL DESBLOQUEADO') throw new Error('el final no se anuncia como tal');
+resHide();
+
+// 37f) EL BUILDUP SE SALTA SOLO EN REJUGADAS, y al punto exacto de la pista
+juega('sotano'); gen(); foes=[]; coins=[]; got=LV.coins; t0=now();
+p={x:C-1,y:R-1}; deal();
+huntSeen=false; huntStart();
+if(huntSkip()) throw new Error('la primera vez el buildup no se salta');
+hunt.t0=now()-HUNT_SKIP_AT-1;
+if(huntSkip()) throw new Error('esperar no habilita el salto si nunca se vio entero');
+huntSeen=true;
+hunt.t0=now();
+if(huntSkip()) throw new Error('el salto se ofrecio antes de HUNT_SKIP_AT');
+hunt.t0=now()-HUNT_SKIP_AT-1;
+if(!huntSkip()) throw new Error('en la rejugada el buildup tiene que poder saltarse');
+if(HUNT.currentTime!==HUNT_DROP) throw new Error('el salto no cayo en el punto exacto de la pista');
+if(!hunt.bit) throw new Error('saltar no puede saltearse la transformacion');
+huntStep(now());
+if(!huntOn()) throw new Error('el salto no dejo la cacería lista para jugarse');
+// ...y llegar al final enciende el flag para la proxima
+if(!huntSeen) throw new Error('el final no dejo el buildup marcado como visto');
+// gen() devuelve el sotano a como estaba: sin cacería, sin tema rojo
+gen();
+if(hunt||PAL!==PALS.base) throw new Error('gen() no desarmo la cacería');
+if(document.documentElement.classList.contains('hunt')) throw new Error('el tema rojo sobrevivio al reinicio');
+if(exitOpen()!==false) throw new Error('la partida nueva arranco con la salida abierta');
+
+// 37g) LA CACERÍA SE TERMINA SIEMPRE, tambien cuando se le regalan escapes.
+// Es la promesa entera de esta mitad del nivel: una cacería que se puede trabar no
+// es una cacería.  El bot la juega errandole a los primeros anillos a proposito.
+for(const fallos of [0,3,6]){
+  juega('sotano'); gen(); foes=[]; coins=[]; got=LV.coins; t0=now();
+  p={x:C-1,y:R-1}; deal(); huntStart(); botHunt(fallos);
+  if(!win||hunt.ph!=='end') throw new Error('la cacería no cerro con '+fallos+' escapes');
+  if(hunt.eaten!==HUNT_PREY) throw new Error('quedaron presas sin devorar');
+  if(hunt.esc!==fallos) throw new Error('se contaron mal los escapes: '+hunt.esc);
+}
+juega('clasico');
+
 // 17) escritorio: el perfil lite NO se aplica, todo queda como estaba
 if(MOBILE) throw new Error('escritorio detectado como movil');
 if(PERF.scan||PERF.glow!==1||PERF.fps||PERF.hudMs||PERF.dust!==1)
@@ -1301,7 +1588,7 @@ const flat=src.replace(/"/g,"'").replace(/ *([=?:,;{}()[\]]) */g,'$1');
 if(!/<link[^>]+href=style\.css/.test(mk)) throw new Error('el index no carga style.css');
 if(!/<script src=game\.js>/.test(mk)) throw new Error('el index no carga game.js');
 const rutas=[...new Set([...src.matchAll(/"(assets\/[\w.-]+)"/g)].map(m=>m[1]))];
-if(rutas.length!==13) throw new Error('el juego dejo de tener sus 13 assets: '+rutas.length);
+if(rutas.length!==16) throw new Error('el juego dejo de tener sus 16 assets: '+rutas.length);
 for(const a of rutas)
   if(!fs.existsSync(path.join(__dirname,a))) throw new Error('falta el archivo '+a);
 
@@ -1521,8 +1808,12 @@ if(hb.indexOf('id=hok')<hb.indexOf('id=hdmeow'))
 // los colores salen del MISMO sitio que los del canvas: el violeta con el que se
 // gasta una carga, el celeste de la onda del maullido y el azul de las paredes
 const vio=(src.match(/det--;[\s\S]{0,900}?burst\([^)]*?"(#[0-9a-f]{3,6})"/i)||[])[1];
-const cel=(src.match(/scareUntil = meowAt[\s\S]{0,1400}?burst\([^)]*?"(#[0-9a-f]{3,6})"/i)||[])[1];
-const muro=(src.match(/k\.strokeStyle = "(#[0-9a-f]{3,6})"/i)||[])[1];
+// el celeste se lee del cartel del propio maullido: el burst que lo acompaña ya no
+// es el primero de la función (en la cacería el mismo boton ruge, y ese va en rojo)
+const cel=(src.match(/¡MAULLIDO!"[\s\S]{0,400}?"(#[0-9a-f]{3,6})"/i)||[])[1];
+// las paredes ya no traen el color escrito en el horneado: lo toman de la paleta
+// (PALS.base), que es de donde tiene que salir ahora el unico color de pared que hay
+const muro=(src.match(/base: \{[\s\S]{0,200}?wall: "(#[0-9a-f]{3,6})"/i)||[])[1];
 if(!vio||!cel||!muro) throw new Error('no se pudieron leer del canvas los colores de las habilidades');
 const pasa=(sel,c,q)=>{ if(bloque(sel).indexOf(c)<0) throw new Error(q) };
 pasa('#hdk',vio,'la letra de la demo no es el violeta de la determinacion');
@@ -1554,8 +1845,28 @@ if(style.indexOf('#hddet *,#hddet::after,#hdmeow *{animation:none')<0)
 // movimiento" ni la pantalla baja hacian nada (y no se nota hasta que se prueba)
 if(!(style.indexOf('.hdemo{')<style.indexOf('@media (max-height:620px)')))
   throw new Error('el CSS del cartel tiene que ir antes de los @media que lo pisan');
-if(!(style.indexOf('#hdcat{')<style.indexOf('@media (prefers-reduced-motion:reduce)')))
+// se compara contra SU override y no contra el primer @media de menos movimiento que
+// aparezca: ahora hay mas de uno (el temblor del QTE tiene el suyo, mas arriba) y
+// buscar la media query suelta medía el orden de otra regla, no el de esta
+if(!(style.indexOf('#hdcat{')<style.indexOf('#hddet *,#hddet::after,#hdmeow *{animation:none')))
   throw new Error('la demo se declara despues de su propio override de menos movimiento');
+// EL TEMBLOR DEL QTE en el CSS: la animacion, la clase que la prende (y que no
+// deja una capa de compositor corriendo cuando no hay QTE) y el respeto por quien
+// pidio menos movimiento
+if(style.indexOf('@keyframes qshake')<0) throw new Error('falta la animacion del temblor del QTE');
+if(style.indexOf(':root.shk #stage')<0||style.indexOf(':root.shk #log')<0)
+  throw new Error('el temblor no esta atado a la clase que lo prende');
+if(style.indexOf('prefers-reduced-motion:reduce){:root.shk #stage,:root.shk #log{animation:none')<0)
+  throw new Error('menos movimiento no apaga el temblor de la GUI');
+// EL TEMA DE LA CACERÍA: no alcanza con teñir el tablero.  El menu de pausa y los
+// carteles son las pantallas donde el jugador se detiene, y si ahi sigue la consola
+// azul de siempre el juego le esta diciendo que lo de afuera es un decorado.
+if(style.indexOf(':root.hunt{')<0) throw new Error('falta el tema de la cacería');
+if(!/:root\.hunt\{[^}]*--mar:/.test(style)) throw new Error('el tema de la cacería no cambia el marco de la chapa');
+['.hunt #menu>div','.hunt #res>div','.hunt #hab>div','.hunt #bar','.hunt canvas','.hunt #board::after'].forEach(sel=>{
+  if(style.indexOf(sel)<0) throw new Error('el tema de la cacería no llega a '+sel);
+});
+
 // y el cartel se cierra por su boton y nada mas, igual que el del primer encuentro
 if(!/hok\.onclick=habGo/.test(flat)) throw new Error('ENTENDIDO no esta cableado');
 if(!/HAB_LOCK/.test(flat)) throw new Error('el cartel no espera a que se lo pueda leer');
@@ -1645,7 +1956,10 @@ if(/^STALK\.src *=/m.test(src)||/^LOBO\.src *=/m.test(src))
 // el terror del QTE: el latido y el ruido tienen que ir pegados al MISMO muf que
 // hunde la musica (si no, son dos fades sueltos que no se cruzan), y tiene que
 // quedar el enchufe para los mp3 propios del dia que existan
-if(!/dreadSet\(muf\)/.test(flat)) throw new Error('el terror del QTE no va pegado al fade-out de la musica');
+// en el QTE el latido sigue atado a `muf` (el mismo hundimiento de la musica); fuera
+// del QTE ya hay otra fuente, la cacería, que lo mantiene encendido con su propio
+// nivel — pero el QTE manda sobre ella, y eso es lo que se comprueba acá
+if(!/dreadSet\(qte\?muf:/.test(flat)) throw new Error('el terror del QTE no va pegado al fade-out de la musica');
 if(!/DREAD_SRC=\{heart:'',noise:''\}/.test(flat)) throw new Error('no quedo donde enchufar los mp3 del latido y el ruido');
 // la cuenta de monedas se lee en el tablero, no solo arriba.  Va DESPUES de la
 // niebla: si no, en el sotano —donde mas hace falta— queda tapada.

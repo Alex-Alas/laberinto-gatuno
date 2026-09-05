@@ -142,6 +142,57 @@ p.help {
 	position: relative;
 	width: var(--w);
 }
+/* ---- EL TEMBLOR DEL QTE ----------------------------------------------------
+    --qs lo publica el JS en <html> durante el QTE: son los píxeles de amplitud, ya
+    cuantizados a medio píxel y creciendo con el reloj (ver qShake en game.js).  El
+    canvas tiembla por su cuenta desde el setTransform; esto es para todo lo DEMÁS
+    —la barra de arriba y el log de teclas—, que hasta ahora se quedaba tieso
+    mientras el gato te comía la pantalla.
+
+    Se hace con una animación y no escribiendo el transform cuadro a cuadro: la
+    amplitud entra por la variable y los pasos los pone el compositor, así que
+    subir la intensidad no cuesta ni una recalculación de estilo más que las ~28
+    que ya cuesta mover --qs.  Y por eso el jitter va en la animación misma, con
+    offsets primos entre sí, que es lo que hace que no se lea como un vaivén. */
+@keyframes qshake {
+	0% {
+		transform: translate3d(calc(var(--qs) * -1px), calc(var(--qs) * 0.4px), 0);
+	}
+	20% {
+		transform: translate3d(calc(var(--qs) * 0.7px), calc(var(--qs) * -1px), 0);
+	}
+	40% {
+		transform: translate3d(calc(var(--qs) * 1px), calc(var(--qs) * 0.8px), 0);
+	}
+	60% {
+		transform: translate3d(calc(var(--qs) * -0.6px), calc(var(--qs) * -0.9px), 0);
+	}
+	80% {
+		transform: translate3d(calc(var(--qs) * 0.9px), calc(var(--qs) * 0.3px), 0);
+	}
+	100% {
+		transform: translate3d(calc(var(--qs) * -0.8px), calc(var(--qs) * -0.5px), 0);
+	}
+}
+/* La animación corre SÓLO con la clase puesta (la pone y la saca el mismo frame
+    que escribe --qs, al cruzar el cero).  Dejarla infinita todo el tiempo con --qs
+    en 0 también "funcionaba", pero deja una capa de compositor y un tick de
+    animación corriendo en cada partida para no mover nada. */
+:root.shk #stage,
+:root.shk #log {
+	animation: qshake 90ms steps(1, end) infinite;
+	will-change: transform;
+}
+:root {
+	--qs: 0;
+}
+/* el que pidió menos movimiento no quiere JUSTO éste: es el más violento del juego */
+@media (prefers-reduced-motion: reduce) {
+	:root.shk #stage,
+	:root.shk #log {
+		animation: none;
+	}
+}
 /* el tablero es su propia caja: lo que se superpone al laberinto (explosión,
     cartel de rango) se posiciona contra el canvas y no contra la barra de info */
 #board {
@@ -2533,4 +2584,138 @@ p.help {
 }
 .lite #lname {
 	font-size: 22px;
+}
+
+/* ============================================================================
+    LA CACERÍA: la GUI de terror
+    ============================================================================
+    La clase .hunt la pone el JS en <html> en el instante EXACTO en que el gato se
+    come la torre de nuggets (ver huntBiteTower en game.js), y no antes: el cambio
+    de piel es un golpe, no un fundido.
+
+    Todo esto es redefinir variables, no reescribir reglas.  La GUI ya estaba hecha
+    de tres ingredientes —--mar (el marco del que salen los bordes ridge/outset),
+    --bev (el bisel) y --grid (la trama)— así que cambiarle el color a la consola
+    entera cabe en un bloque.  Lo que se agrega aparte son las cuatro piezas donde
+    el azul estaba escrito a mano: el resplandor del canvas, las scanlines, el
+    llenado del combo y el halo del rango.
+
+    Y alcanza al MENÚ DE PAUSA y a los carteles a propósito: si el jugador abre el
+    menú en mitad de la cacería y se encuentra la consola azul de siempre, el juego
+    le está diciendo que lo de afuera es un decorado.  Adentro de la cacería no hay
+    ninguna pantalla que siga siendo del otro juego. */
+:root.hunt {
+	--mar: #6b1122;
+	--bev:
+		inset 1px 1px 0 #ff6f7f33,
+		inset -1px -1px 0 #000000c4;
+	/* la trama va más densa y más sucia: la misma idea, peor mantenida */
+	--grid: repeating-linear-gradient(#0000 0 2px, #12000699 2px 3px);
+	--rc: #ff3550;
+}
+.hunt body {
+	background: #0a0104;
+	color: #ffb9c2;
+}
+/* el resplandor del tablero deja de ser cian y pasa a ser una herida */
+.hunt canvas {
+	border-color: #f4455a55;
+	box-shadow:
+		0 0 calc(26px + var(--bop, 0) * 34px) #f0223a3d,
+		inset 0 0 46px #90001a2e;
+}
+/* scanlines más marcadas y con deriva: la señal ya no está sana */
+.hunt #board::after {
+	background: repeating-linear-gradient(#3000060f 0 1px, #0000 1px 3px),
+		repeating-linear-gradient(#00000059 0 1px, #0000 1px 3px);
+}
+.hunt #log {
+	background: var(--grid), #12040788;
+	color: #ffa8b4;
+}
+/* los paneles: mismo bisel de chapa, otra chapa */
+.hunt #menu > div,
+.hunt #lvl > div,
+.hunt #res > div,
+.hunt #skill > div,
+.hunt #brief > div,
+.hunt #hab > div {
+	background: var(--grid), #0d0206;
+}
+/* los encabezados de los paneles: la placa también es chapa, y también se oxida */
+.hunt #menu h3,
+.hunt #lvl h3,
+.hunt #brief h3,
+.hunt #hab h3,
+.hunt #skill h3 {
+	color: #ffc2cb;
+	text-shadow: 0 0 8px #ff2040cc;
+	background:
+		repeating-linear-gradient(-45deg, #ff6f7f1f 0 2px, #0000 2px 5px),
+		linear-gradient(180deg, #4a0a18, #1c0409);
+}
+.hunt #res #rttl {
+	color: #ff5c72;
+	text-shadow: 0 0 14px #ff20406b;
+}
+/* las fichas del resumen: son casi todo lo que se mira en esa pantalla */
+.hunt #rgrid div {
+	border-color: #f4455a4d;
+	background: #12040788;
+}
+.hunt #rgrid b,
+.hunt #rtime {
+	color: #ffd2d8;
+}
+.hunt #rsub,
+.hunt #rtag {
+	color: #ff9aa8;
+}
+/* Los BOTONES son la mitad de la superficie de un panel: sin esto el menú de pausa
+    en plena cacería seguía siendo una consola azul con marco rojo, que es peor que
+    no haber cambiado nada. */
+.hunt #btns button,
+.hunt #skill button,
+.hunt #brief button,
+.hunt #lvl button,
+.hunt #tut button,
+.hunt #res button,
+.hunt #hab button {
+	color: #ffb9c2;
+	background: var(--grid), linear-gradient(180deg, #2a0810, #120206);
+	text-shadow: 0 0 7px #ff204066;
+}
+.hunt #btns button:hover,
+.hunt #btns button:focus-visible,
+.hunt #skill button:hover,
+.hunt #skill button:focus-visible,
+.hunt #brief button:hover,
+.hunt #brief button:focus-visible,
+.hunt #lvl button:hover,
+.hunt #lvl button:focus-visible,
+.hunt #res button:hover,
+.hunt #res button:focus-visible,
+.hunt #tut button:hover,
+.hunt #tut button:focus-visible,
+.hunt #hab button:hover,
+.hunt #hab button:focus-visible {
+	background: var(--grid), linear-gradient(180deg, #451020, #1c0409);
+	border-color: #b8324c;
+	box-shadow: 0 0 14px #ff20404d;
+}
+.hunt #bar {
+	background: var(--grid),
+		linear-gradient(180deg, #1b0409f2, #0a0104f2);
+	box-shadow:
+		0 0 16px #f0223a33,
+		var(--bev);
+}
+.hunt #bfill {
+	background: linear-gradient(90deg, #7a0f22, #ff3550);
+}
+/* ...y el botón del maullido, que en la cacería es lo único que sigue siendo azul
+    en la barra si no se lo toca */
+.hunt #bmeow.ready {
+	color: #ff8a9a;
+	border-color: #f4455a;
 }
