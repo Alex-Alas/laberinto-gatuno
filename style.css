@@ -27,6 +27,29 @@
 		"Arial Narrow", "Roboto Condensed", "Avenir Next Condensed",
 		"Liberation Sans Narrow", "Helvetica Neue", Helvetica, Arial,
 		sans-serif;
+	/* ---- CHAPA: los tres ingredientes de la GUI retro ----------------------
+	    La barra y los paneles eran tarjetas: esquina redonda de 10px, borde de un
+	    pelo y una sombra blanda alrededor.  Eso es lenguaje de aplicación, no de
+	    máquina, y desentonaba con un laberinto de neón lleno de scanlines.  Ahora
+	    todo lo que es GUI está hecho de chapa:
+	      --bev   el bisel de un píxel —luz arriba a la izquierda, sombra abajo a
+	              la derecha—, que es lo que hace que una caja se lea como una
+	              pieza física y no como un rectángulo pintado;
+	      --grid  la trama de líneas horizontales, la misma idea que las
+	              scanlines del tablero, para que la GUI parezca estar detrás del
+	              mismo vidrio;
+	      --mar   el color del marco, del que salen los bordes `ridge` y `outset`
+	              (biselados de verdad, los del navegador, sin una sola sombra de
+	              más).
+	    Las esquinas bajan de 10-11px a 2-3px: nada cuadrado del todo, que se ve
+	    accidental, pero lo justo para que deje de ser una tarjeta.  Todo esto es
+	    background-image y borde: ni una propiedad que anime ni que se salga de su
+	    caja, así que no cuesta un cuadro más que el look anterior. */
+	--mar: #1d466b;
+	--bev:
+		inset 1px 1px 0 #6fd3ff3d,
+		inset -1px -1px 0 #000000a6;
+	--grid: repeating-linear-gradient(#0000 0 2px, #00000042 2px 3px);
 }
 body {
 	background: #08080c;
@@ -74,10 +97,10 @@ body {
 	letter-spacing: 3px;
 	word-break: break-all;
 	text-align: center;
-	border: 1px solid #1ff3;
-	border-radius: 4px;
+	border: 2px ridge var(--mar);
+	border-radius: 2px;
 	padding: 4px 6px;
-	background: #0b0b1288;
+	background: var(--grid), #0b0b1288;
 }
 #log span {
 	text-shadow: 0 0 6px currentColor;
@@ -137,6 +160,23 @@ p.help {
 	z-index: 99;
 	background: #000 center/cover no-repeat;
 }
+/* El jumpscare del ACECHADOR del sótano no corta cuando termina el grito: se
+    DISUELVE.  Pleno hasta el 32% y de ahí a cero, que es el mismo perfil con el
+    que frame() le baja el volumen al audio (ver SCARE_FADE en game.js): la cara
+    y el grito se van juntos.  Es una opacidad y nada más, así que el desvanecido
+    lo resuelve el compositor sin repintar la pantalla entera. */
+#scare.fade {
+	animation: scarefade 2.2s ease-in forwards;
+}
+@keyframes scarefade {
+	0%,
+	32% {
+		opacity: 1;
+	}
+	to {
+		opacity: 0;
+	}
+}
 /* Los botones secundarios viven dentro del menú en los DOS perfiles: en fila
     abajo del tablero le comían al laberinto el alto que ahora se lleva él, y ese
     ruido permanente era para cosas que se tocan una vez por partida. */
@@ -148,23 +188,39 @@ p.help {
 #btns button {
 	width: 100%;
 }
-/* los botones del menú: blanco grande y esquina redonda, los mismos en todos los
-    paneles del juego */
+/* Los botones de todos los paneles.  Eran pastillas planas de esquina redonda —el
+    botón que tiene cualquier página— y ahora son TECLAS: borde `outset`, que es el
+    biselado que trae el navegador de fábrica y no cuesta ni una sombra, la misma
+    trama que el resto de la chapa, y al apretarlas el borde pasa a `inset` y la
+    tecla se hunde un píxel.  Nada de esto es una imagen ni una animación. */
 #btns button,
 #skill button,
 #brief button,
 #lvl button,
 #tut button,
-#res button {
+#res button,
+#hab button {
 	font: inherit;
 	font-size: 12px;
 	letter-spacing: 2px;
 	color: #9ef;
 	cursor: pointer;
-	background: #0b0b12;
-	border: 1px solid #1ff6;
-	border-radius: 6px;
-	padding: 9px 15px;
+	background: var(--grid), linear-gradient(180deg, #131f31, #090d16);
+	border: 3px outset var(--mar);
+	border-radius: 2px;
+	padding: 8px 14px;
+	text-shadow: 0 0 7px #0ff5;
+}
+/* la tecla se hunde: mismo gesto que un botón de consola */
+#btns button:active,
+#skill button:active,
+#brief button:active,
+#lvl button:active,
+#tut button:active,
+#res button:active,
+#hab button:active {
+	border-style: inset;
+	transform: translate(1px, 1px);
 }
 #btns button:hover,
 #btns button:focus-visible,
@@ -177,8 +233,11 @@ p.help {
 #res button:hover,
 #res button:focus-visible,
 #tut button:hover,
-#tut button:focus-visible {
-	background: #12243a;
+#tut button:focus-visible,
+#hab button:hover,
+#hab button:focus-visible {
+	background: var(--grid), linear-gradient(180deg, #1b3552, #0e1728);
+	border-color: #2f6d9e;
 	box-shadow: 0 0 14px #0ff4;
 	outline: none;
 }
@@ -1150,8 +1209,10 @@ p.help {
 	color: #f9a;
 	font-size: 12px;
 }
-#btns button.on {
-	background: #12243a;
+/* el interruptor prendido, igual en el menú y en el selector de nivel */
+#btns button.on,
+#lskb.on {
+	background: var(--grid), linear-gradient(180deg, #2a1526, #150a13);
 	border-color: #f9a;
 	color: #f9a;
 	box-shadow: 0 0 14px #f458;
@@ -1174,15 +1235,18 @@ p.help {
 #menu.open {
 	display: grid;
 }
+/* mismo tratamiento que la barra: chapa con marco biselado y trama, no tarjeta */
 #menu > div {
 	width: min(420px, 94vw);
 	max-height: 96dvh;
 	overflow: auto;
-	background: #080c14;
-	border: 1px solid #1ff6;
-	border-radius: 10px;
+	background: var(--grid), #080c14;
+	border: 3px ridge var(--mar);
+	border-radius: 3px;
 	padding: 16px;
-	box-shadow: 0 0 40px #0ff3;
+	box-shadow:
+		0 0 40px #0ff3,
+		var(--bev);
 }
 #menu h3 .esc {
 	font-size: 10px;
@@ -1193,12 +1257,24 @@ p.help {
 	padding: 2px 5px;
 	margin-left: 6px;
 }
+/* el título es la placa de la ventana: rayado diagonal a los costados del texto,
+    como la barra de título de cualquier consola de los 90 */
 #menu h3 {
-	margin: 0 0 10px;
+	margin: -16px -16px 12px;
+	padding: 7px 10px;
 	font-size: 14px;
-	letter-spacing: 2px;
+	letter-spacing: 3px;
 	text-align: center;
-	color: #9ef;
+	color: #cff;
+	text-shadow: 0 0 8px #0ff8;
+	border-bottom: 3px ridge var(--mar);
+	background:
+		repeating-linear-gradient(
+			-45deg,
+			#6fd3ff1f 0 2px,
+			#0000 2px 5px
+		),
+		linear-gradient(180deg, #143253, #0a1728);
 }
 #mstats {
 	margin: 0 0 14px;
@@ -1216,7 +1292,7 @@ p.help {
 	color: #9ef;
 	background: none;
 	border: 0;
-	border-right: 1px solid #1ff4;
+	border-right: 3px ridge var(--mar);
 	padding: 0 12px;
 	cursor: pointer;
 	-webkit-tap-highlight-color: transparent;
@@ -1240,13 +1316,19 @@ p.help {
 	-webkit-text-fill-color: transparent;
 	filter: drop-shadow(0 0 20px var(--rc, #4cf)) drop-shadow(0 2px 0 #000c);
 }
+/* El golpe de la letra es SÓLO transform: el compositor lo resuelve sin repintar.
+    Antes también animaba `filter` —un drop-shadow más un brightness— encima de un
+    texto que ya lleva degradado recortado (background-clip) y dos drop-shadows
+    fijos: cada cuadro de la animación rehacía el filtro y volvía a rasterizar el
+    texto.  El fogonazo blanco que aportaba ese filter lo pone ahora la capa de
+    #bar.up::after, que es una opacidad y nada más.  El 2.2 de pico bajó a 1.8 por
+    lo mismo: escalar un texto filtrado obliga a rerasterizarlo al tamaño nuevo. */
 @keyframes rankup {
 	0% {
-		transform: skewX(-11deg) scale(2.2);
-		filter: drop-shadow(0 0 22px #fff) brightness(2.6);
+		transform: skewX(-11deg) scale(1.8);
 	}
 	55% {
-		transform: skewX(-11deg) scale(1.14);
+		transform: skewX(-11deg) scale(1.12);
 	}
 	to {
 		transform: skewX(-11deg) scale(1);
@@ -1337,12 +1419,13 @@ p.help {
 	min-height: var(--barh);
 	overflow: hidden;
 	margin-bottom: 6px;
-	border: 1px solid #1ff5;
-	border-radius: 11px;
-	background: linear-gradient(180deg, #0c1524f2, #05070ef2);
+	/* chapa: marco biselado, trama encima del degradado y bisel de un píxel */
+	border: 2px ridge var(--mar);
+	border-radius: 3px;
+	background: var(--grid), linear-gradient(180deg, #0c1524f2, #05070ef2);
 	box-shadow:
 		0 0 14px #0ff2,
-		inset 0 1px 0 #9ef3;
+		var(--bev);
 }
 /* placa del nivel: sólo escritorio, que es donde hay ancho para nombrarlo */
 #bmeta {
@@ -1353,7 +1436,7 @@ p.help {
 	flex: none;
 	max-width: 30%;
 	padding: 0 14px;
-	border-right: 1px solid #1ff4;
+	border-right: 3px ridge var(--mar);
 }
 #bname {
 	font-size: 13px;
@@ -1380,12 +1463,23 @@ p.help {
 	padding: 0 9px;
 	overflow: hidden;
 }
+/* el dato que más se mira de toda la barra, así que se lee como una lectura de
+    máquina: placa hundida, marco propio y el número adentro */
 #bt {
+	width: max-content;
+	max-width: 100%;
+	padding: 0 7px;
 	font-size: 15px;
 	letter-spacing: 1px;
 	color: #eff;
 	font-variant-numeric: tabular-nums;
 	text-shadow: 0 0 10px #0ff6;
+	border: 1px solid #2a5f86;
+	border-radius: 2px;
+	background: #050a14;
+	box-shadow:
+		inset 0 0 10px #0ff2,
+		inset 0 1px 0 #00000099;
 }
 #bc {
 	font-size: 11px;
@@ -1419,7 +1513,7 @@ p.help {
 	row-gap: 3px;
 	flex: none;
 	padding: 0 11px 0 8px;
-	border-left: 1px solid #1ff4;
+	border-left: 3px ridge var(--mar);
 	box-shadow: inset 0 0 22px -8px var(--rc, #4cf);
 }
 #brank {
@@ -1446,17 +1540,25 @@ p.help {
 #bcbar {
 	grid-row: 2;
 	grid-column: 2;
-	height: 4px;
-	border-radius: 2px;
+	height: 5px;
+	border-radius: 1px;
 	overflow: hidden;
 	background: #9ef2;
-	box-shadow: inset 0 0 0 1px #9ef3;
+	box-shadow:
+		inset 0 0 0 1px #9ef4,
+		inset 1px 1px 0 #00000080;
 }
+/* los segmentos son una capa encima del color: el JS sigue moviendo sólo width */
 #bcfill {
 	display: block;
 	height: 100%;
 	width: 0;
-	background: #dff;
+	background-color: #dff;
+	background-image: repeating-linear-gradient(
+		90deg,
+		#0000 0 3px,
+		#000000a6 3px 4px
+	);
 	box-shadow: 0 0 8px #cff;
 	transition: width 0.1s linear;
 }
@@ -1466,7 +1568,7 @@ p.help {
 		0 0 10px #9ff6;
 }
 #bcbar.full #bcfill {
-	background: #9ff;
+	background-color: #9ff;
 	box-shadow:
 		0 0 12px #9ff,
 		0 0 20px #9ff8;
@@ -1486,26 +1588,50 @@ p.help {
 	position: absolute;
 	left: 0;
 	bottom: 0;
-	height: 4px;
+	height: 5px;
 	width: 0;
+	z-index: 1;
 	color: var(--rc, #4cf);
-	background: currentColor;
+	background-color: currentColor;
+	background-image: repeating-linear-gradient(
+		90deg,
+		#0000 0 6px,
+		#000000b3 6px 8px
+	);
 	box-shadow:
 		0 0 10px currentColor,
 		0 0 22px currentColor;
 	opacity: calc(0.55 + var(--bop, 0) * 0.45);
 	transition: width 0.12s linear;
 }
-#bar.up {
+/* EL DESTELLO DEL ASCENSO, en una sola propiedad.  Antes lo hacía la barra misma
+    con `animation: barup` sobre `background` y `box-shadow`: dos propiedades que
+    el compositor no sabe animar, así que el navegador repintaba TODO el ancho de
+    la barra —más un difuminado de 34px que se sale de su caja— en cada cuadro de
+    la animación, justo en el momento en que además entra volando el cartel del
+    rango.  Encima el `background` iba de un color sólido a un degradado, que no
+    interpola: saltaba a la mitad, o sea que ni siquiera se pagaba por lo que se
+    veía.  Ahora el fogonazo es una capa blanca fija encima de la barra que se va
+    con `opacity`, que sí se anima en el compositor: mismo golpe de luz, cero
+    repintados, y el mismo pico de blanco que antes duraba media animación. */
+#bar::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: 4;
+	pointer-events: none;
+	background: #fff;
+	opacity: 0;
+}
+#bar.up::after {
 	animation: barup 0.45s ease-out;
 }
 @keyframes barup {
 	0% {
-		background: #fff;
-		box-shadow: 0 0 34px #fff;
+		opacity: 0.92;
 	}
 	to {
-		background: linear-gradient(180deg, #0c1524f2, #05070ef2);
+		opacity: 0;
 	}
 }
 
@@ -1529,7 +1655,7 @@ p.help {
 	color: #9ff;
 	background: none;
 	border: 0;
-	border-left: 1px solid #1ff4;
+	border-left: 3px ridge var(--mar);
 	cursor: pointer;
 	opacity: 0.26;
 	-webkit-tap-highlight-color: transparent;
@@ -1558,9 +1684,10 @@ p.help {
 	left: 6px;
 	right: 6px;
 	bottom: 6px;
-	height: 3px;
-	border-radius: 2px;
+	height: 4px;
+	border-radius: 1px;
 	background: #9ef3;
+	box-shadow: inset 1px 1px 0 #00000080;
 	overflow: hidden;
 }
 #bmeow.ready #bmcd {
@@ -1570,7 +1697,12 @@ p.help {
 	display: block;
 	height: 100%;
 	width: 0;
-	background: #9ff;
+	background-color: #9ff;
+	background-image: repeating-linear-gradient(
+		90deg,
+		#0000 0 3px,
+		#000000a6 3px 4px
+	);
 	box-shadow: 0 0 8px #9ff;
 }
 
@@ -1767,7 +1899,7 @@ p.help {
 .vibes #bar {
 	box-shadow:
 		0 0 calc(8px + var(--bop, 0) * 26px) #0ff3,
-		inset 0 1px 0 #9ef3;
+		var(--bev);
 }
 .vibes #bcombo {
 	box-shadow:
@@ -1813,7 +1945,7 @@ p.help {
 .lite.vibes #bar {
 	box-shadow:
 		0 0 8px #0ff3,
-		inset 0 1px 0 #9ef3;
+		var(--bev);
 }
 .lite.vibes #bcombo {
 	box-shadow: inset 0 0 22px -8px var(--rc, #4cf);
@@ -1831,9 +1963,9 @@ p.help {
 #tut {
 	display: none;
 	margin-top: 6px;
-	border: 1px solid #0f96;
-	border-radius: 8px;
-	background: linear-gradient(180deg, #07160edd, #04090cee);
+	border: 2px ridge #1a6b44;
+	border-radius: 3px;
+	background: var(--grid), linear-gradient(180deg, #07160edd, #04090cee);
 	padding: 8px 10px;
 	font-size: 12.5px;
 	line-height: 1.45;
@@ -1873,7 +2005,12 @@ p.help {
 	display: block;
 	height: 100%;
 	width: 0;
-	background: #6f9;
+	background-color: #6f9;
+	background-image: repeating-linear-gradient(
+		90deg,
+		#0000 0 4px,
+		#000000a6 4px 5px
+	);
 	box-shadow: 0 0 8px #6f9;
 	transition: width 0.25s ease-out;
 }
@@ -1904,20 +2041,29 @@ p.help {
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
-	background: #080c14;
-	border: 1px solid #1ff6;
-	border-radius: 10px;
-	box-shadow: 0 0 40px #0ff3;
+	background: var(--grid), #080c14;
+	border: 3px ridge var(--mar);
+	border-radius: 3px;
+	box-shadow:
+		0 0 40px #0ff3,
+		var(--bev);
 }
 #lvl h3 {
 	margin: 0;
-	padding: 12px 14px;
+	padding: 10px 14px;
 	font-size: 14px;
 	letter-spacing: 3px;
 	text-align: center;
-	color: #9ef;
-	border-bottom: 1px solid #1ff3;
-	background: #0b1220;
+	color: #cff;
+	text-shadow: 0 0 8px #0ff8;
+	border-bottom: 3px ridge var(--mar);
+	background:
+		repeating-linear-gradient(
+			-45deg,
+			#6fd3ff1f 0 2px,
+			#0000 2px 5px
+		),
+		linear-gradient(180deg, #143253, #0a1728);
 }
 #lbody {
 	display: grid;
@@ -1931,8 +2077,9 @@ p.help {
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
-	border-right: 1px solid #1ff3;
+	border-right: 3px ridge var(--mar);
 	background: #06090f;
+	box-shadow: inset -1px 0 0 #00000099;
 }
 #llist .cat {
 	font-size: 9px;
@@ -1958,9 +2105,14 @@ p.help {
 	margin-top: 2px;
 }
 #llist button.sel {
-	background: #12243a !important;
+	background: #14283f !important;
 	border-color: currentColor !important;
+	border-style: inset !important;
 	box-shadow: 0 0 14px #0ff4;
+}
+/* el cursor de la lista: en una consola el elegido se señala, no se sombrea */
+#llist button.sel::before {
+	content: "\25B8\00a0";
 }
 #llist button.soon {
 	opacity: 0.45;
@@ -2012,11 +2164,67 @@ p.help {
 	letter-spacing: 1px;
 }
 #lmeta span {
-	border: 1px solid #1ff4;
-	border-radius: 4px;
-	padding: 3px 7px;
-	opacity: 0.75;
+	border: 2px ridge var(--mar);
+	border-radius: 2px;
+	padding: 2px 7px;
+	opacity: 0.8;
 	background: #0b0b12;
+}
+/* ---- la dificultad, antes de entrar ---------------------------------------
+    Los baby points los repartía el cartel de skill issue de a uno y en mitad de
+    la partida, que es el peor momento para decidir cuánta ayuda querés.  Acá van
+    al lado de la ficha del nivel —contador de menos / número / más— y debajo el
+    interruptor del aviso, que es la otra mitad de la misma decisión. */
+#lopt {
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+	padding-top: 9px;
+	border-top: 3px ridge var(--mar);
+}
+#lopt .lrow {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+#lopt .lk {
+	font-size: 10px;
+	letter-spacing: 2px;
+	opacity: 0.7;
+}
+#lbm,
+#lbp {
+	flex: none;
+	width: 32px;
+	padding: 3px 0 !important;
+	font-size: 16px !important;
+	line-height: 1.1;
+	text-align: center;
+	/* `outset` deja el borde de abajo y el de la derecha casi negros: en una tecla
+	    ancha eso se lee como relieve y en un cuadradito de 32px, como una caja rota.
+	    `ridge` ilumina las cuatro caras por fuera, así que el marco se cierra. */
+	border-style: ridge;
+}
+#lbm[disabled],
+#lbp[disabled] {
+	opacity: 0.28;
+	cursor: default;
+}
+#lbv {
+	min-width: 22px;
+	text-align: center;
+	font: italic 900 21px/1 var(--dmcf);
+	color: #f9a;
+	text-shadow: 0 0 12px #f458;
+}
+#lbh {
+	font-size: 10px;
+	letter-spacing: 1px;
+	opacity: 0.55;
+}
+#lskb {
+	width: 100%;
 }
 #lvl .row {
 	display: flex;
@@ -2028,7 +2236,13 @@ p.help {
 	flex: 1;
 	padding: 11px !important;
 	color: #cff !important;
+	/* sólido y no biselado: `outset` saca las luces del propio color del borde y
+	    dejaba el marco del botón principal casi blanco */
 	border-color: currentColor !important;
+	border-style: solid !important;
+	box-shadow:
+		0 0 16px #0ff3,
+		var(--bev);
 }
 
 /* ---- pantalla de resultados -----------------------------------------------
@@ -2053,11 +2267,13 @@ p.help {
 	max-height: 94dvh;
 	overflow: auto;
 	text-align: center;
-	background: #080c14;
-	border: 1px solid #1ff6;
-	border-radius: 10px;
+	background: var(--grid), #080c14;
+	border: 3px ridge var(--mar);
+	border-radius: 3px;
 	padding: 18px 20px;
-	box-shadow: 0 0 40px #0ff3;
+	box-shadow:
+		0 0 40px #0ff3,
+		var(--bev);
 }
 #rtag {
 	font-size: 9px;

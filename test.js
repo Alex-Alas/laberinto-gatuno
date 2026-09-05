@@ -572,7 +572,9 @@ tutCheck(); if(tstep!==5) throw new Error('atravesar el muro no cerro el paso');
 if(!has(hab,'on')||!has(hab,'meow')) throw new Error('el paso del maullido no abrio su cartel');
 if(!paused) throw new Error('el cartel del maullido no congelo el juego');
 if(!meowOn||meowCd(now())) throw new Error('el paso no dejo el maullido listo');
-if(foes.length<2) throw new Error('el paso del maullido no puso gatos que ahuyentar');
+// y el gato es EL del tutorial, uno solo: dos desconocidos no son "el enemigo
+// con el que jugaste todo el nivel", que es a quien tiene que ahuyentar
+if(foes.length!==1) throw new Error('el paso del maullido no puso EL gato que ahuyentar');
 habAt=now()-HAB_LOCK-1; hok.onclick();
 if(paused||hab.className) throw new Error('el cartel del maullido no se cerro');
 tutCheck(); if(tstep!==5) throw new Error('el paso del maullido se cerro sin maullar');
@@ -581,7 +583,9 @@ if(!meow()) throw new Error('el maullido no salio');
 tutCheck(); if(tstep!==6) throw new Error('maullar no cerro el paso');
 
 if(coins.length!==LV.coins) throw new Error('el paso de las monedas no las solto');
-if(foes.length) throw new Error('las monedas entran con el tablero limpio de gatos');
+// el maullido AHUYENTA, no borra: el gato tiene que seguir en el laberinto.  El
+// paso siguiente lo desaparecia y desmentia lo que el anterior acababa de ensenar
+if(foes.length!==1) throw new Error('el paso de las monedas se llevo puesto al gato ahuyentado');
 got=LV.coins; coins=[]; tutCheck();
 if(tstep!==7||!exitOpen()) throw new Error('el paso de la salida no arranco');
 win=true; tutCheck();
@@ -703,7 +707,12 @@ if(cell()!==destD) throw new Error('la letra violeta no atraveso el muro');
 if(det!==0) throw new Error('atravesar no gasto la carga');
 if(Object.keys(phase).length) throw new Error('sin carga siguen apareciendo letras de muro');
 if(Object.keys(letters).some(d=>g[cell()][d])) throw new Error('sin carga hay letra sobre un muro');
-wrong(); if(cell()!==antesD) throw new Error('el retroceso no volvio atravesando el muro');
+// ...y del otro lado del muro se arranca de cero: la celda a la que cruzaste es
+// tu nuevo punto de partida.  Devolver al jugador atravesando la pared lo dejaba
+// del lado equivocado y SIN carga con que volver a cruzar, o sea peor que el
+// castigo normal; ahora un error ahi no lo mueve de donde esta.
+if(trail.length) throw new Error('cruzar un muro tiene que borrar el camino de migas');
+wrong(); if(cell()!==destD) throw new Error('un error devolvio al jugador atravesando el muro');
 // las cargas se acumulan hasta el tope y gen() las borra
 det=0; qteWins=0;
 for(let i=0;i<DET_EVERY*(DET_MAX+1);i++){ qteStart(); qte.seq.slice().forEach(k=>press(k)) }
@@ -849,6 +858,152 @@ rlvls.onclick();
 if(!lvlOn||resOn) throw new Error('NIVELES no llevo al selector');
 lvlHide(); juega('clasico');
 
+// 30) EL AVISO DE SKILL ISSUE: apagable, y cada NO lo vuelve menos insistente
+// Decir "asi esta bien" y que el cartel vuelva a los 25 teclazos es no haber
+// escuchado la respuesta: cada NO tiene que alargar la espera Y bajar el umbral.
+juega('clasico'); noes=0; baby=0; hits=0; fails=0; skillOff=false;
+const acc0=skillAcc();
+hits=10; fails=0; babyEnd(true);
+const askSi=nextAsk-(hits+fails);
+if(askSi!==25) throw new Error('el SI cambio su cooldown corto');
+if(baby!==1) throw new Error('el SI no dio el baby point');
+if(skillAcc()!==acc0) throw new Error('aceptar la ayuda no deberia bajar el umbral');
+babyEnd(false);
+const askNo1=nextAsk-(hits+fails);
+if(!(askNo1>askSi)) throw new Error('el NO tiene que esperar mas que el SI: '+askNo1);
+if(!(skillAcc()<acc0)) throw new Error('el NO no bajo el umbral de precision');
+babyEnd(false);
+const askNo2=nextAsk-(hits+fails);
+if(!(askNo2>askNo1)) throw new Error('el segundo NO tiene que esperar todavia mas');
+if(!(skillAcc()<0.8-0.12)) throw new Error('el segundo NO no bajo mas el umbral');
+if(skillAcc()<0.45) throw new Error('el umbral no puede caer por debajo del piso');
+// ...y con el interruptor apagado no aparece nunca, por mal que se juegue
+noes=0; baby=0; hits=2; fails=30; nextAsk=0; paused=false; skillSet(true);
+push('a','bad');
+if(paused||skill.style.display==='grid') throw new Error('el cartel salio con el aviso apagado');
+skillSet(false);
+push('a','bad');
+if(!paused) throw new Error('con el aviso prendido el cartel tiene que salir');
+babyEnd(false); noes=0; baby=0; hits=0; fails=0; nextAsk=12;
+// el interruptor es UNO solo aunque se toque desde dos lugares
+skb.onclick(); if(!skillOff) throw new Error('el boton del menu no apago el aviso');
+lskb.onclick(); if(skillOff) throw new Error('el boton del selector no volvio a prenderlo');
+if(has(skb,'on')!==has(lskb,'on')) throw new Error('los dos interruptores muestran estados distintos');
+skillSet(false);
+
+// 31) BABY POINTS ANTES DE ENTRAR: la dificultad se elige con la ficha a la vista
+startBaby=0; babyStep(-1);
+if(startBaby!==0) throw new Error('los baby points no pueden ser negativos');
+for(let i=0;i<BABY_MAX+3;i++) babyStep(1);
+if(startBaby!==BABY_MAX) throw new Error('los baby points pasaron su tope');
+babyStep(-1);
+if(startBaby!==BABY_MAX-1) throw new Error('el menos no descuenta');
+// babyK toma el valor suelto para poder mostrar lo que todavia no se aplico
+if(babyK(2)!==1+0.35*2) throw new Error('babyK no acepta un valor suelto');
+baby=0; if(babyK()!==babyK(baby)) throw new Error('babyK sin argumento dejo de leer baby');
+startBaby=2; lvlPick('clasico'); lvlPlay();
+if(baby!==2) throw new Error('entrar al nivel no aplico los baby points elegidos');
+// y valen lo mismo que los que regala el cartel: mas ventana por letra y por QTE
+got=0; combo=0; deal(); const durBaby=dur();
+baby=0; const durSin=dur();
+if(!(durBaby>durSin)) throw new Error('los baby points elegidos no dan mas tiempo');
+baby=2; qteStart(); const qb=qte.ms; qte=null;
+baby=0; qteStart(); const qa=qte.ms; qte=null;
+if(!(qb>qa)) throw new Error('los baby points elegidos no aflojan el QTE');
+startBaby=0; baby=0; babySync();
+
+// 32) EL ACECHADOR DEL SOTANO: cara, grito y salida propios
+juega('sotano');
+if(!STALK.src) throw new Error('el sotano no bajo la cara del acechador');
+if(!LOBO.src.endsWith('assets/lobotomy.mp3')) throw new Error('el sotano no bajo el grito del acechador');
+// el QTE se acuerda de QUIEN te alcanzo: los acechadores son los primeros de foes
+foes=[cell(),far()]; qteStart();
+if(!qte.st) throw new Error('el QTE no marco que te alcanzo el acechador');
+qte=null;
+foes=[far(),cell()]; qteStart();   // el segundo ya es un gato negro comun
+if(qte.st) throw new Error('un gato comun no puede pasar por acechador');
+qte=null;
+// el jumpscare del acechador usa SU grito y se va con fade; el del resto, no
+mufSlow=0; scareShow(true);
+if(scareA!==LOBO) throw new Error('el acechador no grito con su propio audio');
+if(scare.className!=='fade') throw new Error('el jumpscare del acechador no se desvanece');
+if(!scareFade) throw new Error('el fade del acechador no arranco');
+if(!mufSlow) throw new Error('el jumpscare no pidio el fade-in largo de la musica');
+scareHide();
+if(frozen||scare.className||scareFade||scareA) throw new Error('el susto no se limpio al cerrarse');
+scareShow(false);
+if(scareA!==SCREAM) throw new Error('un gato comun no puede robarle el grito al acechador');
+if(scare.className==='fade'||scareFade) throw new Error('el susto de siempre corta, no se desvanece');
+scareHide();
+juega('clasico');
+
+// 33) LA MUSICA SE HUNDE EN EL QTE Y VUELVE DE A POCO
+if(vibes) vibe.onclick();
+juega('clasico'); BGM.muted=false;
+const rn=performance.now; let FT=rn();
+performance.now=()=>FT;                       // reloj de mentira: el ducking va por dt
+// de a 100ms: el dt de cada cuadro esta topado en 250 (ver frame), que es lo que
+// tapa el salto de una pestana dormida.  Un unico salto grande no vale.
+const paso=(ms,n)=>{ for(let i=0;i<n;i++){ FT+=ms; lastDraw=0; frame() } };
+muf=0; mufAt=0; mufV=-1; mufSlow=0;
+qteStart(); lastDraw=0; frame();              // el primer cuadro solo fija mufAt
+const vol0=BGM.volume, qms=qte.ms;
+paso(100,Math.round(qms*0.5/100));
+if(!(muf>0.4&&muf<0.6)) throw new Error('a mitad del QTE la musica tendria que ir por la mitad: '+muf);
+if(!(BGM.volume<vol0)) throw new Error('el volumen no bajo durante el QTE');
+paso(100,Math.round(qms*0.45/100));
+if(muf<0.9) throw new Error('al final del QTE la musica tiene que estar casi muda: '+muf);
+if(!(BGM.volume<BGM.v0*0.25)) throw new Error('el volumen del final del QTE quedo alto: '+BGM.volume);
+// perderlo la deja abajo y la trae por el camino LARGO
+qteEnd(false);
+if(!mufSlow) throw new Error('el jumpscare no pidio el fade-in largo');
+scareHide();
+paso(250,1);
+if(muf<=0) throw new Error('despues del susto la musica no puede volver de golpe');
+paso(250,Math.ceil(MUF_IN/250)+1);
+if(muf!==0||mufSlow) throw new Error('la musica no termino de volver: '+muf);
+if(BGM.volume!==BGM.v0) throw new Error('el volumen no volvio al de siempre: '+BGM.volume);
+// ...y ganar un QTE la devuelve por el camino corto, que es mas de tres veces mas rapido
+if(!(MUF_IN>MUF_OUT*3)) throw new Error('el fade-in del susto tiene que ser mucho mas largo');
+muf=1; mufSlow=0; paso(250,Math.ceil(MUF_OUT/250)+1);
+if(muf!==0) throw new Error('sin susto la musica tiene que volver enseguida');
+performance.now=rn;
+
+// 34) ESQUIVE AL CRUCE: el gato pasa de largo y eso ahora paga
+juega('clasico'); gen(); foes=[]; det=0; combo=0; stl=0; dodges=0;
+step(); const celB=cell(), celA=trail[trail.length-1];
+foes=[celA]; prevFoe=[];                        // el gato viene desde celA hacia celB
+wrong();                                      // el jugador se equivoca y retrocede A celA
+if(cell()!==celA) throw new Error('el retroceso no lo dejo en la celda del gato');
+stl=0; dodge(celA,celB);                          // y el gato entra a la celda que dejo
+if(dodges!==1) throw new Error('el cruce no se conto como esquive');
+if(stl!==STYLE_DODGE) throw new Error('el esquive no pago el bonus de estilo: '+stl);
+if(!(STYLE_DODGE>STYLE_QTE)) throw new Error('esquivar al cruce tiene que pagar mas que un QTE ganado');
+// y NO es esquive cualquier otra cosa: ni un gato que va a otro lado, ni el
+// mismo cruce dos minutos despues (si no, perseguirte de atras pagaria siempre)
+dodges=0; dodge(celA,celA);
+if(dodges) throw new Error('conto un esquive donde no hubo cruce');
+dodge(celB,celB);
+if(dodges) throw new Error('conto un esquive con el gato en otra celda');
+pfrom.t-=DODGE_MS+1; dodge(celA,celB);
+if(dodges) throw new Error('el esquive tiene que ser casi al mismo tiempo, no cuando sea');
+// ...y el cruce tiene que llegar desde moveFoes, no solo de llamar a dodge a mano.
+// Para que el gato no pueda ir a otro lado: un pasillo con DOS salidas y el gato
+// viniendo de una, asi que la unica que le queda es la celda que dejo el jugador.
+juega('clasico'); scareUntil=0; dodges=0; stl=0;
+let cX=-1; for(let i=0;i<C*R;i++) if(open(i).length===2){ cX=i; break }
+if(cX<0) throw new Error('no hay pasillo de dos salidas donde probar el cruce');
+const [oUno,oOtro]=open(cX);
+p={x:cX%C,y:cX/C|0}; vis={x:p.x,y:p.y};
+pfrom={c:oUno,t:now()}; foes=[cX]; prevFoe=[oOtro];
+moveFoes();
+if(foes[0]!==oUno) throw new Error('el gato no tomo el unico camino que le quedaba');
+if(dodges!==1) throw new Error('moveFoes no paga el esquive: el bonus no se cobra nunca');
+if(stl!==STYLE_DODGE) throw new Error('el esquive desde moveFoes no pago estilo');
+
+// el resumen tiene que poder contarlos sin romperse
+dodges=3; win=true; tEnd=1000; resShow(); resHide(); win=false; dodges=0;
+
 // 17) escritorio: el perfil lite NO se aplica, todo queda como estaba
 if(MOBILE) throw new Error('escritorio detectado como movil');
 if(PERF.scan||PERF.glow!==1||PERF.fps||PERF.hudMs||PERF.dust!==1)
@@ -883,7 +1038,7 @@ if(document.fullscreenElement) throw new Error('el boton no salio de pantalla co
 if(fsb.className) throw new Error('el boton quedo marcado al salir');
 if(fsb.style.display==='none') throw new Error('con API disponible el boton tiene que verse');
 
-console.log('OK 26/26 | partida completa:',teclas,'teclas, precision',prec+'%');
+console.log('OK 31/31 | partida completa:',teclas,'teclas, precision',prec+'%');
 `;
 
 // ---- 19) el mismo juego en un teléfono: perfil lite, gameplay intacto ----
@@ -1060,7 +1215,7 @@ const flat=src.replace(/"/g,"'").replace(/ *([=?:,;{}()[\]]) */g,'$1');
 if(!/<link[^>]+href=style\.css/.test(mk)) throw new Error('el index no carga style.css');
 if(!/<script src=game\.js>/.test(mk)) throw new Error('el index no carga game.js');
 const rutas=[...new Set([...src.matchAll(/"(assets\/[\w.-]+)"/g)].map(m=>m[1]))];
-if(rutas.length!==9) throw new Error('el juego dejo de tener sus 9 assets: '+rutas.length);
+if(rutas.length!==11) throw new Error('el juego dejo de tener sus 11 assets: '+rutas.length);
 for(const a of rutas)
   if(!fs.existsSync(path.join(__dirname,a))) throw new Error('falta el archivo '+a);
 
@@ -1279,7 +1434,7 @@ if(hb.indexOf('id=hok')<hb.indexOf('id=hdmeow'))
   throw new Error('ENTENDIDO tiene que cerrar el cartel, no abrirlo');
 // los colores salen del MISMO sitio que los del canvas: el violeta con el que se
 // gasta una carga, el celeste de la onda del maullido y el azul de las paredes
-const vio=(src.match(/det--;[\s\S]{0,400}?burst\([^)]*?"(#[0-9a-f]{3,6})"/i)||[])[1];
+const vio=(src.match(/det--;[\s\S]{0,900}?burst\([^)]*?"(#[0-9a-f]{3,6})"/i)||[])[1];
 const cel=(src.match(/scareUntil = meowAt[\s\S]{0,1400}?burst\([^)]*?"(#[0-9a-f]{3,6})"/i)||[])[1];
 const muro=(src.match(/k\.strokeStyle = "(#[0-9a-f]{3,6})"/i)||[])[1];
 if(!vio||!cel||!muro) throw new Error('no se pudieron leer del canvas los colores de las habilidades');
@@ -1320,4 +1475,94 @@ if(!/hok\.onclick=habGo/.test(flat)) throw new Error('ENTENDIDO no esta cableado
 if(!/HAB_LOCK/.test(flat)) throw new Error('el cartel no espera a que se lo pueda leer');
 if(style.indexOf('#hab.on #hok{')<0) throw new Error('ENTENDIDO no se carga solo');
 
-console.log('OK 32/32 | el perfil lite prende solo en pointer:coarse y no toca la dificultad');
+// ---- 35) el destello del ascenso de rango dejo de repintar la barra entera ----
+// Animar `background` y `box-shadow` sobre una caja del ancho de la pantalla es un
+// repintado por cuadro, con un difuminado de 34px que encima se sale de su caja; y
+// el background iba de color solido a degradado, que ni siquiera interpola: saltaba
+// a la mitad.  El fogonazo pasa a ser una capa aparte que se va con opacity, que es
+// de lo poco que el compositor anima sin volver a pintar nada.
+const kf=k=>{const i=style.indexOf('@keyframes '+k);
+  if(i<0) throw new Error('falta la animacion '+k);
+  return style.slice(i,style.indexOf('}}',i))};
+const kfb=kf('barup');
+if(/background|box-shadow/.test(kfb)) throw new Error('el destello sigue animando pintura: '+kfb);
+if(!/opacity/.test(kfb)) throw new Error('el destello dejo de destellar');
+if(style.indexOf('#bar.up::after{')<0)
+  throw new Error('el destello tiene que vivir en su propia capa, no en la barra');
+const kfr=kf('rankup');
+if(/filter/.test(kfr))
+  throw new Error('la letra del rango sigue animando un filter sobre texto recortado');
+if(!/transform/.test(kfr)) throw new Error('la letra del rango dejo de festejar');
+// reiniciar las tres animaciones cuesta UN layout sincronico, no tres
+const voids=(flat.match(/void [a-z]+\.offsetWidth/g)||[]);
+if(voids.length!==1) throw new Error('rankShow fuerza '+voids.length+' layouts: tiene que ser uno');
+
+// ---- 36) la GUI es CHAPA, no tarjetas ----
+// La barra y los paneles eran tarjetas: esquina de 10px, borde de un pelo y sombra
+// blanda.  Eso es lenguaje de aplicacion, no de maquina, y desentonaba con un
+// laberinto de neon lleno de scanlines.  Ahora: bordes biselados de verdad (los del
+// navegador, sin una sombra de mas), esquina casi recta y trama encima.
+for(const t of ['--bev:','--grid:','--mar:'])
+  if(style.indexOf(t)<0) throw new Error('falta el token de la chapa '+t);
+for(const [sel,q] of [['#bar','la barra'],['#menu>div','el menu'],
+                      ['#lvl>div','el selector'],['#res>div','el resumen']]){
+  const b=bloque(sel);
+  if(!/(ridge|outset)/.test(b)) throw new Error(q+' no tiene marco biselado');
+  if(!/border-radius:[0-3]px/.test(b)) throw new Error(q+' sigue con esquina de tarjeta');
+  if(b.indexOf('var(--grid)')<0) throw new Error(q+' no lleva la trama de la chapa');
+}
+const btn='#btns button,#skill button,#brief button,#lvl button,#tut button,#res button,#hab button';
+if(!/(ridge|outset)/.test(bloque(btn))) throw new Error('los botones no son teclas biseladas');
+if(style.indexOf(btn.replace(/,/g,':active,')+':active{')<0)
+  throw new Error('las teclas no se hunden al apretarlas');
+// los medidores se leen segmentados: una barra lisa es una barra de progreso
+for(const sel of ['#bfill','#bcfill','#bmfill'])
+  if(bloque(sel).indexOf('repeating-linear-gradient')<0)
+    throw new Error('el medidor '+sel+' no esta segmentado');
+// el reloj es el dato que mas se mira: tiene su placa, no es texto suelto
+if(!/border:/.test(bloque('#bt'))) throw new Error('el reloj no tiene su placa');
+// y el bisel de la barra sobrevive al latido, que le pisa el box-shadow entero
+for(const sel of ['.vibes #bar','.lite.vibes #bar'])
+  if(bloque(sel).indexOf('var(--bev)')<0)
+    throw new Error(sel+' se lleva puesto el bisel de la barra');
+
+// ---- 37) la dificultad se elige ANTES de entrar, y el aviso se puede apagar ----
+for(const id of ['skb','lskb','lopt','lbm','lbv','lbp','lbh'])
+  if(mk.indexOf('id='+id)<0) throw new Error('falta el control '+id+' en el markup');
+if(mk.match(/<div id=btns>[\s\S]*?<\/div>/)[0].indexOf('id=skb')<0)
+  throw new Error('el interruptor no esta en el menu de ESC');
+const ldet=mk.slice(mk.indexOf('<div id=ldet>'),mk.indexOf('id=res'));
+if(ldet.indexOf('id=lskb')<0) throw new Error('el interruptor no esta en el selector de nivel');
+if(!(ldet.indexOf('id=lopt')<ldet.indexOf('id=lgo')))
+  throw new Error('la dificultad se elige ANTES de JUGAR, no despues');
+if(style.indexOf('#lskb.on')<0)
+  throw new Error('el interruptor prendido no se distingue en el selector');
+if(!/localStorage.setItem\('lg.skill'/.test(flat))
+  throw new Error('el interruptor no se recuerda entre partidas');
+const chk=src.slice(src.indexOf('function checkSkill'),src.indexOf('function unpause'));
+if(chk.indexOf('skillOff')<0) throw new Error('checkSkill no mira el interruptor');
+if(chk.indexOf('skillAcc()')<0)
+  throw new Error('el umbral de checkSkill dejo de aflojarse con cada NO');
+if(!/baby = startBaby/.test(src))
+  throw new Error('entrar al nivel no aplica los baby points elegidos');
+
+// ---- 38) el acechador y la cuenta de monedas en el tablero ----
+if(style.indexOf('#scare.fade{')<0) throw new Error('el susto del acechador no tiene su fade');
+kf('scarefade');
+if(!/SCARE_FADE/.test(flat)) throw new Error('el JS no acompana el fade de la cara con el del grito');
+if(!/ready\(STALK\) \? STALK : FOE/.test(src))
+  throw new Error('el tablero dibuja al acechador con el sprite de los otros gatos');
+// los dos archivos del acechador se bajan al entrar al sotano y no antes: son
+// ~270KB que en los niveles 1 y 2 no se miran nunca
+if(/^STALK\.src *=/m.test(src)||/^LOBO\.src *=/m.test(src))
+  throw new Error('la cara y el grito del acechador se bajan al abrir la pagina');
+// la cuenta de monedas se lee en el tablero, no solo arriba.  Va DESPUES de la
+// niebla: si no, en el sotano —donde mas hace falta— queda tapada.
+const iFog=src.indexOf('if (LV.fog) {'), iCoin=src.indexOf('las monedas, en el tablero');
+if(iCoin<0) throw new Error('el tablero no dibuja la cuenta de monedas');
+if(!(iCoin>iFog)) throw new Error('la cuenta de monedas queda debajo de la niebla');
+if(!/p\.y === 0 \? BH - 15 : 15/.test(src))
+  throw new Error('la cuenta no se corre cuando el gato esta en la primera fila, que es donde arranca');
+if(src.indexOf('ESQUIVES AL CRUCE')<0) throw new Error('el resumen no cuenta los esquives');
+
+console.log('OK 36/36 | el perfil lite prende solo en pointer:coarse y no toca la dificultad');

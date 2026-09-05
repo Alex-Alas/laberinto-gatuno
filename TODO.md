@@ -1,6 +1,23 @@
 # Pendientes de UI/UX
 
-**No queda nada pendiente.** Los dos puntos que había están hechos:
+## Lo único pendiente: el sprite del acechador
+
+`assets/acechador.png` es un **reemplazo generado**, no la imagen que se subió: la foto no
+llegó al contenedor donde se hizo el cambio (el mp3 del grito sí, y ése es el original).
+Está hecha en el mismo espíritu —blanco y negro, primer plano, grano de cámara, ojos
+enormes— y todo lo demás del acechador está terminado: el sprite del tablero, el jumpscare
+con su propio grito y el fade-out.
+
+**Para poner la buena:** pisá `assets/acechador.png` con la imagen de verdad (cualquier
+tamaño; el tablero la dibuja a ~26px y el jumpscare la estira a pantalla completa, así que
+conviene que no baje de ~400px de lado). No hay que tocar ni una línea de código: si el
+nombre y la ruta son ésos, la usa sola. Si se prefiere `.webp`, hay que cambiar la ruta en
+los dos lugares donde aparece el literal `assets/acechador.png` (`gen()` en `game.js`) y
+el conteo de assets del test 8.
+
+---
+
+Los dos puntos de UI/UX que había están hechos:
 
 1. **Que el laberinto no se pueda esconder en móvil** — hecho.
    Ver *GUI del teléfono → Que el laberinto no se pueda esconder* en el README.
