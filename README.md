@@ -87,9 +87,12 @@ nunca pregunta en qué nivel está, así que un nivel nuevo es un objeto más en
 | Monedas | 3 | 5 | 7 |
 | Gatos | 1 (guiado) | 2 (+1 a la 3ª moneda) | 3 (+1) y un acechador |
 | Ventana por letra | 2400 → 1400 ms | 1700 → 650 ms | 1700 → 650 ms |
-| Extras | tutorial paso a paso | — | niebla, faroles, radar |
+| Extras | tutorial paso a paso | — | niebla, faroles, radar, **la cacería** |
+| Termina | en la puerta | en la puerta | la puerta es la **mitad** (ver *La Cacería*) |
 
-El **sótano** es el que suma mecánicas nuevas, pensadas para una partida larga:
+El **sótano** es el que suma mecánicas nuevas, pensadas para una partida larga, y el único
+que tiene **final**: juntar las siete monedas y llegar a la puerta no te saca de ahí, da
+vuelta el nivel entero. Está contado en *La Cacería*, más abajo.
 
 - **Niebla.** Sólo ves unas cuatro celdas alrededor del gato: un relleno con degradado
   radial sobre todo lo que es mundo (paredes, monedas, enemigos). Las letras, el QTE y
@@ -167,6 +170,22 @@ el `soon`.
   **cruce**, y sólo si las dos movidas pasaron con menos de 1,2 s de diferencia: que un
   gato que te viene siguiendo de atrás pise la casilla que dejaste es lo que hace un gato
   todo el tiempo, no una jugada.
+- **La pantalla se sacude durante todo el QTE, y cada vez más.** Antes el único que
+  temblaba era el canvas, y con un solo golpe al empezar que se apagaba en medio segundo.
+  Ahora se sacude la GUI **entera** —barra y log incluidos— y la sacudida **crece** según
+  se vacía el reloj: arranca casi imperceptible y termina violenta (va con el cuadrado de
+  la fracción consumida; lineal se leía como un motor, no como un ataque de pánico).
+
+  Y el **techo depende de cuánto dura el QTE**: una ronda del acechador son 1,4 s y una
+  secuencia de 8 letras son 5,6 s, así que la primera nunca llega a sacudir como la
+  segunda (`QS_MIN` → `QS_MAX`, entre `QS_T0` y `QS_T1`). Si las dos sacudieran igual, el
+  reloj corto llegaría a su máximo casi de entrada y la pantalla estaría gritando lo mismo
+  en los dos casos: la violencia de la pantalla **es** cuánto tiempo llevás adentro. En el
+  canvas es el piso del temblor —los golpes sueltos siguen mandando en su pico—; afuera, el
+  JS publica la amplitud en `--qs` (cuantizada a medio píxel, escrita sólo cuando cambia,
+  igual que `--bop`) y el CSS la mueve con una animación de `transform`, que es compositor
+  puro. La clase `.shk` la prende y la apaga al cruzar el cero, así que sin QTE no queda ni
+  una capa ni un tick corriendo. Con `prefers-reduced-motion` no se sacude nada.
 - **Respiro:** ganar un QTE congela **2 s** la ventana de reacción *y* el paso de los
   gatos (en el tutorial, **5 s**). Salís del QTE con la pantalla llena de secuencia y sin
   saber para dónde ibas: ese rato es para mirar el laberinto de nuevo, no para correr. El
@@ -213,7 +232,7 @@ animada, en los pasos 5 y 6 (arriba).
   —te dejaba del lado equivocado **y sin carga** con qué volver—, y encima la
   determinación es un atajo de ida, no un pasillo abierto.
 - **AHUYENTADOR.** Se **arma** la primera vez que el combo llega a **x8** (`MEOW_ARM`, la
-  mitad de `COMBO_MAX`) y de ahí en más lo único que lo frena es el **cooldown de 25 s**
+  mitad de `COMBO_MAX`) y de ahí en más lo único que lo frena es el **cooldown de 32 s**
   —menos **6 s** (`MEOW_KILL`) por cada gato que vencés en un QTE, así que se recupera
   jugando y no esperando; vencer al acechador entero lo devuelve **listo de una**—. Antes
   se pedía el combo al tope *en el momento de maullar*, y eso lo volvía inservible: cuando
@@ -221,16 +240,169 @@ animada, en los pasos 5 y 6 (arriba).
   medias —armarlo al tope y 45 s de espera—, y el problema seguía siendo el mismo de otra
   forma: llegar a x15 sin errarle a nada es no necesitar ya el ahuyentador, y 45 s son
   media partida. Es una herramienta, no un premio. **ESPACIO** o **ENTER** sueltan el maullido: los gatos a
-  **7 celdas o menos** dan media vuelta y corren para el otro lado durante **2,5 s**
-  —hasta el acechador del sótano, que no despista nunca— y mientras huyen no abren QTE. Es
-  el mismo campo de flujo del BFS, leído al revés. En el sótano, además, deja el **radar**
-  (arriba). En el teléfono no hay barra espaciadora a mano: el botón es el `♪` y también
-  el bloque del rango de combo.
+  **7 celdas o menos** dan media vuelta y corren para el otro lado durante **2,5 s**, y
+  mientras huyen no abren QTE. Es el mismo campo de flujo del BFS, leído al revés. En el
+  sótano, además, deja el **radar** (arriba). En el teléfono no hay barra espaciadora a
+  mano: el botón es el `♪` y también el bloque del rango de combo.
+
+  **La espera fue 25 s y son 32.** A 25 s el maullido volvía tan seguido que la decisión
+  de cuándo soltarlo no existía —se tiraba apenas estaba listo— y los gatos negros dejaban
+  de dar miedo en la segunda mitad de la partida, que es justo donde más rápido se mueven.
+  Con 32 s hay que elegir el momento, y el descuento por gato vencido pasa a valer de
+  verdad: el que caza recupera su herramienta, el que corre la espera entera.
+
+  **Y al ACECHADOR no lo toca.** Es el único enemigo del juego que no se ahuyenta: un
+  maullido es un susto, y a él los sustos no le hacen nada. Sigue bajando por el campo de
+  flujo mientras los demás huyen, sigue yendo **a medio paso** —la inmunidad no lo
+  acelera— y si te alcanza con el maullido sonando te abre su tanda igual. En pantalla se
+  nota sin leer nada: los gatos comunes se ponen pálidos y cambian su halo rojo por el
+  celeste del maullido, y él se queda rojo y opaco. El cartel del maullido también lo
+  dice, y sólo en los niveles que tienen acechador. Existía para que no hubiera escapatoria
+  y tenía una: ahora no.
 
   El estado se lee en el `♪` de la barra, sin texto: apagado = todavía no llegaste a x8;
   con la barrita llenándose = esperando el cooldown; prendido y latiendo =
   listo. En escritorio la línea de la barra lo dice además con palabras
   (`MAULLIDO EN 27s`, `MAULLIDO LISTO [ESPACIO]`).
+
+## La Cacería — el final del sótano
+
+El sótano es el **modo historia**, y su historia no termina en la puerta. Juntar las siete
+monedas y pisar la casilla verde deja de ser escapar: es el **punto de no retorno**. A
+partir de ahí el juego se da vuelta entero —el gato blanco deja de ser la presa— y no hay
+salida hasta que no quede ninguna. Los otros dos niveles no cambian: la puerta sigue
+siendo la puerta. Lo enciende un solo campo del nivel, `hunt: 1`.
+
+Nada de esto es un motor nuevo. El campo de flujo es **el mismo** BFS de siempre, sólo que
+las presas lo suben en vez de bajarlo; el QTE es **el mismo**, con un anillo en lugar de
+una fila; el latido, el ruido blanco y el ducking de la música son los que ya estaban. Lo
+único de verdad nuevo son las tres fases y el zarpazo.
+
+### Fase 1 — el buildup (12 s)
+
+El laberinto se congela —ni letras, ni anillo de reacción, ni un paso de nadie: ofrecer
+una letra es prometer que se puede caminar— y arranca `assets/hunt.mp3`. Todo lo que se
+dibuja sale de un solo número, los milisegundos desde que empezó, así que no hay un timer
+nuevo en ninguna parte.
+
+- **0–1,4 s** — la oscuridad se cierra de golpe sobre el gato. Los ojos de las presas se
+  encienden en el negro, lejos.
+- **1,4–10 s** — la **torre de nuggets** baja desde afuera del tablero hasta quedarle
+  encima, creciendo, con un halo dorado que late cada vez más rápido y un cono de luz que
+  cae sobre el gato. La caída **es** la cuenta regresiva.
+- **10 s** — se la come. Flash, explosión, y el cambio de piel entra **de golpe y
+  completo**: sprite nuevo, paleta del canvas en rojo, clase `.hunt` en `<html>` y las
+  paredes rehorneadas. Un degradado suave acá sería un chiste; el momento tiene que doler.
+  Un segundo largo la cara nueva ocupa el tablero entero y se va.
+- **12 s** — cae el drop del mp3 y empieza la cacería.
+
+**Se puede saltar, pero sólo en las rejugadas.** La primera vez va entero: es un golpe que
+se da una vez. A partir de la segunda (el flag vive en `localStorage`, como el interruptor
+del skill issue) aparece un `[ESPACIO] SALTAR` chiquito abajo —en el teléfono, tocar el
+tablero— y saltar adelanta la pista **al segundo exacto del drop** y corre el reloj de la
+cinemática la misma cantidad: imagen y música caen juntas en el mismo instante en el que
+habrían caído solas. No es un fundido a negro, es el mismo golpe, antes.
+
+### Fase 2 — la cacería
+
+Cinco presas: las que quedaban vivas más las que falten, y **el acechador es una de
+ellas**.
+
+| | Partida normal | Cacería |
+|---|---|---|
+| Campo de flujo | los gatos bajan hacia vos | las presas lo **suben**: huyen |
+| Contacto | pisar su casilla | **zarpazo**: alcanza con quedar a 2 celdas |
+| Niebla | 4,2 celdas | 6,4 y **cerrándose** con cada presa devorada |
+| Presas | invisibles en la oscuridad | se ven **a través** de la niebla |
+| Latido | sólo en el QTE | **no para**, y acelera con cada presa que cae |
+| Salida | la casilla verde | **no hay** |
+
+**Por qué no puede fallar.** Una cacería que se pierde no es una cacería: es otra
+persecución con los papeles cambiados, y el sótano ya tiene una de ésas en su primera
+mitad. Acá el jugador es inevitable *por diseño*, y son cuatro piezas:
+
+1. **El zarpazo** (`HUNT_REACH = 2`). No hace falta pisar a la presa: basta con quedar a
+   dos celdas. Sin esto, dos cosas que se mueven por un laberinto se persiguen para
+   siempre y la única forma de terminar es aburrirse. Con esto, para salvarse la presa
+   tiene que sacarte **tres** celdas, no una.
+2. **Van a medio paso.** Un beat de cada dos mientras huyen, contra tu paso entero.
+3. **El hambre pesa.** Cada dos presas devoradas, la que corre pierde un beat más: las
+   primeras cuestan, las últimas se entregan. Es la forma que tiene que tener un clímax.
+4. **Cada escape te la deja más fácil.** Si le errás al anillo, esa presa gana un lastre:
+   se mueve un beat de cada tres (de cada cuatro con dos escapes) y su anillo pierde una
+   letra, con piso de tres. El único que puede salvar a una presa es el propio jugador, y
+   aun así se la vuelve a encontrar, y más blanda.
+
+**Y sólo huyen si te sienten** (`HUNT_SENSE = 8` celdas). Con las cinco corriendo desde el
+primer cuadro terminaban las cinco apretadas en la esquina más lejana y la cacería era una
+caminata de treinta pasos por presa: lo contrario de la ráfaga que tiene que ser. Que la
+que no te siente pasee al azar tampoco alcanzaba —llegar hasta ella seguía costando lo
+mismo—. Así que **la que no te siente se te acerca**: está a oscuras, no sabe qué sos, y
+el sótano es chico. Recién a ocho celdas se da cuenta de lo que tiene enfrente y sale
+disparada, y para entonces ya la tenés. Las dos mitades del comportamiento cuentan la
+misma historia y, de paso, parten al medio lo que hay que caminar. Medido en el navegador
+a velocidad humana: **~70 s** para las cinco.
+
+**El maullido pasa a ser un RUGIDO.** El mismo botón, el mismo cooldown, el mismo
+`scareUntil`, sentido invertido: en vez de ahuyentar, **paraliza** a las presas cercanas
+—incluido el acechador—. Dejarlo como estaba lo habría vuelto un botón muerto que además
+miente, y apagarlo habría tirado la única herramienta que el jugador se ganó en la primera
+mitad justo cuando pasa a ser el que caza.
+
+### El anillo: devorar, no ejecutar una secuencia
+
+El QTE de la cacería no es una fila de letras en orden. La presa va al centro y las letras
+**alrededor**, y **no hay orden**: cada letra es un **pedazo**, y morderla borra su
+porción del cuerpo —el sprite se dibuja por sectores y el sector de una letra ya comida
+simplemente no se pinta, con su chorro de partículas—. De un bicho se muerde por donde se
+puede. Por eso el dibujo tampoco marca ninguna como "la que toca": marcarla sería volver a
+pedir una secuencia por la ventana. Cuatro letras y 2,6 s.
+
+### El acechador cierra
+
+Se guarda para el final. Mientras quede otra presa corre a **paso entero** y el zarpazo no
+lo agarra; cuando ya es el último **se da vuelta y te carga**. Su devorada son **3 rondas
+de 5 letras** encadenadas con el mismo mecanismo que la tanda de la primera mitad, con su
+cara y su grito, que ya estaban cargados. El que te cazó toda la partida termina comido, y
+el clímax no costó un asset nuevo.
+
+### Fase 3 — el final
+
+Con la última presa cae `FINAL DESBLOQUEADO`: el mismo panel de resultados, con dos fichas
+más (presas devoradas y cuántas se te escaparon) y el récord del sótano, que a partir de
+ahora mide la historia entera y no la mitad.
+
+### El tema de terror
+
+La clase `.hunt` en `<html>` (mismo mecanismo que `.vibes`) en el instante exacto en que se
+come la torre. Todo el CSS es **redefinir variables**, no reescribir reglas: la GUI ya
+estaba hecha de `--mar`, `--bev` y `--grid` (ver *La GUI es chapa*), así que cambiarle el
+color a la consola entera cabe en un bloque. El canvas hace lo mismo por su lado con un
+objeto `PAL`, y `bakeMaze()` corre una vez para rehornear las paredes en rojo.
+
+Y alcanza al **menú de pausa**, al selector, al resumen y a los carteles a propósito, con
+sus botones y sus placas de encabezado: si el jugador abre el menú en plena cacería y se
+encuentra la consola azul de siempre, el juego le está diciendo que lo de afuera es un
+decorado. Adentro de la cacería no queda ninguna pantalla del otro juego. El único detalle
+que hubo que ir a buscar aparte fue el **rango de combo**: su color va como estilo *inline*
+desde `rankShow()`, así que le gana a cualquier regla del CSS, y sin contemplarlo ahí se
+quedaba celeste —lo único azul que quedaba, y justo en el bloque más grande de la barra—.
+
+### Terror que salió gratis
+
+Todo esto reusa máquinas que ya estaban; ni un asset ni una dependencia:
+
+- **Visión de hambre.** Las presas se ven a través de la niebla, como rombos rojos con dos
+  ojos que no parpadean. Es terror *y* es lo que impide que la cacería sea buscar a ciegas,
+  que es justo la sensación de la primera mitad.
+- **El latido no para.** `dreadOn`/`dreadSet` quedan encendidos toda la fase y aceleran con
+  cada presa devorada, en vez de subir y bajar con cada QTE.
+- **Chillidos.** Un `sfx()` que sube y se va cuando una presa se te escapa.
+- **La cámara se cierra.** Con cada presa la niebla se achica: el final, encima del
+  acechador, se juega casi a ciegas.
+- **El contador sangra.** La fila de fichas del tablero es la misma pieza —es la misma
+  pregunta, "¿cuánto me falta?"— pero cuenta presas, en rojo. Y el renglón de la barra
+  deja de hablar de una salida que ya no existe y dice `QUEDAN 4`.
 
 ## Dificultad
 
@@ -823,6 +995,41 @@ El 26 es la pantalla de resultados: que ganar la deje en camino y no entre hasta
 que el tutorial termine en ella y **no** en el selector, y que sus tres salidas lleven al
 nivel siguiente, al mismo de nuevo y al selector (con el `SIGUIENTE` escondido en el
 último nivel).
+
+El **35** es la inmunidad del acechador al maullido, que son tres cosas y hay que
+comprobar las tres o el arreglo queda a medias: que con el maullido sonando **siga bajando**
+por el campo de flujo mientras el gato común lo sube, que siga yendo a **medio paso**
+(inmune no puede significar además al doble de velocidad) y que pegado a vos te alcance
+igual y te abra su tanda, mientras que el gato común pegado a vos sale corriendo. Y que el
+cartel del maullido lo diga en los niveles que tienen acechador, y **no** lo diga en los
+que no.
+
+El **36** es el temblor del QTE: que sin QTE valga cero, que el techo crezca con la
+duración y quede topado entre `QS_MIN` y `QS_MAX`, que dentro de un mismo QTE **crezca**
+según se vacía el reloj sin pasarse de su propio techo, y —el punto de todo— que a la
+misma altura del reloj el QTE largo sacuda **más** que el corto. Después, que el cuadro
+publique la amplitud en `--qs` y prenda y apague la clase `.shk` al cruzar el cero. La
+animación, la clase y el `prefers-reduced-motion` se verifican contra el CSS aparte.
+
+Del **37** al **37g** va **la cacería** entera: que pisar la puerta del sótano con todas
+las monedas arranque el buildup en vez de ganar el nivel, que arme las cinco presas, que
+se lleve monedas, faroles, salida y pista, que durante el buildup el laberinto quede
+congelado, que a `HUNT_EAT` mute de golpe (sprite, paleta y clase en `<html>`) y recién a
+`HUNT_BUILD` empiece a jugarse (37); que las presas huyan **si te sienten** y se **acerquen**
+si no, que la que pasea vaya más lenta que la que corre, y que el zarpazo alcance sin
+pisarlas (37b); que el anillo no tenga orden —se muerde a propósito **al revés** del que
+salieron las letras, que es la prueba de que no hay orden— y que vaciarlo devore la presa
+(37c); que dejar escapar una la deje más lenta y con menos letras, con su piso, que es lo
+único que hace que la cacería no se pueda trabar (37d); que el rugido paralice a las
+presas cercanas (37d-bis); que el acechador se guarde para el final, cargue en vez de huir
+y se coma en varias rondas encadenadas, y que la última desbloquee el final con su resumen
+propio (37e); que el buildup se salte **sólo en rejugadas** y cayendo en el segundo exacto
+del drop, y que `gen()` desarme la cacería y el tema rojo (37f).
+
+Y el **37g** es el que sostiene la promesa entera de esa mitad del nivel: un bot juega la
+cacería **tres veces** —con 0, 3 y 6 escapes regalados a propósito— y las tres tienen que
+terminar con las cinco presas devoradas. Una cacería que se puede trabar no es una
+cacería, y eso no se comprueba leyendo el código.
 
 El 17 y el 18 son el perfil de rendimiento: corren el mismo `game.js` en dos contextos
 —uno con `pointer:fine` y otro con `pointer:coarse`— y verifican que el lite prenda sólo

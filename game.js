@@ -166,6 +166,40 @@ const CF =
 const DF =
 	"Impact,Haettenschweiler,'Franklin Gothic Heavy','Arial Black','Roboto Condensed',sans-serif";
 
+// ---- LA PALETA DEL CANVAS ---------------------------------------------------
+// El azul del laberinto estaba escrito a mano en cada dibujo, así que "que la UI se
+// vuelva de terror" era imposible sin tocar veinte literales.  Ahora los colores
+// que cambian con la cacería viven acá y el cuadro los lee de PAL; los que NO
+// cambian (el verde de la salida, el amarillo de las monedas, el violeta de la
+// determinación) se quedan donde estaban, que es lo que los deja gritar cuando el
+// resto de la pantalla es de un solo color.
+//
+// El CSS hace lo mismo por su lado con la clase .hunt en <html> (ver style.css):
+// las dos mitades de la GUI cambian de piel con el mismo interruptor.
+const PALS = {
+	base: {
+		wall: "#39f", // las paredes (horneadas, ver bakeLayer)
+		glow: "#2af",
+		pj: "#0ff", // el halo del gato
+		pjFill: "0,220,255",
+		foe: "#f36", // el que te caza
+		prey: "#9ff", // el que huye
+		key: "#9ff", // las letras de las salidas, con tiempo de sobra
+		edge: "120,235,255", // el borde del tablero que late
+	},
+	hunt: {
+		wall: "#8d1226",
+		glow: "#ff2440",
+		pj: "#f2223c",
+		pjFill: "255,40,60",
+		foe: "#ff4d63",
+		prey: "#ffc9d0",
+		key: "#ffb3bd",
+		edge: "255,70,90",
+	},
+};
+let PAL = PALS.base;
+
 const PJ = new Image(),
 	FOE = new Image();
 PJ.src = "assets/jugador.webp";
@@ -187,6 +221,13 @@ $("bdcat").src = BIG.src;
 // negros del tablero: son las imágenes que ya están cargadas
 $("hdcat").src = $("hmcat").src = PJ.src;
 $("hmf1").src = $("hmf2").src = FOE.src;
+// LA CACERÍA trae dos imágenes propias: la torre de nuggets del buildup y el gato
+// ya transformado.  Se bajan igual que la cara del acechador —recién al generar un
+// nivel con `hunt`— y TODO su uso pasa por ready(): mientras los archivos no estén,
+// la torre se dibuja procedural y el gato rojo son los ojos encendidos sobre el
+// sprite de siempre.  La cacería se juega entera con o sin ellas.
+const NUGG = new Image(),
+	REDPJ = new Image();
 const BOOM = "assets/boom.gif";
 const SCREAM = new Audio("assets/scream.mp3"),
 	BANG = new Audio("assets/bang.mp3");
@@ -194,6 +235,13 @@ const SCREAM = new Audio("assets/scream.mp3"),
 // URL se la pone gen() al generar un nivel que tenga acechador
 const LOBO = new Audio();
 LOBO.preload = "none";
+// ...y el tema de la cacería, que es el más pesado de todo el repo (2,3 MB): mismo
+// trato, y encima sólo se usa en la segunda mitad de UN nivel.  Los niveles 1 y 2
+// no bajan un byte de esto.
+const HUNT_SRC = "assets/hunt.mp3";
+const HUNT = new Audio();
+HUNT.preload = "none";
+HUNT.v0 = HUNT.volume = 0.42;
 const play = (a) => {
 	try {
 		a.currentTime = 0;
@@ -220,12 +268,13 @@ VIBE.preload = "none"; // las vibes se bajan al pedirlas, también en escritorio
 // la que va a sonar —el BGM con la 1ª tecla, las vibes recién al pedirlas—; en
 // escritorio el BGM se carga de entrada, las vibes no (otros ~730KB ahorrados).
 const srcOn = (a) => {
-	if (!a.src) a.src = a === VIBE ? VIBE_SRC : BGM_SRC;
+	if (!a.src) a.src = a === HUNT ? HUNT_SRC : a === VIBE ? VIBE_SRC : BGM_SRC;
 };
 if (!PERF.lazy) srcOn(BGM);
 mus.onclick = () => {
 	BGM.muted = !BGM.muted;
 	VIBE.muted = BGM.muted;
+	HUNT.muted = BGM.muted;
 	mus.textContent = (BGM.muted ? "♫̸" : "♫") + " MUSICA";
 	mus.blur();
 };
@@ -409,7 +458,14 @@ const bopAt = (t) =>
 	Math.pow(1 - (((((t + VIBE_OFF) / BEAT) % 1) + 1) % 1), 1.8);
 let vibes = false,
 	bop = 0;
-const track = () => (vibes ? VIBE : BGM);
+// LA CACERÍA vive acá arriba y no en el bloque de estado de la partida porque
+// track() —que está tres renglones abajo— la lee: si se declarara después, la
+// primera llamada caería en la zona muerta del `let`.  El objeto entero lo arma
+// huntStart() y lo desarma huntReset(); null = partida normal.
+let hunt = null;
+// con la cacería encendida la pista ES la cacería: el ducking del QTE, el mute del
+// menú y el "arranca con la primera tecla" siguen funcionando sin saber cuál suena
+const track = () => (hunt ? HUNT : vibes ? VIBE : BGM);
 vibe.onclick = () => {
 	vibes = !vibes;
 	vibe.className = vibes ? "on" : "";
@@ -489,7 +545,7 @@ const LEVELS = [
 		id: "sotano",
 		pic: "assets/nivel3.png",
 		name: "EL SÓTANO",
-		tag: "NIVEL 3 · PESADILLA",
+		tag: "NIVEL 3 · MODO HISTORIA",
 		col: "#f4a",
 		C: 17,
 		R: 13,
@@ -503,13 +559,14 @@ const LEVELS = [
 		fog: 4.2,
 		lamps: 3,
 		stalk: 1,
-		desc: "Un sótano el doble de grande y a oscuras: sólo ves lo que tenés al lado y algo ahí adentro no deja de seguirte nunca.",
+		hunt: 1, // llegar a la puerta con todo no termina el nivel: lo da vuelta
+		desc: "Un sótano el doble de grande y a oscuras: sólo ves lo que tenés al lado y algo ahí adentro no deja de seguirte nunca. Y juntar las siete monedas no es escapar: es la mitad de la historia.",
 		pts: [
 			"<b>NIEBLA</b>: el mapa te lo acordás vos",
 			"<b>FAROLES</b>: pisá uno y el sótano se enciende 5 segundos",
-			"<b>ACECHADOR</b>: nunca despista, y te agarra con una tanda de QTEs cortos",
+			"<b>ACECHADOR</b>: nunca despista, no lo para ni el maullido, y te agarra con una tanda de QTEs cortos",
 			"<b>MAULLIDO</b>: acá además es radar de monedas y gatos",
-			"Siete monedas: partida larga de verdad",
+			"El único nivel con <b>final</b>: la puerta no es la salida",
 		],
 	},
 ];
@@ -730,15 +787,49 @@ const comboCol = () => RANKS[rankI()].col;
 // Pedía el combo AL TOPE (x15) para armarlo y 45 s de espera entre uno y otro, y
 // las dos cosas lo dejaban afuera de la partida justo cuando hacía falta: llegar
 // a x15 sin errarle a nada es no necesitar ya el ahuyentador, y 45 s son media
-// partida.  Ahora se arma a la mitad del combo, espera la mitad, y cada gato
-// vencido le come otro tajo al cooldown: es una herramienta, no un premio.
+// partida.  Ahora se arma a la mitad del combo y cada gato vencido le come un tajo
+// al cooldown: es una herramienta, no un premio.
+//
+// La espera arrancó en 25 s y son 32: a 25 s el maullido volvía tan seguido que la
+// decisión de cuándo soltarlo no existía —se tiraba apenas estaba— y los gatos
+// negros dejaban de dar miedo en la segunda mitad de la partida, que es justo
+// donde más rápido se mueven.  Con 32 s hay que elegir el momento, y el descuento
+// por gato vencido pasa a valer de verdad.
+// ---- EL TEMBLOR DEL QTE -----------------------------------------------------
+// Un QTE es el momento en que el laberinto deja de existir y la música se hunde,
+// pero la GUI se quedaba quieta: el único que temblaba era el canvas, y con un solo
+// golpe al empezar (shake = 10) que se apagaba en medio segundo.  Ahora la pantalla
+// ENTERA —barra, tablero y log— se sacude durante todo el QTE y la sacudida CRECE
+// según se vacía el reloj: arranca casi imperceptible y termina violenta.
+//
+// Y el techo depende de CUÁNTO DURA el QTE, que es el pedido puntual: una ronda del
+// acechador son 2 letras x 700 ms = 1400 ms y una secuencia larga son 8 x 700 =
+// 5600 ms.  Si las dos sacudieran igual, el reloj corto llegaría a su máximo casi
+// de entrada y la pantalla estaría gritando lo mismo en los dos casos.  Con el techo
+// atado a la duración, un temporizador corto nunca llega a temblar como uno largo:
+// la violencia de la pantalla ES cuánto tiempo llevás adentro, no en qué QTE estás.
+const QS_MIN = 3, // techo del QTE más corto que existe (una ronda del acechador)
+	QS_MAX = 14, // ...y el del más largo (8 letras, o el de la cacería con lastre)
+	QS_T0 = 1400, // las dos duraciones de referencia, en ms
+	QS_T1 = 6000;
+const qsCap = (ms) =>
+	QS_MIN + (QS_MAX - QS_MIN) * Math.max(0, Math.min(1, (ms - QS_T0) / (QS_T1 - QS_T0)));
+// `gone` al cuadrado: la primera mitad del reloj casi no se siente y la última se
+// va de las manos.  Lineal daba una rampa pareja que se lee como un motor, no como
+// un ataque de pánico.
+const qShake = (T) => {
+	if (!qte) return 0;
+	const gone = Math.max(0, Math.min(1, 1 - (qte.until - T) / qte.ms));
+	return qsCap(qte.ms) * gone * gone;
+};
+
 const GRACE_MS = 2000, // respiro sin reloj al ganar un QTE
 	TUT_GRACE_MS = 5000, // en el tutorial el respiro es más largo (ver qteEnd)
 	DET_EVERY = 3,
 	DET_MAX = 3,
 	MEOW_MS = 2500,
 	MEOW_ARM = 8, // combo que lo ARMA (de COMBO_MAX = 15)
-	MEOW_CD = 25000,
+	MEOW_CD = 32000,
 	MEOW_KILL = 6000, // lo que cada gato vencido le descuenta al cooldown
 	MEOW_R = 7; // MEOW_R: "cercano" en celdas de laberinto
 // el eco del maullido en el sótano: cuánto dura y cuánto miente (en celdas)
@@ -770,7 +861,13 @@ const habTxt = (T) =>
 // queda sólo la determinación, que no tiene otro lugar donde leerse
 const habIco = () => (det ? "  " + "\u25C8".repeat(det) : "");
 
-const exitOpen = () => got >= LV.coins; // única condición para escapar: las monedas
+// única condición para escapar: las monedas... salvo en la cacería, donde NO HAY
+// salida.  Es lo que hace que la puerta sea un punto de no retorno y no una puerta
+// giratoria: sin esto, volver a pisar la casilla verde con la cacería a medias
+// terminaba el nivel como si nada hubiera pasado.  Y de paso apaga solo todo lo que
+// hablaba de la salida —la casilla verde, el color de las fichas, el renglón de la
+// barra—, porque todo eso ya leía de acá.
+const exitOpen = () => got >= LV.coins && !hunt;
 // cada baby point = 35% más de tiempo.  Toma un valor suelto para que el selector
 // de nivel pueda mostrar lo que van a valer los que todavía no se aplicaron.
 const babyK = (n) => 1 + 0.35 * (n === undefined ? baby : n);
@@ -791,6 +888,7 @@ function checkSkill() {
 		frozen ||
 		win ||
 		tutOn ||
+		hunt || // en la cacería no: es una escena, no una partida que se pueda ajustar
 		n < 12 ||
 		n < nextAsk ||
 		acc() >= skillAcc()
@@ -819,6 +917,7 @@ function unpause() {
 	if (revealT) revealT += d; // ni el farol, que si no se gasta en la pausa
 	if (radar) radar.t += d;
 	if (resAt) resAt += d; // ni el resumen, que si no salta sobre el menú
+	if (hunt) hunt.t0 += d; // ni la cinemática de la cacería (el mp3 lo para frame())
 	paused = false;
 }
 function babyEnd(yes) {
@@ -957,6 +1056,7 @@ function gen() {
 	foes = [];
 	briefSeen = 0;
 	brief.className = ""; // el cartel del primer encuentro, de cero
+	huntReset(); // ...y la cacería, con su paleta y su tema, antes de hornear nada
 	// en el tutorial las monedas y los gatos los va soltando cada paso, no el gen()
 	if (!LV.tut) {
 		spawn(coins, LV.coins);
@@ -969,6 +1069,12 @@ function gen() {
 	if (LV.stalk) {
 		if (!STALK.src) STALK.src = "assets/acechador.png";
 		if (!LOBO.src) LOBO.src = "assets/lobotomy.mp3";
+	}
+	// ...y las dos imágenes de la cacería, con el mismo criterio.  La pista NO: son
+	// 2,3 MB y no hacen falta hasta que se pisa la puerta (ver huntStart).
+	if (LV.hunt) {
+		if (!NUGG.src) NUGG.src = "assets/nuggets.jpg";
+		if (!REDPJ.src) REDPJ.src = "assets/gato-rojo.jpg";
 	}
 	bakeMaze(); // el laberinto nuevo se hornea una sola vez
 	deal();
@@ -1134,16 +1240,41 @@ function dodge(f, next) {
 function moveFoes() {
 	const d = flow();
 	foeBeat++;
-	const huyen = now() < scareUntil; // ahuyentador activo
+	const huyen = now() < scareUntil, // ahuyentador activo
+		caza = huntOn(); // la cacería: los papeles están dados vuelta
 	foes = foes.map((f, i) => {
 		const st = i < (LV.stalk || 0); // acechador del sótano
-		if (st && !huyen && foeBeat % 2) return f; // va a medio paso...
+		// EL RITMO.  El acechador va a medio paso, y va a medio paso SIEMPRE: antes
+		// el maullido se lo sacaba (`!huyen`) y ahora que es inmune eso lo dejaría
+		// inmune y al doble de velocidad, que es lo peor de los dos mundos.  En la
+		// cacería el ritmo lo pone huntPace(): cada presa arrastra el lastre de los
+		// escapes que le regalaste.
+		const ve = caza && huntSees(i, st, d, f); // ¿te siente venir?
+		if (foeBeat % (caza ? huntPace(i, st, ve) : st ? 2 : 1)) return f;
 		let nb = open(f);
 		if (!nb.length) return f;
+		// LA CACERÍA: el mismo campo de flujo.  La presa que te siente lo SUBE —huye—;
+		// la que no, lo BAJA: se te viene encima sin saberlo (ver huntSees).  Y el
+		// acechador, cuando ya es el último, lo baja a propósito: te carga.
+		if (caza) {
+			// EL RUGIDO (ver meow): lo que era huida acá es parálisis.  Alcanza a todas
+			// las presas cercanas, acechador incluido —en esta mitad del nivel el que
+			// mete miedo sos vos—.
+			if (huyen && d[f] >= 0 && d[f] <= MEOW_R) return f;
+			const pv = prevFoe[i]; // de dónde viene, ANTES de pisar la marca
+			prevFoe[i] = f;
+			if (ve && !huntCharge(i, st))
+				return nb.reduce((a, b) => (d[b] > d[a] ? b : a));
+			// sin volverse sobre sus pasos salvo callejón: si no, en cada bifurcación
+			// se queda oscilando entre dos celdas y no llega nunca
+			const av = nb.filter((n) => n !== pv);
+			return (av.length ? av : nb).reduce((a, b) => (d[b] < d[a] ? b : a));
+		}
 		// AHUYENTADOR: el mismo campo de flujo, leído al revés.  Sólo lo escuchan los
-		// que están cerca (el maullido no llega al otro lado del laberinto), pero al
-		// que lo escucha lo pone a correr aunque sea el acechador, que no despista nunca.
-		if (huyen && d[f] >= 0 && d[f] <= MEOW_R) {
+		// que están cerca (el maullido no llega al otro lado del laberinto) y NUNCA lo
+		// escucha el acechador: es el único enemigo del juego al que no se ahuyenta.
+		// Un maullido es un susto, y a él los sustos no le hacen nada.
+		if (huyen && !st && d[f] >= 0 && d[f] <= MEOW_R) {
 			prevFoe[i] = f;
 			return nb.reduce((a, b) => (d[b] > d[a] ? b : a));
 		}
@@ -1157,13 +1288,22 @@ function moveFoes() {
 		dodge(f, next); // ¿se cruzaron sin tocarse? eso se paga
 		return next;
 	});
-	if (!huyen && foes.includes(p.y * C + p.x)) qteStart();
+	// EL CONTACTO.  En la cacería lo decide el ZARPAZO —basta con quedar al lado, ver
+	// huntGrab—.  Fuera de ella hay que compartir celda, y con el maullido encima el
+	// único que igual te alcanza es el acechador: los índices por debajo de LV.stalk
+	// son los suyos (ver spawn en gen()), así que indexOf ya devuelve el que manda.
+	if (caza) return huntGrab(d);
+	const i = foes.indexOf(p.y * C + p.x);
+	if (i > -1 && (!huyen || i < (LV.stalk || 0))) qteStart();
 }
 
 // ---- el maullido -----------------------------------------------------------
 // No gasta combo (el precio es el cooldown, ver MEOW_CD arriba).
 // Devuelve true sólo si salió, para que quien lo llame sepa si hacer otra cosa.
 function meow() {
+	// durante el buildup de la cacería el ESPACIO no maulla: saltea la cinemática
+	// (y sólo si ya se vio entera alguna vez, ver huntSkip)
+	if (huntHold()) return huntSkip();
 	if (win || frozen || paused || qte || tutHold()) return false;
 	if (!meowReady()) {
 		sfx(120, 180, "sine", 0.035, 80);
@@ -1183,13 +1323,34 @@ function meow() {
 				...foes.map((i) => ping(i, 1)),
 			],
 		};
+	// EL RUGIDO.  En la cacería el mismo botón hace lo contrario: no ahuyenta, PARALIZA.
+	// Dejarlo como estaba lo habría vuelto un botón muerto que además miente —el cartel
+	// diría "los gatos se alejan" mientras la mecánica de huida ni siquiera se lee en
+	// esa mitad del nivel (ver moveFoes)—, y apagarlo del todo habría tirado la única
+	// herramienta que el jugador se ganó en la primera mitad justo cuando pasa a ser el
+	// que caza.  Mismo cooldown, mismo `scareUntil`, sentido invertido: las presas
+	// cercanas se quedan clavadas del terror el tiempo que dura.
+	tmeow++; // el paso del tutorial que enseña el maullido espera esto
+	if (huntOn()) {
+		sfx(90, 520, "sawtooth", 0.085, 34);
+		setTimeout(() => sfx(62, 700, "sine", 0.07, 26), 120);
+		shake = 20;
+		burst(p.x * S + S / 2, p.y * S + S / 2, PAL.foe, 40);
+		say("¡RUGIDO!", "LAS PRESAS CERCANAS NO SE PUEDEN MOVER", PAL.foe);
+		return true;
+	}
 	// maullido de verdad: sube y después cae, no un beep
 	sfx(520, 240, "sawtooth", 0.055, 900);
 	setTimeout(() => sfx(900, 420, "sawtooth", 0.05, 280), 150);
 	shake = 13;
-	tmeow++; // el paso del tutorial que enseña el maullido espera esto
 	burst(p.x * S + S / 2, p.y * S + S / 2, "#9ff", 34);
-	say("¡MAULLIDO!", "LOS GATOS NEGROS SE ALEJAN", "#9ff");
+	say(
+		"¡MAULLIDO!",
+		LV.stalk
+			? "LOS GATOS NEGROS SE ALEJAN · EL ACECHADOR NO"
+			: "LOS GATOS NEGROS SE ALEJAN",
+		"#9ff",
+	);
 	return true;
 }
 
@@ -1220,6 +1381,33 @@ function qteStart(chain) {
 	if (qte || win || frozen) return;
 	// ...y antes de ese primero el juego se frena y lo explica (ver briefShow)
 	if (tutOn && !briefSeen) return briefShow();
+	// LA CACERÍA arma otro QTE: un ANILLO de letras alrededor de la presa, y SIN
+	// ORDEN.  No es una secuencia que hay que ejecutar, es un bicho al que hay que
+	// sacarle pedazos, y de un bicho se muerde por donde se puede.  Cada letra que
+	// entra le borra su porción del cuerpo (ver el dibujo del overlay).
+	if (huntOn() && hunt.prey > -1) {
+		const ace = hunt.prey < (LV.stalk || 0),
+			free = [...POOL].sort(() => Math.random() - 0.5),
+			// cada escape que le regalaste a ESTA presa le come una letra al anillo:
+			// la segunda vez que la agarrás se devora más rápido que la primera
+			n = ace
+				? HUNT_ACE_N
+				: Math.max(HUNT_RING_MIN, HUNT_RING - hunt.slow[hunt.prey]),
+			ms = HUNT_RING_MS * babyK();
+		qte = {
+			seq: [...Array(n)].map((_) => free.pop()),
+			i: 0,
+			ms,
+			until: now() + ms,
+			st: ace, // el acechador trae su cara también acá
+			ring: 1,
+			round: chain ? chain.round : 1,
+			rounds: chain ? chain.rounds : ace ? HUNT_ACE_ROUNDS : 1,
+		};
+		qte.eat = new Set(qte.seq); // lo que falta morder, sin orden
+		shake = 12;
+		return;
+	}
 	const primero = tutOn && !qteWins,
 		free = [...POOL].sort(() => Math.random() - 0.5),
 		// los acechadores son los primeros de `foes` (ver moveFoes): quién te
@@ -1241,6 +1429,10 @@ function qteStart(chain) {
 	shake = 10;
 }
 function qteEnd(okAll) {
+	// el anillo de la cacería se resuelve entero en huntBite: no comparte ni el
+	// pago, ni el castigo, ni la reubicación del enemigo con el QTE de la primera
+	// mitad, y mezclarlos habría dejado las dos mitades peor
+	if (qte && qte.ring) return huntBite(okAll);
 	const cell = p.y * C + p.x,
 		st = !!(qte && qte.st), // te alcanzó el acechador del sótano
 		round = qte ? qte.round || 1 : 1,
@@ -1345,6 +1537,529 @@ function qteEnd(okAll) {
 	qte = null;
 	if (okAll) deal();
 	else scareShow(st);
+}
+
+// ---- LA CACERÍA -------------------------------------------------------------
+// El sótano es el modo historia, y su historia no termina en la puerta.  Juntar las
+// siete monedas y pisar la casilla verde deja de ser escapar: es el punto de no
+// retorno.  A partir de ahí el juego se da vuelta entero —el gato blanco deja de ser
+// la presa— y no queda salida hasta que no quede ninguna presa.
+//
+// Todo lo que sigue reusa las máquinas que ya estaban.  El campo de flujo es EL MISMO
+// (flow()), sólo que las presas lo suben en vez de bajarlo; el QTE es EL MISMO, con
+// un anillo en vez de una fila; el latido, el ruido blanco y el ducking de la música
+// son los mismos.  Lo único de verdad nuevo son las tres fases y el zarpazo.
+//
+// POR QUÉ LA CACERÍA NO PUEDE FALLAR.  Una cacería que se pierde no es una cacería,
+// es otra persecución con los papeles cambiados, y el sótano ya tiene una de ésas en
+// su primera mitad.  Acá el jugador es inevitable por diseño, y son cuatro piezas:
+//
+//   1. EL ZARPAZO (HUNT_REACH).  No hace falta pisar a la presa: alcanza con quedar a
+//      dos celdas.  Sin esto, dos cosas que se mueven por un laberinto se persiguen
+//      para siempre y la única forma de terminar es aburrirse.  Con esto, para
+//      salvarse la presa tiene que sacarte TRES celdas, no una.
+//   2. VAN A MEDIO PASO mientras huyen, contra tu paso entero (huntPace).
+//   3. EL HAMBRE PESA: cada dos presas devoradas, la que corre pierde un beat más.
+//      Las primeras cuestan, las últimas se entregan.
+//   4. CADA ESCAPE TE LA DEJA MÁS FÁCIL: la presa a la que le erraste queda más lenta
+//      y con menos letras en el anillo (huntBite).
+//
+// El único que puede salvar a una presa es el propio jugador, errándole al QTE, y aun
+// así se la vuelve a encontrar y más blanda.  La tensión no está en si vas a llegar:
+// está en cuánto aguantás sin equivocarte mientras la pantalla se te viene encima.
+const HUNT_PREY = 5, // presas de la horda (el acechador es una de ellas)
+	HUNT_BUILD = 12000, // el buildup entero: termina justo con el drop del mp3
+	HUNT_EAT = 10000, // ...y a los 10 s se come la torre y cambia de piel
+	HUNT_DROP = 12, // el MISMO instante, pero en segundos de la pista
+	HUNT_SKIP_AT = 2000, // desde acá se ofrece saltar (sólo si ya se vio entero)
+	HUNT_FOE_MS = 640, // el reloj de las presas: el ritmo fino lo pone huntPace
+	HUNT_RING = 4, // letras del anillo de una presa entera
+	HUNT_RING_MIN = 3, // ...y el piso al que baja a fuerza de escapes
+	HUNT_RING_MS = 2600,
+	HUNT_ACE_N = 5, // el acechador es más grande: más letras...
+	HUNT_ACE_ROUNDS = 3, // ...y no se come de un solo bocado
+	HUNT_REACH = 2, // EL ZARPAZO, en celdas de laberinto
+	HUNT_SENSE = 8, // hasta dónde te SIENTEN: más lejos que esto, ni se enteran
+	HUNT_FOG0 = 6.4, // la vista arranca más ancha que la del sótano (LV.fog = 4.2)...
+	HUNT_FOG_STEP = 0.55, // ...y se cierra con cada presa: el final se juega a ciegas
+	HUNT_STYLE = 12; // lo que paga devorar una presa
+
+// ¿ya se vio el buildup entero alguna vez?  Se guarda igual que el interruptor del
+// skill issue: la cinemática de 12 s es un golpe que se da UNA vez, y a partir de la
+// segunda el que la quiera saltar tiene derecho.
+let huntSeen = (() => {
+	try {
+		return localStorage.getItem("lg.hunt") === "1";
+	} catch (e) {
+		return false;
+	}
+})();
+const huntSaw = () => {
+	huntSeen = true;
+	try {
+		localStorage.setItem("lg.hunt", "1");
+	} catch (e) {}
+};
+
+const huntOn = () => !!hunt && hunt.ph === "hunt"; // la cacería propiamente dicha
+const huntHold = () => !!hunt && hunt.ph === "build"; // el buildup congela el laberinto
+// el ACECHADOR se guarda para el final: mientras quede otra presa corre a paso entero
+// y el zarpazo no lo agarra; recién cuando es el último se da vuelta y te carga.
+const huntLast = () => !!hunt && foes.length === 1;
+const huntCharge = (i, st) => !!st && huntLast();
+// ¿ESTA presa te siente?  Sólo dentro de HUNT_SENSE celdas.  Es la regla de la que
+// cuelga todo el ritmo de la cacería.
+//
+// Con las cinco huyendo desde el primer cuadro, las cinco terminaban apretadas en la
+// esquina más lejana del sótano y la cacería era una caminata de treinta pasos por
+// presa: lo contrario de la ráfaga que tiene que ser.  Pero que la que no te siente
+// se quede paseando al azar tampoco alcanzaba —el laberinto es de 17x13 y llegar
+// hasta ella seguía costando lo mismo—.
+//
+// Así que la que NO te siente se te ACERCA.  Está a oscuras, no sabe qué sos, y el
+// sótano es chico: se mueve, y moverse en un sótano donde está esto es acercarse.
+// Recién a HUNT_SENSE celdas se da cuenta de lo que tiene enfrente y sale disparada
+// —y para entonces ya la tenés—.  Las dos mitades del comportamiento cuentan la
+// misma historia y, de paso, parten al medio lo que hay que caminar.
+const huntSees = (i, st, d, f) => st || (d[f] >= 0 && d[f] <= HUNT_SENSE);
+// El ritmo de cada presa, en beats de HUNT_FOE_MS.  Medio paso mientras huye, uno de
+// cada tres mientras todavía no te siente, y un beat más por cada escape que le
+// regalaste.  El acechador que aún no es el último es el único a paso entero: es el
+// que no se deja agarrar hasta que le toca.
+//
+// Y el HAMBRE PESA, pero SÓLO sobre la que está huyendo: cada dos presas devoradas,
+// la que corre pierde un beat más.  Las últimas se entregan, que es la forma que
+// tiene que tener un clímax.  El lastre no toca a la que todavía no te siente, y eso
+// no es un detalle: si también la frenara, dejaría de venírsete encima y volvería a
+// haber que caminar el sótano entero para llegar a ella —medido, empeoraba la
+// cacería entera en cuarenta segundos—.
+const huntPace = (i, st, ve) =>
+	st && !huntLast()
+		? 1
+		: (ve ? 2 + (((hunt && hunt.eaten) || 0) >> 1) : 3) +
+			((hunt && hunt.slow[i]) || 0);
+// el latido no se apaga en toda la cacería y acelera con cada presa que cae
+const huntDread = () =>
+	hunt ? 0.22 + (0.55 * hunt.eaten) / Math.max(1, HUNT_PREY) : 0;
+// la niebla del sótano se abre al empezar la cacería (sos vos el que ve en lo oscuro)
+// y se va cerrando con cada presa devorada
+const fogR = () =>
+	huntOn() || huntHold()
+		? Math.max(2.6, HUNT_FOG0 - HUNT_FOG_STEP * (hunt.eaten || 0))
+		: LV.fog;
+
+// ---- fase A: el buildup ----------------------------------------------------
+function huntStart() {
+	if (hunt) return;
+	dreadOff();
+	[BGM, VIBE].forEach((a) => {
+		try {
+			a.pause();
+		} catch (e) {}
+	});
+	srcOn(HUNT); // los 2,3 MB recién acá, y sólo acá
+	HUNT.muted = BGM.muted;
+	HUNT.volume = HUNT.v0;
+	try {
+		HUNT.currentTime = 0;
+	} catch (e) {}
+	play(HUNT).catch(() => {});
+	hunt = {
+		ph: "build",
+		t0: now(),
+		eaten: 0,
+		esc: 0,
+		bit: 0, // ¿ya se comió la torre?
+		prey: -1, // a cuál le está clavando el diente
+		slow: [],
+	};
+	// LA HORDA.  Los que quedaron vivos al llegar a la puerta más los que falten para
+	// HUNT_PREY: nadie desaparece y nadie aparece de la nada más allá de eso.
+	while (foes.length > HUNT_PREY) foes.pop();
+	while (foes.length < HUNT_PREY) foes.push(far());
+	hunt.slow = foes.map(() => 0);
+	prevFoe = [];
+	// la primera mitad se terminó: las monedas están todas y los faroles ya no
+	coins = [];
+	lamps = [];
+	revealT = 0;
+	radar = null;
+	qte = null;
+	graceT = 0;
+	scareUntil = 0;
+	note = null;
+	unlockT = 0;
+	shake = 16;
+	deal(); // el tablero queda consistente aunque durante el buildup no se teclee
+	sfx(70, 900, "sine", 0.09, 30);
+}
+
+// A los HUNT_EAT: el gato se come la torre.  Es EL momento del nivel, así que el
+// cambio de piel entra de golpe y completo —sprite, paleta del canvas, tema del CSS
+// y las paredes rehorneadas en rojo—.  Un degradado suave acá sería un chiste: lo
+// que tiene que pasar es que el jugador levante las cejas.
+function huntBiteTower() {
+	hunt.bit = 1;
+	PAL = PALS.hunt;
+	root.classList.add("hunt");
+	rankShow(rankI(), false); // el rango repinta ahora, no en el próximo tramo
+	bakeMaze(); // las paredes están horneadas: hay que volver a hornearlas rojas
+	flash = 1;
+	shake = 22;
+	burst((p.x + 0.5) * S, (p.y + 0.5) * S, "#fd0", 40);
+	burst((p.x + 0.5) * S, (p.y + 0.5) * S, "#f22", 40);
+	play(BANG).catch(() => {});
+	boom.src = "";
+	boom.src = BOOM;
+	boom.style.cssText = `position:absolute;display:block;pointer-events:none;z-index:2;top:${((p.y * S - 34) / BH) * 100}%;left:${((p.x * S - 34) / BW) * 100}%;width:${(110 / BW) * 100}%`;
+	setTimeout(() => (boom.style.display = "none"), 1100);
+	sfx(140, 700, "sawtooth", 0.08, 42);
+}
+
+// El salto del buildup.  Sólo si ya se vio entero (huntSeen), y salta al PUNTO EXACTO
+// de la pista: se adelanta el mp3 al drop Y se corre el reloj de la cinemática la
+// misma cantidad, así que imagen y música caen juntas en el mismo instante en el que
+// habrían caído solas.  No es un fundido a negro: es el mismo golpe, antes.
+function huntSkip() {
+	if (!huntHold() || !huntSeen || now() - hunt.t0 < HUNT_SKIP_AT) return false;
+	if (!hunt.bit) huntBiteTower(); // la transformación no se saltea, se adelanta
+	hunt.t0 = now() - HUNT_BUILD;
+	try {
+		HUNT.currentTime = HUNT_DROP;
+	} catch (e) {}
+	return true;
+}
+
+// ---- fase B: la cacería ----------------------------------------------------
+// EL ZARPAZO.  `d` es el campo de flujo desde el gato, así que d[celda] es la
+// distancia REAL por el laberinto: con HUNT_REACH = 1 basta con estar en la celda de
+// al lado —o encima— para clavarle el diente.  Es lo que impide que esto se vuelva
+// el gato y el ratón: sin esto, dos cosas que se mueven en un laberinto se persiguen
+// para siempre y la única forma de terminar sería aburrirse.
+function huntGrab(d) {
+	if (qte || !huntOn()) return;
+	let best = -1,
+		bd = 1e9;
+	foes.forEach((f, i) => {
+		if (i < (LV.stalk || 0) && !huntLast()) return; // el acechador, al final
+		const q = d[f];
+		if (q >= 0 && q <= HUNT_REACH && q < bd) {
+			bd = q;
+			best = i;
+		}
+	});
+	if (best < 0) return;
+	hunt.prey = best;
+	qteStart();
+}
+
+// Devorada resuelta.  Sale por acá TODO el QTE de anillo (ver qteEnd), así que no
+// toca ni una línea del QTE normal: son dos juegos distintos con la misma pantalla.
+function huntBite(okAll) {
+	const i = hunt.prey,
+		round = (qte && qte.round) || 1,
+		rounds = (qte && qte.rounds) || 1,
+		ace = i > -1 && i < (LV.stalk || 0);
+	qte = null;
+	if (i < 0 || i >= foes.length) return; // la presa ya no está: nada que cobrar
+	// una ronda ganada que no es la última: se encadena sin soltar la pantalla, igual
+	// que la tanda del acechador de la primera mitad
+	if (okAll && round < rounds) {
+		shake = 13;
+		sfx(160, 90, "sawtooth", 0.06, 60);
+		burst((p.x + 0.5) * S, (p.y + 0.5) * S, "#f22", 16);
+		qteStart({ round: round + 1, rounds });
+		return;
+	}
+	if (okAll) {
+		// PRESA DEVORADA.  Se va de `foes` y con ella su lastre y su memoria de paso.
+		foes.splice(i, 1);
+		hunt.slow.splice(i, 1);
+		prevFoe.splice(i, 1);
+		hunt.eaten++;
+		hunt.prey = -1;
+		kills++;
+		maxKills = Math.max(maxKills, kills);
+		comboUp();
+		styleUp(HUNT_STYLE);
+		graceT = now() + GRACE_MS;
+		shake = 18;
+		flash = 0.7;
+		hits++;
+		burst((p.x + 0.5) * S, (p.y + 0.5) * S, "#f22", 34);
+		play(BANG).catch(() => {});
+		sfx(90, 320, "sawtooth", 0.08, 38); // el crujido
+		setTimeout(() => sfx(58, 220, "sine", 0.06, 30), 120);
+		if (!foes.length) return huntFinish();
+		say(
+			ace ? "¡EL ACECHADOR ES TUYO!" : "DEVORADA",
+			`QUEDAN ${foes.length}`,
+			PAL.foe,
+		);
+		// letras nuevas, por el mismo motivo que las reparte qteEnd: el zarpazo salta
+		// EN MEDIO del paso —el QTE se abre justo después de que te moviste— así que
+		// las que están en pantalla son las de la celda anterior.  Sin esto, salir de
+		// una devorada te deja tecleando el laberinto de hace un movimiento.
+		deal();
+		return;
+	}
+	// SE TE ESCAPÓ.  No hay susto ni castigo de tiempo: acá el jugador es el que
+	// muerde, y un jumpscare le devolvería el papel de víctima justo cuando el nivel
+	// entero está diciendo lo contrario.  El precio es que la presa se va... y el
+	// premio de consuelo es que se va coja: un beat más lenta y con una letra menos
+	// en el anillo la próxima vez.  Dos escapes seguidos y prácticamente se entrega.
+	hunt.esc++;
+	hunt.slow[i]++;
+	hunt.prey = -1;
+	combo = 0;
+	kills = 0;
+	fails++;
+	styleDown(STYLE_ERR);
+	flash = 1;
+	shake = 12;
+	sfxBad();
+	huntFlee(i);
+	say("SE TE ESCAPÓ", "VA MÁS LENTA · NO SE VA A IR LEJOS", "#f80");
+	deal(); // ídem: la pantalla vuelve al laberinto y tiene que volver a la celda buena
+}
+
+// La presa que se zafó sale disparada por el campo de flujo: seis pasos subiendo,
+// que es lo que hace falta para que el zarpazo no la agarre de nuevo en el acto.
+// Se va corriendo, no se teletransporta: si el farol la agarra en el camino, se ve.
+function huntFlee(i) {
+	const d = flow();
+	let c = foes[i];
+	for (let n = 0; n < 6; n++) {
+		const nb = open(c);
+		if (!nb.length) break;
+		c = nb.reduce((a, b) => (d[b] > d[a] ? b : a));
+	}
+	foes[i] = c;
+	prevFoe[i] = -1;
+	sfx(760, 260, "sawtooth", 0.05, 180); // el chillido, subiendo y yéndose
+}
+
+// ---- fase C: el final ------------------------------------------------------
+function huntFinish() {
+	hunt.ph = "end";
+	hunt.t0 = now();
+	win = true;
+	tEnd = now() - t0;
+	dreadOff();
+	huntSaw(); // se llegó al final: el buildup ya se puede saltar
+	const bb = bests[LV.id];
+	newPB = bb === undefined || tEnd + pen < bb;
+	if (newPB) bests[LV.id] = tEnd + pen;
+	resAt = now() + RES_MS * 3; // el final se mira; el resumen puede esperar
+	flash = 1;
+	shake = 24;
+	burst((p.x + 0.5) * S, (p.y + 0.5) * S, "#f22", 60);
+	[196, 165, 131, 98].forEach((f, i) =>
+		setTimeout(() => sfx(f, 700, "sawtooth", 0.09, 40), i * 220),
+	);
+	say("NO QUEDA NINGUNA", "SE ACABÓ EL HAMBRE", PAL.foe);
+}
+
+// devuelve el sótano a como estaba: lo llama gen() antes de hornear nada
+function huntReset() {
+	if (hunt) {
+		try {
+			HUNT.pause();
+		} catch (e) {}
+	}
+	hunt = null;
+	PAL = PALS.base;
+	root.classList.remove("hunt");
+}
+
+// El reloj de las tres fases.  Va con el reloj DEL JUEGO, así que el menú de pausa
+// congela la cinemática igual que congela todo lo demás (y frame() le para el mp3).
+function huntStep(T) {
+	if (!hunt || hunt.ph !== "build") return;
+	const e = T - hunt.t0;
+	if (!hunt.bit && e >= HUNT_EAT) huntBiteTower();
+	if (e < HUNT_BUILD) return;
+	hunt.ph = "hunt";
+	hunt.t0 = T;
+	foeTick = T;
+	shownAt = T;
+	graceT = T + GRACE_MS;
+	huntSaw();
+	deal(); // letras nuevas: el buildup se comió las que había
+	say("LA CACERÍA", `${foes.length} PRESAS · NO DEJES NINGUNA`, PAL.foe);
+}
+
+// ---- lo que la cacería DIBUJA ----------------------------------------------
+// Va después de la niebla y antes de las letras, en coordenadas de tablero, igual
+// que la onda del maullido: en el sótano lo que importa se ve aunque no se vea nada.
+
+// La torre de nuggets del buildup.  La foto viene con FONDO BLANCO —es una foto de
+// producto—, y un rectángulo blanco encima de un laberinto negro se lee como un
+// error de carga, no como una súper píldora.  Se recorta en círculo y se le pone un
+// halo dorado detrás: el blanco que sobrevive al recorte deja de ser fondo y pasa a
+// ser el resplandor de la cosa, que es justo lo que tiene que parecer.
+function huntTower(cx, cy, r, k) {
+	const q = 0.5 + 0.5 * Math.sin(k * 14); // late más rápido cuanto más cerca está
+	x.save();
+	x.shadowColor = "#fd0";
+	x.shadowBlur = (26 + 30 * q) * GLOW;
+	const gr = x.createRadialGradient(cx, cy, r * 0.2, cx, cy, r * 1.5);
+	gr.addColorStop(0, `rgba(255,225,120,${(0.5 + 0.3 * q).toFixed(3)})`);
+	gr.addColorStop(1, "rgba(255,180,0,0)");
+	x.fillStyle = gr;
+	x.beginPath();
+	x.arc(cx, cy, r * 1.5, 0, 6.283);
+	x.fill();
+	x.shadowBlur = 0;
+	x.beginPath();
+	x.arc(cx, cy, r, 0, 6.283);
+	x.clip();
+	if (ready(NUGG)) {
+		// la foto se dibuja CUBRIENDO el disco (recortando a los lados), no encajada
+		// adentro: encajada dejaba dos bordes rectos de fondo blanco y el círculo se
+		// leía como una foto pegada.  Cubriendo, el blanco llena el disco entero y con
+		// el tinte dorado de abajo deja de ser papel y pasa a ser luz.
+		const ar = NUGG.naturalWidth / NUGG.naturalHeight || 1.5;
+		x.drawImage(NUGG, cx - r * ar, cy - r, r * 2 * ar, r * 2);
+		x.fillStyle = `rgba(255,186,40,${(0.2 + 0.16 * q).toFixed(3)})`;
+		x.beginPath();
+		x.arc(cx, cy, r, 0, 6.283);
+		x.fill();
+	} else {
+		// sin la foto, la torre igual existe: un montón de bultos dorados
+		x.fillStyle = "#e9a63a";
+		for (let i = 0; i < 22; i++) {
+			const a = (i * 2.4) % 6.283,
+				rr = r * (0.15 + 0.6 * ((i * 7) % 11) / 11);
+			x.beginPath();
+			x.arc(
+				cx + Math.cos(a) * rr,
+				cy + Math.sin(a) * rr * 0.7,
+				r * 0.22,
+				0,
+				6.283,
+			);
+			x.fill();
+		}
+	}
+	x.restore();
+}
+
+function huntScene(T) {
+	if (!hunt) return;
+	const e = T - hunt.t0;
+	// ---- las presas SE VEN a través de la niebla -----------------------------
+	// "Visión de hambre": el que caza no busca a ciegas.  Sin esto la cacería se
+	// vuelve recorrer un sótano oscuro esperando chocarse con algo, que es
+	// exactamente la sensación de la PRIMERA mitad y lo contrario de lo que esta
+	// parte tiene que dar.  Las presas se ven; llegar a ellas es lo que cuesta.
+	if (hunt.ph !== "end") {
+		const q = 0.5 + 0.5 * Math.sin(T / 170);
+		foes.forEach((f, i) => {
+			const X = (f % C) * S + S / 2,
+				Y = ((f / C) | 0) * S + S / 2,
+				ace = i < (LV.stalk || 0);
+			x.shadowColor = ace ? "#f22" : "#f66";
+			x.shadowBlur = (10 + 12 * q) * GLOW;
+			x.globalAlpha = 0.35 + 0.3 * q;
+			x.fillStyle = ace ? "#f22" : "#f77";
+			x.beginPath(); // un rombo, el mismo lenguaje que los faroles
+			x.moveTo(X, Y - 9);
+			x.lineTo(X + 6, Y);
+			x.lineTo(X, Y + 9);
+			x.lineTo(X - 6, Y);
+			x.closePath();
+			x.fill();
+			// los ojos: dos puntos que no parpadean nunca
+			x.globalAlpha = 0.8 + 0.2 * q;
+			x.fillStyle = "#fff";
+			for (const o of [-3.2, 3.2]) x.fillRect(X + o - 1, Y - 2, 2, 2);
+			x.globalAlpha = 1;
+		});
+		x.shadowBlur = 0;
+	}
+	if (hunt.ph !== "build") return;
+
+	// ---- el buildup ----------------------------------------------------------
+	// todo el dibujo sale de `e`: no hay un solo timer más que el reloj del juego
+	// El gato está SIEMPRE en la esquina de la puerta cuando arranca esto, así que
+	// una torre centrada en él se salía media pantalla por el borde y se veía como un
+	// recorte, no como un objeto.  Se la mantiene entera dentro del tablero y el cono
+	// de luz se encarga de decir sobre quién está cayendo.
+	const r0 = S * 2,
+		cx = Math.max(r0, Math.min(BW - r0, (vis.x + 0.5) * S)),
+		cy = (vis.y + 0.5) * S;
+	// la oscuridad se cierra sobre el gato durante el primer segundo
+	if (e < 1400) {
+		x.fillStyle = `rgba(2,0,4,${(0.7 * (1 - e / 1400)).toFixed(3)})`;
+		x.fillRect(0, 0, BW, BH);
+	}
+	if (!hunt.bit) {
+		// LA TORRE BAJA.  Arranca fuera del tablero y termina encima del gato justo
+		// cuando el reloj llega a HUNT_EAT: la caída ES la cuenta regresiva.
+		const k = Math.max(0, Math.min(1, (e - 800) / (HUNT_EAT - 800))),
+			ease = k * k,
+			ty = -S * 2 + (cy - S * 0.9 + S * 2) * ease,
+			r = S * (0.5 + 1.5 * ease);
+		huntTower(cx, ty, r, k);
+		// y el gato la mira: un cono de luz dorada desde la torre hasta él
+		const px = (vis.x + 0.5) * S;
+		x.globalAlpha = 0.12 + 0.2 * ease;
+		x.fillStyle = "#fd0";
+		x.beginPath();
+		x.moveTo(cx - r * 0.5, ty);
+		x.lineTo(cx + r * 0.5, ty);
+		x.lineTo(px + S * 0.5, cy + S * 0.4);
+		x.lineTo(px - S * 0.5, cy + S * 0.4);
+		x.closePath();
+		x.fill();
+		x.globalAlpha = 1;
+	} else {
+		// LA TRANSFORMACIÓN.  La cara nueva ocupa el tablero entero un segundo largo
+		// y se va: es la única vez que se ve grande, y por eso es la que queda.
+		const k = Math.max(0, Math.min(1, (e - HUNT_EAT) / 1300));
+		if (ready(REDPJ)) {
+			x.globalAlpha = (1 - k) * 0.92;
+			const w = BW * (1 + 0.25 * k),
+				h = BH * (1 + 0.25 * k);
+			x.drawImage(REDPJ, (BW - w) / 2, (BH - h) / 2, w, h);
+			x.globalAlpha = 1;
+		}
+		x.fillStyle = `rgba(140,0,20,${(0.3 * (1 - k)).toFixed(3)})`;
+		x.fillRect(0, 0, BW, BH);
+	}
+	// el título entra con el último tramo del buildup, letra por letra
+	if (e > HUNT_EAT) {
+		const k = Math.min(1, (e - HUNT_EAT) / (HUNT_BUILD - HUNT_EAT)),
+			t = "LA CACERÍA".slice(0, Math.max(1, Math.round(k * 10)));
+		x.font = "italic 900 " + Math.round(BW / 11) + "px " + DF;
+		x.shadowColor = "#f00";
+		x.shadowBlur = 26 * GLOW;
+		x.fillStyle = "#fff";
+		x.fillText(t, BW / 2, BH / 2);
+		x.shadowBlur = 0;
+	}
+	// SALTAR: sólo si ya se vio entero alguna vez (ver huntSkip).  Chiquito y abajo:
+	// el que lo necesita lo busca, y al que lo ve por primera vez no le roba el golpe.
+	if (huntSeen && e >= HUNT_SKIP_AT) {
+		x.font = "bold 11px " + CF;
+		x.shadowBlur = 0;
+		x.globalAlpha = 0.5 + 0.2 * Math.sin(T / 300);
+		x.fillStyle = "#fbb";
+		x.fillText(MOBILE ? "TOCÁ PARA SALTAR" : "[ESPACIO] SALTAR", BW / 2, BH - 12);
+		x.globalAlpha = 1;
+	}
+}
+
+// El velo rojo de la cacería: un vignette que respira y se cierra con cada presa.
+// Es lo último que se pinta sobre el mundo, así que tiñe todo lo de abajo sin tapar
+// las letras ni el QTE, que se dibujan después.
+function huntVeil(T) {
+	if (!hunt || hunt.ph === "build") return;
+	const q = 0.5 + 0.5 * Math.sin(T / 420),
+		k = hunt.eaten / HUNT_PREY;
+	x.fillStyle = `rgba(120,0,18,${(0.06 + 0.05 * q + 0.06 * k).toFixed(3)})`;
+	x.fillRect(0, 0, BW, BH);
 }
 
 // ---- el cartel de las dos habilidades (tutorial) ---------------------------
@@ -1572,6 +2287,7 @@ let lastW,
 	lastMw,
 	lastSc,
 	lastBop, // el frame no reescribe estilos que no cambiaron
+	lastQs, // ...y el temblor del QTE tampoco
 	lastT,
 	lastEx,
 	lastSub,
@@ -1653,7 +2369,12 @@ function rpopPlace() {
 // vacía el estilo pendiente de todo el documento, no del elemento que se lee.
 function rankShow(i, up) {
 	const r = RANKS[i];
-	root.style.setProperty("--rc", r.col); // de acá lo toman la letra, la barra y el cartel
+	// --rc va como estilo inline, así que le gana a cualquier regla del CSS: si acá
+	// no se contempla la cacería, el rango se queda celeste y es lo ÚNICO azul que
+	// queda en pantalla, justo en el bloque más grande de la barra.  El rango sigue
+	// leyéndose por su letra; en la cacería lo que se pierde es el color, que pasa a
+	// ser el único que hay.
+	root.style.setProperty("--rc", hunt && hunt.bit ? PAL.pj : r.col); // de acá lo toman la letra, la barra y el cartel
 	brank.textContent = r.k;
 	bfill.style.color = r.col;
 	if (up) rpop.textContent = r.n + "!";
@@ -1715,9 +2436,9 @@ function bakeLayer(i) {
 	k.setTransform(K, 0, 0, K, 0, 0); // la capa guarda los mismos píxeles que el canvas
 	k.translate(PAD, PAD); // walls() sigue hablando en coords del tablero
 	k.lineCap = "round";
-	k.strokeStyle = "#39f";
+	k.strokeStyle = PAL.wall;
 	k.lineWidth = 2;
-	k.shadowColor = "#2af";
+	k.shadowColor = PAL.glow;
 	k.shadowBlur = BLUR[i];
 	k.beginPath();
 	walls(k);
@@ -1782,10 +2503,12 @@ function frame() {
 	// ...y lo que entra en el lugar que deja la música: el latido y el ruido suben
 	// con el mismo `muf` (ver dreadOn).  Se van con él cuando la música vuelve, o
 	// de golpe si arrancó el jumpscare, que ya trae su propio grito.
-	if (qte && !frozen) dreadOn();
+	// ...y en la cacería el latido NO se apaga entre presa y presa: es lo que hace
+	// que el sótano deje de tener silencios.  Acelera con cada una que cae.
+	if ((qte || huntOn()) && !frozen) dreadOn();
 	if (dreadAt) {
-		if (frozen || (!qte && muf <= 0.02)) dreadOff();
-		else dreadSet(muf);
+		if (frozen || (!qte && !huntOn() && muf <= 0.02)) dreadOff();
+		else dreadSet(qte ? muf : huntOn() ? huntDread() : muf);
 	}
 	// y el grito del acechador baja con su imagen: el mismo perfil que el CSS de
 	// #scare.fade (pleno hasta el 32%, y de ahí a cero), sin un timer más
@@ -1793,8 +2516,15 @@ function frame() {
 		const q = (RT - scareFade) / SCARE_FADE;
 		scareA.volume = Math.max(0, Math.min(1, (1 - q) / 0.68));
 	}
+	// la cinemática del buildup es lo único del juego que corre CON la música pegada
+	// a la imagen, así que el menú de pausa tiene que parar las dos o quedan corridas
+	if (hunt && hunt.ph === "build" && HUNT.src) {
+		if (paused && !HUNT.paused) HUNT.pause();
+		else if (!paused && HUNT.paused) play(HUNT).catch(() => {});
+	}
 	const T = paused ? pauseAt : RT,
-		live = t0 && !win && !frozen && !paused; // en pausa el reloj se congela
+		// durante el buildup el laberinto queda tan quieto como con un cartel encima
+		live = t0 && !win && !frozen && !paused && !huntHold(); // en pausa el reloj se congela
 	// Respiro post-QTE: durante GRACE_MS la ventana de la letra no corre y los gatos
 	// no dan un paso.  Es el único momento del juego en que se puede pensar.
 	const respiro = live && !qte && T < graceT;
@@ -1825,6 +2555,7 @@ function frame() {
 			: 1;
 
 	if (tutOn) tutCheck();
+	huntStep(T); // el reloj de las tres fases de la cacería
 	if (resAt && T >= resAt) resShow(); // ganaste hace RES_MS: entra el resumen
 	if (qte && T > qte.until) qteEnd(false);
 	else if (live && !qte && left <= 0) penalize(400, "#f70", "late", "-");
@@ -1833,7 +2564,8 @@ function frame() {
 		live &&
 		!qte &&
 		!respiro &&
-		T - foeTick > foeMs() * (T < scareUntil ? 0.55 : 1)
+		T - foeTick >
+			(huntOn() ? HUNT_FOE_MS : foeMs() * (T < scareUntil ? 0.55 : 1))
 	) {
 		foeTick = T;
 		moveFoes();
@@ -1862,7 +2594,20 @@ function frame() {
 	flash *= 0.9;
 	cpop *= 0.88;
 
-	const sk = shake > 0.4 ? shake : 0; // debajo de medio píxel no se ve y rompe el fast path
+	// el temblor del QTE es el PISO: los golpes sueltos (shake = 7..14) siguen
+	// mandando en su pico y se apagan encima de él, no en vez de él
+	const qs = qShake(T),
+		sk = Math.max(shake, qs) > 0.4 ? Math.max(shake, qs) : 0; // debajo de medio píxel no se ve y rompe el fast path
+	// ...y la misma cuenta sale al CSS para que se sacuda la GUI de afuera del canvas.
+	// Cuantizado a medio píxel y escrito sólo cuando cambió, igual que --bop: es una
+	// recalculación de estilo, no se paga una por cuadro de arrepentimiento.
+	const qsCss = Math.round(qs * 2) / 2;
+	if (qsCss !== lastQs) {
+		if (!qsCss !== !lastQs)
+			root.classList[qsCss ? "add" : "remove"]("shk"); // prende y apaga la animación
+		root.style.setProperty("--qs", qsCss.toFixed(1));
+		lastQs = qsCss;
+	}
 	// K: el canvas guarda K píxeles por cada uno del tablero (ver sizeCanvas).  El
 	// temblor sigue midiéndose en píxeles del tablero, así que también se escala.
 	x.setTransform(
@@ -1951,16 +2696,24 @@ function frame() {
 
 	// enemigos (gato oscuro).  Con el maullido encima van pálidos y con el halo del
 	// maullido en vez del rojo: de un vistazo se ve que están huyendo, no cazando.
-	const asustados = T < scareUntil;
-	x.shadowColor = asustados ? "#9ff" : "#f36";
+	// El ACECHADOR queda afuera de eso: es inmune al maullido, así que sigue rojo y
+	// opaco mientras el resto se despinta.  Si se pusiera pálido como los demás la
+	// pantalla estaría diciendo "éste también huye" justo cuando no es cierto, y el
+	// jugador leería el golpe que se viene como un bug.
+	const asustados = T < scareUntil,
+		nst = LV.stalk || 0; // los acechadores son los primeros de la lista
 	x.shadowBlur = (16 + bop * 14) * GLOW;
-	if (asustados) x.globalAlpha = 0.72;
-	const nst = LV.stalk || 0; // los acechadores son los primeros de la lista
 	foes.forEach((f, i) => {
 		const X = (f % C) * S + S / 2,
 			Y = ((f / C) | 0) * S + S / 2,
 			s = S - 8 + 2 * Math.sin(T / 150 + f),
-			im = i < nst && ready(STALK) ? STALK : FOE;
+			ace = i < nst,
+			// en la cacería los papeles están dados vuelta: las presas van pálidas y
+			// con el halo de miedo TODO el tiempo, y el que caza sos vos
+			huye = huntOn() ? !huntCharge(i, ace) : asustados && !ace,
+			im = ace && ready(STALK) ? STALK : FOE;
+		x.shadowColor = huye ? (huntOn() ? PAL.prey : "#9ff") : PAL.foe;
+		x.globalAlpha = huye ? 0.72 : 1;
 		if (ready(im)) x.drawImage(im, X - s / 2, Y - s / 2, s, s);
 		else {
 			x.fillStyle = "#f57";
@@ -1969,21 +2722,44 @@ function frame() {
 	});
 	x.globalAlpha = 1;
 
-	// jugador (gato blanco)
-	x.shadowColor = "#0ff";
-	x.shadowBlur = (18 + bop * 16) * GLOW;
-	x.fillStyle = `rgba(0,220,255,${(0.18 + bop * 0.16).toFixed(3)})`;
+	// jugador (gato blanco... hasta que se come la torre)
+	const mut = !!(hunt && hunt.bit), // ya mutó: sprite y halo nuevos
+		pjIm = mut && ready(REDPJ) ? REDPJ : PJ;
+	x.shadowColor = PAL.pj;
+	x.shadowBlur = (18 + bop * 16 + (mut ? 14 : 0)) * GLOW;
+	x.fillStyle = `rgba(${PAL.pjFill},${(0.18 + bop * 0.16 + (mut ? 0.44 : 0)).toFixed(3)})`;
 	x.fillRect(vis.x * S + 4, vis.y * S + 4, S - 8, S - 8);
-	if (ready(PJ))
-		x.drawImage(PJ, vis.x * S + 3, vis.y * S + 3, S - 6, S - 6);
+	// la foto del gato transformado es oscura y a ~28px se hunde contra el sótano:
+	// el anillo la despega del fondo sin taparla
+	if (mut) {
+		x.strokeStyle = PAL.pj;
+		x.lineWidth = 1.5;
+		x.strokeRect(vis.x * S + 3.5, vis.y * S + 3.5, S - 7, S - 7);
+	}
+	if (ready(pjIm))
+		x.drawImage(pjIm, vis.x * S + 3, vis.y * S + 3, S - 6, S - 6);
 	else {
-		x.fillStyle = "#7ff";
+		x.fillStyle = mut ? "#f66" : "#7ff";
 		x.fillRect(vis.x * S + 9, vis.y * S + 9, S - 18, S - 18);
+	}
+	// ...y si la imagen del gato transformado todavía no está en assets/, la mutación
+	// igual se VE: dos ojos rojos encendidos sobre el sprite de siempre, que es el
+	// motivo de la imagen que va a ir ahí.  Nunca una pantalla rota por un 404.
+	if (mut && !ready(REDPJ)) {
+		x.shadowColor = "#f00";
+		x.shadowBlur = 12 * GLOW;
+		x.fillStyle = "#f22";
+		for (const o of [-0.17, 0.17]) {
+			x.beginPath();
+			x.arc((vis.x + 0.5 + o) * S, (vis.y + 0.44) * S, 2.6, 0, 6.283);
+			x.fill();
+		}
+		x.shadowBlur = 0;
 	}
 
 	const PX = vis.x * S + S / 2,
 		PY = vis.y * S + S / 2;
-	if (!win && !tutHold()) {
+	if (!win && !tutHold() && !huntHold()) {
 		// durante el respiro el anillo queda lleno y en blanco: se ve que NO está corriendo
 		x.strokeStyle = respiro
 			? "#dff"
@@ -2055,7 +2831,7 @@ function frame() {
 				revealT && dt < REVEAL_MS
 					? Math.min(1, 2 - (2 * dt) / REVEAL_MS)
 					: 0,
-			rad = (LV.fog + lit * lit * (C + R) * 1.6) * S, // a pleno, el núcleo tapa el tablero entero
+			rad = (fogR() + lit * lit * (C + R) * 1.6) * S, // a pleno, el núcleo tapa el tablero entero
 			fx = (vis.x + 0.5) * S,
 			fy = (vis.y + 0.5) * S;
 		if (fogTex === undefined) fogTex = bakeFog();
@@ -2116,6 +2892,11 @@ function frame() {
 		}
 		x.shadowBlur = 0;
 	}
+
+	// LA CACERÍA, por el mismo motivo que la onda de acá abajo: la torre del buildup
+	// y las presas vistas a través de la oscuridad tienen que estar POR ENCIMA de la
+	// niebla, o el nivel a oscuras se come su propia segunda mitad.
+	huntScene(T);
 
 	// AHUYENTADOR: la onda del maullido saliendo del gato blanco.  Va después de la
 	// niebla a propósito: en el sótano el maullido se oye aunque no se vea nada.
@@ -2189,19 +2970,33 @@ function frame() {
 	// todas verdes cuando la salida ya abrió.  Va DESPUÉS de la niebla, así que en
 	// el sótano —donde no se ve nada y la cuenta importa más— se lee igual.  Se
 	// muda abajo si el gato está en la primera fila, que es donde arranca.
-	if (!win) {
-		const gap = 13,
-			wc = LV.coins * gap,
+	// ...y en la cacería la MISMA fila cuenta otra cosa: las presas que ya devoraste.
+	// Es la misma pieza porque es la misma pregunta —"¿cuánto me falta?"— y aprender
+	// a leerla dos veces sería una regla de más.  Las llenas son las que se comieron.
+	if (!win || huntOn()) {
+		const caza = !!hunt,
+			tot = caza ? HUNT_PREY : LV.coins,
+			hechas = caza ? hunt.eaten : got,
+			gap = 13,
+			wc = tot * gap,
 			X0 = (BW - wc) / 2 + gap / 2,
 			Y0 = p.y === 0 ? BH - 15 : 15;
 		x.fillStyle = "rgba(4,6,12,.82)";
 		x.fillRect(X0 - gap / 2 - 6, Y0 - 10, wc + 12, 20);
-		x.strokeStyle = ab ? "#0f96" : "#1ff5";
+		x.strokeStyle = caza ? "#f446" : ab ? "#0f96" : "#1ff5";
 		x.lineWidth = 1;
 		x.strokeRect(X0 - gap / 2 - 5.5, Y0 - 9.5, wc + 11, 19);
-		for (let i = 0; i < LV.coins; i++) {
-			const lleno = i < got,
-				c = lleno ? (ab ? "#0f9" : "#fe4") : "#4a5a72";
+		for (let i = 0; i < tot; i++) {
+			const lleno = i < hechas,
+				c = lleno
+					? caza
+						? "#f34"
+						: ab
+							? "#0f9"
+							: "#fe4"
+					: caza
+						? "#6b3040"
+						: "#4a5a72";
 			x.strokeStyle = x.fillStyle = c;
 			x.shadowColor = c;
 			x.shadowBlur = MOBILE || !lleno ? 0 : 9 * GLOW;
@@ -2212,12 +3007,16 @@ function frame() {
 		x.shadowBlur = 0;
 	}
 
-	// letras de las salidas: SIEMPRE al final, encima de todo
-	if (!win && !qte) {
+	huntVeil(T); // el velo rojo tiñe el mundo, no la GUI que se dibuja después
+
+	// letras de las salidas: SIEMPRE al final, encima de todo.  Durante el buildup de
+	// la cacería no: el laberinto está congelado y una letra ofrecida es una promesa
+	// de que se puede caminar.
+	if (!win && !qte && !huntHold()) {
 		const col = respiro
 			? "#dff"
 			: left > 0.5
-				? "#9ff"
+				? PAL.key
 				: left > 0.25
 					? "#fe6"
 					: "#f88";
@@ -2260,7 +3059,87 @@ function frame() {
 		banner(T, note.t, note.a, note.b, note.col, abrio ? 66 : 0);
 
 	// overlay del QTE
-	if (qte) {
+	if (qte && qte.ring) {
+		// ---- EL ANILLO: devorar, no ejecutar una secuencia ---------------------
+		// La presa va al centro y las letras alrededor, repartidas en círculo.  No
+		// hay "la que toca": cada letra es un PEDAZO, y morderla borra su porción
+		// del cuerpo.  Por eso el orden da igual —de un bicho se muerde por donde
+		// se puede— y por eso el dibujo no marca ninguna como siguiente: marcar una
+		// sería volver a pedir una secuencia por la ventana.
+		x.fillStyle = "rgba(14,0,4,.72)";
+		x.fillRect(0, 0, BW, BH);
+		const n = qte.seq.length,
+			cx = BW / 2,
+			cy = BH / 2,
+			gr = Math.min(1, Math.max(0, 1 - left)),
+			// al revés que el QTE normal: acá el bicho no se te viene encima, se te
+			// ENCOGE.  Lo que crece es tu lugar en la pantalla.
+			rad = Math.min(BW, BH) * 0.3,
+			sz = Math.min(BW, BH) * (0.42 - 0.1 * gr),
+			cara = qte.st && ready(STALK) ? STALK : BIG,
+			ang = (i) => -1.571 + (6.283 * i) / n;
+		// el cuerpo, por sectores: uno por letra, y el sector de una letra ya comida
+		// simplemente no se pinta.  El bicho se va quedando en pedazos sueltos.
+		if (ready(cara))
+			qte.seq.forEach((k, i) => {
+				if (!qte.eat.has(k)) return; // ese pedazo ya no está
+				const a0 = ang(i) - 3.1416 / n,
+					a1 = ang(i) + 3.1416 / n;
+				x.save();
+				x.beginPath();
+				x.moveTo(cx, cy);
+				x.arc(cx, cy, sz, a0, a1);
+				x.closePath();
+				x.clip();
+				x.globalAlpha = 0.55 + 0.4 * gr;
+				x.drawImage(cara, cx - sz, cy - sz, sz * 2, sz * 2);
+				x.restore();
+			});
+		x.globalAlpha = 1;
+		x.font = "italic 900 16px " + DF;
+		x.shadowColor = "#f22";
+		x.shadowBlur = 12 * GLOW;
+		x.fillStyle = "#fbb";
+		x.fillText(
+			qte.rounds > 1
+				? `! DEVORALO — RONDA ${qte.round} DE ${qte.rounds} !`
+				: "! DEVORALO — EN CUALQUIER ORDEN !",
+			cx,
+			cy - rad - 26,
+		);
+		x.font = "bold 30px " + CF;
+		qte.seq.forEach((k, i) => {
+			const a = ang(i),
+				X = cx + Math.cos(a) * rad,
+				Y = cy + Math.sin(a) * rad,
+				queda = qte.eat.has(k),
+				col = queda ? "#fff" : "#7a2030";
+			x.shadowBlur = 0;
+			x.fillStyle = "rgba(10,0,4,.92)";
+			x.beginPath();
+			x.arc(X, Y, 17, 0, 7);
+			x.fill();
+			x.strokeStyle = queda ? "#f45" : "#5a1522";
+			x.lineWidth = 2;
+			x.stroke();
+			x.shadowColor = "#f22";
+			x.shadowBlur = (queda ? 18 : 0) * GLOW;
+			x.fillStyle = col;
+			x.fillText(k.toUpperCase(), X, Y);
+		});
+		x.shadowBlur = 0;
+		x.fillStyle = "#f22";
+		x.fillRect(cx - 120, cy + rad + 22, 240 * Math.max(0, left), 5);
+		if (qte.rounds > 1) {
+			const pw = 14,
+				px0 = cx - ((qte.rounds - 1) * (pw + 5)) / 2;
+			for (let i = 0; i < qte.rounds; i++) {
+				x.fillStyle =
+					i < qte.round - 1 ? "#f34" : i === qte.round - 1 ? "#fff" : "#4a1020";
+				x.fillRect(px0 + i * (pw + 5) - pw / 2, cy + rad + 36, pw, 4);
+			}
+		}
+	} else if (qte) {
 		x.fillStyle = "rgba(8,0,10,.78)";
 		x.fillRect(0, 0, BW, BH);
 		// el enemigo se te viene encima según se acaba el tiempo
@@ -2335,7 +3214,7 @@ function frame() {
 	// las scanlines las pinta el CSS (#board::after): eran ~150 fillRect por cuadro
 	if (bop > 0.02) {
 		// y el borde del tablero también late
-		x.strokeStyle = `rgba(120,235,255,${(bop * 0.45).toFixed(3)})`;
+		x.strokeStyle = `rgba(${PAL.edge},${(bop * 0.45).toFixed(3)})`;
 		x.lineWidth = 1 + bop * 3;
 		x.shadowColor = "#0ff";
 		x.shadowBlur = bop * 24 * GLOW;
@@ -2373,18 +3252,25 @@ function frame() {
 		}
 	}
 	const mon = "\u25CF".repeat(got) + "\u25CB".repeat(falta),
+		// en la cacería el renglón deja de hablar de la salida —no hay— y cuenta lo
+		// único que importa a partir de ahí: cuántas presas quedan vivas
+		caza = !!hunt,
 		lock = win
-			? "\u{1F3C1} GANASTE!  " + mon
-			: MOBILE
-				? (falta ? "\u{1F512}" : "\u{1F513}") + mon + habIco()
-				: (falta
-						? `\u{1F512} SALIDA BLOQUEADA · faltan ${falta} ${falta == 1 ? "moneda" : "monedas"}`
-						: "\u{1F513} SALIDA ABIERTA") +
-					"  " +
-					mon;
+			? caza
+				? "\u{1F52A} NO QUEDA NINGUNA"
+				: "\u{1F3C1} GANASTE!  " + mon
+			: caza
+				? (MOBILE ? "\u{1F52A} " : "\u{1F52A} QUEDAN ") + foes.length
+				: MOBILE
+					? (falta ? "\u{1F512}" : "\u{1F513}") + mon + habIco()
+					: (falta
+							? `\u{1F512} SALIDA BLOQUEADA · faltan ${falta} ${falta == 1 ? "moneda" : "monedas"}`
+							: "\u{1F513} SALIDA ABIERTA") +
+						"  " +
+						mon;
 	if (lock !== lastEx) {
 		bc.textContent = lock;
-		bc.style.color = falta && !win ? "#f88" : "#0f9";
+		bc.style.color = caza ? "#f77" : falta && !win ? "#f88" : "#0f9";
 		lastEx = lock;
 	}
 	const lab = "x" + combo;
@@ -2469,7 +3355,15 @@ function key(k) {
 			.play()
 			.catch(() => {});
 	} // la música arranca con la 1ª tecla
-	if (win || frozen || paused || k.length != 1 || k < "a" || k > "z")
+	if (
+		win ||
+		frozen ||
+		paused ||
+		huntHold() || // el buildup se mira, no se juega
+		k.length != 1 ||
+		k < "a" ||
+		k > "z"
+	)
 		return;
 	if (!t0) {
 		t0 = now();
@@ -2478,6 +3372,30 @@ function key(k) {
 	}
 
 	if (qte) {
+		// EL ANILLO de la cacería no tiene orden: vale cualquier letra que siga en
+		// el cuerpo.  `i` se sigue llevando porque el dibujo lo usa para saber
+		// cuántos pedazos faltan, pero ya no dice CUÁL toca.
+		if (qte.ring) {
+			if (qte.eat.has(k)) {
+				qte.eat.delete(k);
+				qte.i++;
+				push(k, "qte");
+				hits++;
+				sfx(120 + qte.i * 40, 70, "sawtooth", 0.055, 60);
+				burst(
+					(p.x + 0.5) * S,
+					(p.y + 0.5) * S,
+					"#f22",
+					8,
+				);
+				if (!qte.eat.size) qteEnd(true);
+			} else {
+				push(k, "qtebad");
+				fails++;
+				qteEnd(false);
+			}
+			return;
+		}
 		// durante el QTE sólo cuenta la secuencia
 		if (k === qte.seq[qte.i]) {
 			push(k, "qte");
@@ -2549,6 +3467,10 @@ function key(k) {
 		burst(p.x * S + S / 2, p.y * S + S / 2, "#fd8", 24);
 	}
 	if (exitOpen() && p.x == C - 1 && p.y == R - 1) {
+		// EL PUNTO DE NO RETORNO.  En el sótano la puerta con todas las monedas no
+		// es la salida: es donde empieza la segunda mitad (ver huntStart).  En los
+		// otros niveles esto no existe y la puerta sigue siendo la puerta.
+		if (LV.hunt && !hunt) return huntStart();
 		win = true;
 		tEnd = now() - t0;
 		const bb = bests[LV.id]; // el récord es de cada nivel
@@ -2559,6 +3481,15 @@ function key(k) {
 		[784, 988, 1175, 1568].forEach((f, i) =>
 			setTimeout(() => sfx(f, 220, "triangle", 0.08), i * 110),
 		);
+		return;
+	}
+	// en la cacería el contacto se evalúa en cuanto te movés y no recién en el
+	// próximo paso de las presas: esperar hasta 640 ms para que se note que las
+	// alcanzaste rompía lo único que esta parte tiene que ser, que es frenética
+	if (huntOn()) {
+		huntGrab(flow());
+		if (qte) return;
+		deal();
 		return;
 	}
 	if (foes.includes(p.y * C + p.x)) return qteStart(); // le caíste encima a un enemigo
@@ -2698,7 +3629,11 @@ tec.onclick = () => {
 	tap();
 	tec.blur();
 };
-cv.onclick = tap;
+// en el teléfono no hay ESPACIO: el que salta el buildup es el propio tablero
+cv.onclick = () => {
+	if (huntHold() && huntSkip()) return;
+	tap();
+};
 bar.onclick = tap;
 // en el teléfono no hay barra espaciadora a mano: el bloque del rango es el botón
 // del maullido, y si todavía no está listo hace lo mismo que el resto de la barra
@@ -2895,8 +3830,13 @@ function resShow() {
 	const avg = RANKS[rankI(avgStl())],
 		top = RANKS[rankI(maxStl)],
 		nx = nextLv();
-	rtag.textContent = LV.tag;
-	rttl.textContent = LV.tut ? "TUTORIAL COMPLETADO" : "NIVEL COMPLETADO";
+	const fin = !!hunt && hunt.ph === "end"; // se terminó la cacería: es EL final
+	rtag.textContent = fin ? "EL SÓTANO · FINAL" : LV.tag;
+	rttl.textContent = fin
+		? "FINAL DESBLOQUEADO"
+		: LV.tut
+			? "TUTORIAL COMPLETADO"
+			: "NIVEL COMPLETADO";
 	rtime.textContent = fmt(tEnd + pen);
 	rsub.textContent = `CRUDO ${fmt(tEnd)}  ·  ${pen < 0 ? "BONUS -" : "PENALIZACIÓN +"}${fmt(Math.abs(pen))}`;
 	// El rango grande es el PROMEDIO de toda la partida, no el pico ni el que quedó
@@ -2918,6 +3858,10 @@ function resShow() {
 			: "") +
 		(dodges
 			? `<div><b>${dodges}</b><small>ESQUIVES AL CRUCE</small></div>`
+			: "") +
+		(fin
+			? `<div><b>${hunt.eaten}/${HUNT_PREY}</b><small>PRESAS</small></div>` +
+				`<div><b>${hunt.esc}</b><small>SE TE ESCAPARON</small></div>`
 			: "") +
 		(baby ? `<div><b>${baby}</b><small>BABY POINTS</small></div>` : "");
 	rpb.textContent = newPB

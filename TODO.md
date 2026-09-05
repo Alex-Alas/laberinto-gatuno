@@ -1,6 +1,26 @@
 # Pendientes de UI/UX
 
-## Lo único pendiente: el sprite del acechador
+## Los assets de la cacería ya están
+
+`assets/nuggets.jpg` (la torre del buildup) y `assets/gato-rojo.jpg` (el gato ya
+transformado) son **las imágenes buenas**, subidas al repo. Van por ruta y todo su uso
+pasa por `ready()`, así que si algún día se reemplazan basta con pisarlas: no hay una sola
+línea de código que tocar mientras el nombre y la extensión no cambien. Si se cambia la
+extensión hay que tocar los dos literales en `gen()` (`game.js`) y el conteo de assets del
+test 8.
+
+Dos notas sobre cómo se dibujan, por si se reemplazan por otras:
+
+- **La torre** se recorta en círculo y se dibuja **cubriendo** el disco, con un halo dorado
+  detrás y un tinte cálido encima. Está pensado para una foto de producto **con fondo
+  blanco**: así el blanco deja de leerse como papel y pasa a ser el resplandor de la súper
+  píldora. Una imagen con fondo transparente también funciona, pero el tinte le va a subir
+  la temperatura.
+- **El gato transformado** se dibuja a ~28 px en el tablero, así que lleva un anillo y un
+  relleno rojo detrás para despegarlo del sótano. A pantalla completa (el segundo de la
+  transformación) se ve entera y sin recortar.
+
+## Lo otro pendiente: el sprite del acechador
 
 `assets/acechador.png` es un **reemplazo generado**, no la imagen que se subió: la foto no
 llegó al contenedor donde se hizo el cambio (el mp3 del grito sí, y ése es el original).
