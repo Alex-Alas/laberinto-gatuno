@@ -238,7 +238,7 @@ babyEnd(false);
 if(!BGM.loop||!(BGM.volume>0&&BGM.volume<1)) throw new Error('musica mal configurada');
 if([SCREAM,BANG,BGM].some(a=>a.preload!=='auto')) throw new Error('falta preload de audio');
 BGM.paused=true; press('a'); if(BGM.paused) throw new Error('la musica no arranco con la 1a tecla');
-if(!BGM.src.endsWith('assets/bgm.mp3')) throw new Error('la 1a tecla no le puso la pista al BGM');
+if(!BGM.src.endsWith('assets/vibes.mp3')) throw new Error('la 1a tecla no le puso la pista al BGM');
 mus.onclick(); if(!BGM.muted) throw new Error('mute'); mus.onclick();
 
 // 9) teclado de telefono: la ruta oninput mueve igual que keydown
@@ -1301,7 +1301,7 @@ const flat=src.replace(/"/g,"'").replace(/ *([=?:,;{}()[\]]) */g,'$1');
 if(!/<link[^>]+href=style\.css/.test(mk)) throw new Error('el index no carga style.css');
 if(!/<script src=game\.js>/.test(mk)) throw new Error('el index no carga game.js');
 const rutas=[...new Set([...src.matchAll(/"(assets\/[\w.-]+)"/g)].map(m=>m[1]))];
-if(rutas.length!==14) throw new Error('el juego dejo de tener sus 14 assets: '+rutas.length);
+if(rutas.length!==13) throw new Error('el juego dejo de tener sus 13 assets: '+rutas.length);
 for(const a of rutas)
   if(!fs.existsSync(path.join(__dirname,a))) throw new Error('falta el archivo '+a);
 
