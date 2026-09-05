@@ -1677,7 +1677,7 @@ const HUNT_PREY = 5, // presas de la horda (el acechador es una de ellas)
 	HUNT_FOG_STEP = 0.55, // ...y se cierra con cada presa: el final se juega a ciegas
 	HUNT_STYLE = 12, // lo que paga devorar una presa
 	// EL ATAQUE DE DETERMINACIÓN: a esta distancia EN LÍNEA RECTA se dispara solo
-	HUNT_DET_R = 3,
+	HUNT_DET_R = 4,
 	HUNT_DET_N = 1, // ...y a esta carga lo sostiene mientras la presa siga cerca
 	// EL LATIDO: desde acá se empieza a oír, y a cero celdas está al tope
 	HEART_NEAR = 9,
@@ -4032,6 +4032,7 @@ function lvlShow() {
 	lvlOn = true;
 	menuClose();
 	kb.blur();
+	huntReset();
 	if (!paused) {
 		paused = true;
 		pauseAt = now();
