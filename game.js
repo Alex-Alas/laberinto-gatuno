@@ -333,7 +333,7 @@ vibe.onclick = () => {
 const LEVELS = [
 	{
 		id: "tutorial",
-		pic: "assets/nivel1.jpeg",
+		pic: "assets/nivel1.png",
 		name: "PRIMEROS PASOS",
 		tag: "NIVEL 1 · TUTORIAL",
 		col: "#6f9",
@@ -356,7 +356,7 @@ const LEVELS = [
 	},
 	{
 		id: "clasico",
-		pic: "assets/nivel2.jpeg",
+		pic: "assets/nivel2.png",
 		name: "EL LABERINTO",
 		tag: "NIVEL 2 · CLÁSICO",
 		col: "#4cf",
@@ -378,7 +378,7 @@ const LEVELS = [
 	},
 	{
 		id: "sotano",
-		pic: "assets/nivel3.jpeg",
+		pic: "assets/nivel3.png",
 		name: "EL SÓTANO",
 		tag: "NIVEL 3 · PESADILLA",
 		col: "#f4a",
