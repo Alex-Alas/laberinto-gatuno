@@ -242,6 +242,17 @@ const HUNT_SRC = "assets/hunt.mp3";
 const HUNT = new Audio();
 HUNT.preload = "none";
 HUNT.v0 = HUNT.volume = 0.42;
+// EL LATIDO.  Un mp3 propio (256KB), y mismo trato que los otros dos pesados: se
+// baja al entrar a la cacería y en ningún otro momento.  Es el ÚNICO audio de la
+// segunda mitad del sótano que no es música: sube al acercarte a una presa, ocupa
+// el lugar del ruido blanco durante el QTE, y cuando ya no queda más que el
+// acechador se queda solo en la pista (ver heartSet y huntHeart).
+const HEART_SRC = "assets/heartbeat.mp3";
+const HEART = new Audio();
+HEART.preload = "none";
+HEART.loop = true;
+HEART.v0 = 0.95; // el tope: con el acechador encima esto TIENE que tapar todo
+HEART.volume = 0;
 const play = (a) => {
 	try {
 		a.currentTime = 0;
@@ -268,13 +279,22 @@ VIBE.preload = "none"; // las vibes se bajan al pedirlas, también en escritorio
 // la que va a sonar —el BGM con la 1ª tecla, las vibes recién al pedirlas—; en
 // escritorio el BGM se carga de entrada, las vibes no (otros ~730KB ahorrados).
 const srcOn = (a) => {
-	if (!a.src) a.src = a === HUNT ? HUNT_SRC : a === VIBE ? VIBE_SRC : BGM_SRC;
+	if (!a.src)
+		a.src =
+			a === HUNT
+				? HUNT_SRC
+				: a === HEART
+					? HEART_SRC
+					: a === VIBE
+						? VIBE_SRC
+						: BGM_SRC;
 };
 if (!PERF.lazy) srcOn(BGM);
 mus.onclick = () => {
 	BGM.muted = !BGM.muted;
 	VIBE.muted = BGM.muted;
 	HUNT.muted = BGM.muted;
+	HEART.muted = BGM.muted;
 	mus.textContent = (BGM.muted ? "♫̸" : "♫") + " MUSICA";
 	mus.blur();
 };
@@ -445,6 +465,47 @@ function dreadOff() {
 			dreadH.pause();
 			dreadH.volume = 0;
 		}
+	} catch (e) {}
+}
+
+// ---- EL LATIDO DE LA CACERÍA: el mp3, con su propio volumen y su propia prisa ----
+// El terror sintetizado de arriba es el de la PRIMERA mitad del sótano —y el de los
+// niveles 1 y 2—: ahí el jugador es la presa y lo que lo rodea es siseo.  En la
+// cacería los papeles están dados vuelta y el sonido también: no hay ruido blanco,
+// hay un corazón, y es el de la cosa que está buscando.  Un solo mando, `k` de 0 a 1
+// (lo arma huntHeart), y con él van las DOS cosas que pidió el balance: suena MÁS
+// FUERTE y late MÁS RÁPIDO cuanto más cerca esté la presa.
+//
+// La prisa sale de playbackRate y no de un pulso propio: el mp3 ya trae su ritmo, y
+// marcarle otro encima daría dos corazones desfasados.  `heartPh` es sólo el reflejo
+// visual de ese mismo ritmo (ver el ping del acechador), y avanza con el mismo factor.
+const HEART_RATE = 0.85, // cuánto acelera el latido con la presa encima
+	HEART_BPS = 1.15; // latidos por segundo del mp3, para que el ping vaya al compás
+let heartV = -1, // el volumen ya escrito en el elemento (no se toca por gusto)
+	heartK = 0, // el último `k`: lo lee el ping del acechador para ir al compás
+	heartPh = 0; // la fase del latido, 0..1: la usa el dibujo, no el audio
+function heartSet(k) {
+	if (BGM.muted || !hunt) return heartOff();
+	heartK = k = Math.max(0, Math.min(1, k));
+	try {
+		srcOn(HEART); // los 256KB recién acá, y sólo acá
+		HEART.muted = BGM.muted;
+		if (HEART.paused) HEART.play().catch(() => {});
+		const v = +(HEART.v0 * k).toFixed(3);
+		if (v !== heartV) HEART.volume = heartV = v;
+		HEART.playbackRate = heartRate();
+	} catch (e) {} // sin audio la cacería se juega igual, muda
+}
+// la prisa del corazón, y la MISMA para el mp3 y para el ping que se dibuja
+const heartRate = () => 1 + HEART_RATE * heartK;
+function heartOff() {
+	if (heartV < 0) return; // ya estaba apagado: no se toca el elemento por gusto
+	heartV = -1;
+	heartK = 0;
+	try {
+		HEART.pause();
+		HEART.volume = 0;
+		HEART.playbackRate = 1;
 	} catch (e) {}
 }
 
@@ -1375,6 +1436,15 @@ const STALK_N = 2, // letras por ronda: cortas a propósito
 const stalkRounds = () =>
 	STALK_R0 +
 	Math.round((STALK_RMAX - STALK_R0) * Math.min(1, got / LV.coins));
+// CUÁNTOS PEDAZOS LE FALTAN AL ACECHADOR EN ESTA RONDA.  Cada escape le come un
+// pedazo, igual que a una presa cualquiera, pero él se pelea por rondas: el pedazo
+// no se lo puede comer a todas a la vez o dos escapes lo dejarían en nada.  Así que
+// los escapes se REPARTEN entre las rondas que le quedan, de la primera a la última:
+// con un escape y dos rondas por delante, la primera de esas dos viene con un pedazo
+// menos y la otra entera.  El sobrante da otra vuelta.
+const aceCut = (esc, round, rounds) =>
+	((esc / rounds) | 0) + (esc % rounds >= round ? 1 : 0);
+
 // `chain` = {round, rounds}: la ronda siguiente de una tanda del acechador, que
 // la encadena qteEnd sin soltar la pantalla ni reubicar al enemigo
 function qteStart(chain) {
@@ -1388,11 +1458,28 @@ function qteStart(chain) {
 	if (huntOn() && hunt.prey > -1) {
 		const ace = hunt.prey < (LV.stalk || 0),
 			free = [...POOL].sort(() => Math.random() - 0.5),
-			// cada escape que le regalaste a ESTA presa le come una letra al anillo:
-			// la segunda vez que la agarrás se devora más rápido que la primera
+			// EL ACECHADOR NO SE REGENERA.  Las rondas que ya le ganaste quedan
+			// cobradas aunque después se te escape: la próxima vez arranca donde
+			// quedó (ver huntBite).  Sin esto, errarle a la tercera ronda te
+			// devolvía a la primera y la pelea no terminaba nunca.
+			rounds = chain
+				? chain.rounds
+				: ace
+					? Math.max(1, HUNT_ACE_ROUNDS - (hunt.aceDone || 0))
+					: 1,
+			round = chain ? chain.round : 1,
 			n = ace
-				? HUNT_ACE_N
+				? Math.max(
+						HUNT_ACE_MIN,
+						HUNT_ACE_N -
+							aceCut(hunt.slow[hunt.prey] || 0, round, rounds),
+					)
 				: Math.max(HUNT_RING_MIN, HUNT_RING - hunt.slow[hunt.prey]),
+			// EL RELOJ NO SE ACHICA CON EL ANILLO.  Es la pieza del balance: cada
+			// escape le saca una letra a la presa y el tiempo sigue siendo el
+			// mismo, así que lo que crece es el margen POR letra.  Atarlo a `n`
+			// —como hace el QTE de la primera mitad, n * MS_LETRA— habría dejado
+			// la cacería exactamente igual de apretada después de cada escape.
 			ms = HUNT_RING_MS * babyK();
 		qte = {
 			seq: [...Array(n)].map((_) => free.pop()),
@@ -1401,8 +1488,8 @@ function qteStart(chain) {
 			until: now() + ms,
 			st: ace, // el acechador trae su cara también acá
 			ring: 1,
-			round: chain ? chain.round : 1,
-			rounds: chain ? chain.rounds : ace ? HUNT_ACE_ROUNDS : 1,
+			round,
+			rounds,
 		};
 		qte.eat = new Set(qte.seq); // lo que falta morder, sin orden
 		shake = 12;
@@ -1574,15 +1661,28 @@ const HUNT_PREY = 5, // presas de la horda (el acechador es una de ellas)
 	HUNT_SKIP_AT = 2000, // desde acá se ofrece saltar (sólo si ya se vio entero)
 	HUNT_FOE_MS = 640, // el reloj de las presas: el ritmo fino lo pone huntPace
 	HUNT_RING = 4, // letras del anillo de una presa entera
-	HUNT_RING_MIN = 3, // ...y el piso al que baja a fuerza de escapes
-	HUNT_RING_MS = 2600,
+	HUNT_RING_MIN = 1, // ...y el piso al que baja a fuerza de escapes
+	// El reloj del anillo: FIJO, sin importar cuántas letras trae.  Estaba en 2600 y
+	// eso daba 520 ms por letra contra el acechador entero —cinco letras, y tres
+	// rondas seguidas así—: el reloj se comía la pelea antes que el jugador.  Con
+	// 3200 el primer encuentro ya es jugable, y como el número NO se achica con las
+	// letras, cada escape que le regalás lo vuelve más y más holgado.
+	HUNT_RING_MS = 3200,
 	HUNT_ACE_N = 5, // el acechador es más grande: más letras...
+	HUNT_ACE_MIN = 2, // ...con su propio piso, que es más alto...
 	HUNT_ACE_ROUNDS = 3, // ...y no se come de un solo bocado
 	HUNT_REACH = 2, // EL ZARPAZO, en celdas de laberinto
 	HUNT_SENSE = 8, // hasta dónde te SIENTEN: más lejos que esto, ni se enteran
 	HUNT_FOG0 = 6.4, // la vista arranca más ancha que la del sótano (LV.fog = 4.2)...
 	HUNT_FOG_STEP = 0.55, // ...y se cierra con cada presa: el final se juega a ciegas
-	HUNT_STYLE = 12; // lo que paga devorar una presa
+	HUNT_STYLE = 12, // lo que paga devorar una presa
+	// EL ATAQUE DE DETERMINACIÓN: a esta distancia EN LÍNEA RECTA se dispara solo
+	HUNT_DET_R = 3,
+	HUNT_DET_N = 1, // ...y a esta carga lo sostiene mientras la presa siga cerca
+	// EL LATIDO: desde acá se empieza a oír, y a cero celdas está al tope
+	HEART_NEAR = 9,
+	HEART_BASE = 0.12, // el piso: durante la cacería no se apaga nunca
+	HEART_SOLO = 0.45; // ...y con el acechador solo en el sótano, el piso sube
 
 // ¿ya se vio el buildup entero alguna vez?  Se guarda igual que el interruptor del
 // skill issue: la cinemática de 12 s es un golpe que se da UNA vez, y a partir de la
@@ -1638,15 +1738,84 @@ const huntPace = (i, st, ve) =>
 		? 1
 		: (ve ? 2 + (((hunt && hunt.eaten) || 0) >> 1) : 3) +
 			((hunt && hunt.slow[i]) || 0);
-// el latido no se apaga en toda la cacería y acelera con cada presa que cae
-const huntDread = () =>
-	hunt ? 0.22 + (0.55 * hunt.eaten) / Math.max(1, HUNT_PREY) : 0;
 // la niebla del sótano se abre al empezar la cacería (sos vos el que ve en lo oscuro)
 // y se va cerrando con cada presa devorada
 const fogR = () =>
 	huntOn() || huntHold()
 		? Math.max(2.6, HUNT_FOG0 - HUNT_FOG_STEP * (hunt.eaten || 0))
 		: LV.fog;
+
+// ---- LA PROXIMIDAD: la presa más cercana, EN LÍNEA RECTA --------------------
+// Ojo: en línea recta, no por el laberinto (flow()).  Es a propósito, y de acá
+// cuelgan las dos piezas que siguen.  Lo que se siente cuando una presa está del
+// otro lado de una pared es que la tenés AHÍ; que el camino hasta ella dé la
+// vuelta al sótano es el problema, no la medida.  Y de yapa sale gratis: flow()
+// es un BFS del tablero entero y esto son cinco restas.
+const huntNear = () => {
+	let b = 1e9;
+	for (const f of foes)
+		b = Math.min(b, Math.hypot((f % C) - p.x, ((f / C) | 0) - p.y));
+	return b;
+};
+
+// ---- EL ATAQUE DE DETERMINACIÓN --------------------------------------------
+// El problema medido: en la cacería el que persigue sos vos, y un laberinto de
+// 17x13 castiga al que persigue.  La presa está a dos celdas, hay una pared en el
+// medio, y llegar cuesta dieciocho pasos por los que ella ya se movió otras seis
+// veces.  Eso no es una cacería, es un trámite.
+//
+// La determinación ya resolvía exactamente eso —la letra violeta atraviesa el
+// muro— pero se cobra cada tres gatos vencidos, y en la cacería no hay gatos que
+// vencer antes: entrás con las cargas que traías y se acaban enseguida.
+//
+// Así que acá se GANA POR ESTAR CERCA.  Mientras haya una presa a HUNT_DET_R
+// celdas en línea recta, la carga se repone sola: deja de ser un recurso que se
+// administra y pasa a ser un estado —el hambre— que se te prende cuando la tenés a
+// tiro.  El efecto es el que pidió el balance: desde que la ves hasta que la
+// mordés, las paredes dejan de existir.
+//
+// Lo que se apaga al perder a la presa es la REPOSICIÓN, no la carga que ya está
+// puesta: sacártela a mitad de camino, con la pared enfrente y la letra violeta en
+// pantalla, sería peor que no habértela dado.
+function huntDet() {
+	if (!huntOn()) return;
+	if (huntNear() > HUNT_DET_R) {
+		hunt.det = 0; // se fue de rango: el próximo acercamiento vuelve a anunciarse
+		return;
+	}
+	if (det < HUNT_DET_N) {
+		const seco = !det;
+		det = HUNT_DET_N;
+		// si no había NINGUNA carga, las letras violetas de los muros no están
+		// repartidas: se agregan ahora, sin volver a repartir el resto (repartir
+		// acá reiniciaría el reloj de la letra, o sea regalaría tiempo por
+		// acercarse a una presa)
+		if (seco && !qte) dealPhase();
+	}
+	if (hunt.det) return; // el ataque ya está puesto: no se anuncia dos veces
+	hunt.det = 1;
+	sfx(150, 260, "sine", 0.05, 620);
+	burst((p.x + 0.5) * S, (p.y + 0.5) * S, "#c8f", 20);
+	say("ATAQUE DE DETERMINACIÓN", "LA LETRA VIOLETA ATRAVIESA EL MURO", "#c8f");
+}
+
+// ---- CUÁNTO SUENA EL CORAZÓN -----------------------------------------------
+// Un solo número, 0..1, y manda el más fuerte de los tres motivos que lo suben:
+//
+//   · LA PROXIMIDAD.  Es el motivo principal y el que se siente todo el tiempo:
+//     entra en fade a HEART_NEAR celdas y llega al tope encima de la presa.
+//   · EL QTE.  Durante el anillo el latido ocupa EL LUGAR del ruido blanco, así
+//     que sube con el mismo `muf` con el que se hunde la música (ver frame): no
+//     es un fade y después el otro, es un reemplazo.
+//   · EL ACECHADOR SOLO.  Cuando no queda nadie más la música se apaga (huntBite)
+//     y esto se queda solo en la pista, con su piso propio.
+const huntHeart = () => {
+	if (!huntOn()) return 0;
+	let k = Math.max(HEART_BASE, 1 - huntNear() / HEART_NEAR);
+	if (qte) k = Math.max(k, muf);
+	if (huntLast()) k = Math.max(k, HEART_SOLO);
+	return Math.min(1, k);
+};
 
 // ---- fase A: el buildup ----------------------------------------------------
 function huntStart() {
@@ -1765,6 +1934,10 @@ function huntBite(okAll) {
 	// una ronda ganada que no es la última: se encadena sin soltar la pantalla, igual
 	// que la tanda del acechador de la primera mitad
 	if (okAll && round < rounds) {
+		// ...y la ronda ganada queda COBRADA aunque la siguiente se pierda: si el
+		// acechador se te escapa, la próxima pelea arranca con las que le faltan
+		// (ver qteStart).  Es lo único del sótano que se guarda entre encuentros.
+		if (ace) hunt.aceDone = (hunt.aceDone || 0) + 1;
 		shake = 13;
 		sfx(160, 90, "sawtooth", 0.06, 60);
 		burst((p.x + 0.5) * S, (p.y + 0.5) * S, "#f22", 16);
@@ -1791,9 +1964,25 @@ function huntBite(okAll) {
 		sfx(90, 320, "sawtooth", 0.08, 38); // el crujido
 		setTimeout(() => sfx(58, 220, "sine", 0.06, 30), 120);
 		if (!foes.length) return huntFinish();
+		// LA ÚLTIMA PRESA CAYÓ Y QUEDA EL ACECHADOR.  Acá se apaga la música —el
+		// tema de la cacería no vuelve— y lo único que queda sonando en el sótano
+		// es el corazón: el suyo.  Un final con banda sonora no es un final; el
+		// silencio con algo latiendo adentro sí.  Desde este momento el latido
+		// manda solo (ver huntHeart) y se DIBUJA en el tablero como el radar del
+		// maullido: cuanto más cerca, más fuerte y más rápido.
+		if (huntLast()) {
+			try {
+				HUNT.pause();
+			} catch (e) {}
+			hunt.solo = 1;
+		}
 		say(
-			ace ? "¡EL ACECHADOR ES TUYO!" : "DEVORADA",
-			`QUEDAN ${foes.length}`,
+			ace
+				? "¡EL ACECHADOR ES TUYO!"
+				: huntLast()
+					? "SÓLO QUEDA EL ACECHADOR"
+					: "DEVORADA",
+			huntLast() ? "ESCUCHÁ SU CORAZÓN" : `QUEDAN ${foes.length}`,
 			PAL.foe,
 		);
 		// letras nuevas, por el mismo motivo que las reparte qteEnd: el zarpazo salta
@@ -1806,8 +1995,11 @@ function huntBite(okAll) {
 	// SE TE ESCAPÓ.  No hay susto ni castigo de tiempo: acá el jugador es el que
 	// muerde, y un jumpscare le devolvería el papel de víctima justo cuando el nivel
 	// entero está diciendo lo contrario.  El precio es que la presa se va... y el
-	// premio de consuelo es que se va coja: un beat más lenta y con una letra menos
-	// en el anillo la próxima vez.  Dos escapes seguidos y prácticamente se entrega.
+	// premio de consuelo es que se va coja: un beat más lenta y con UN PEDAZO MENOS
+	// en el anillo la próxima vez —y el reloj del anillo no se achica con él, así que
+	// cada escape le regala margen al que la persigue—.  Vale para el acechador
+	// igual que para las otras cuatro, y él encima no recupera las rondas que ya le
+	// ganaste.  Tres escapes seguidos y prácticamente se entrega.
 	hunt.esc++;
 	hunt.slow[i]++;
 	hunt.prey = -1;
@@ -1819,7 +2011,14 @@ function huntBite(okAll) {
 	shake = 12;
 	sfxBad();
 	huntFlee(i);
-	say("SE TE ESCAPÓ", "VA MÁS LENTA · NO SE VA A IR LEJOS", "#f80");
+	const quedan = Math.max(1, HUNT_ACE_ROUNDS - (hunt.aceDone || 0));
+	say(
+		ace ? "EL ACECHADOR SE ZAFÓ" : "SE TE ESCAPÓ",
+		ace
+			? `VUELVE CON ${quedan} RONDA${quedan > 1 ? "S" : ""} · UN PEDAZO MENOS`
+			: "VA MÁS LENTA · UN PEDAZO MENOS",
+		"#f80",
+	);
 	deal(); // ídem: la pantalla vuelve al laberinto y tiene que volver a la celda buena
 }
 
@@ -1846,6 +2045,7 @@ function huntFinish() {
 	win = true;
 	tEnd = now() - t0;
 	dreadOff();
+	heartOff();
 	huntSaw(); // se llegó al final: el buildup ya se puede saltar
 	const bb = bests[LV.id];
 	newPB = bb === undefined || tEnd + pen < bb;
@@ -1866,6 +2066,7 @@ function huntReset() {
 		try {
 			HUNT.pause();
 		} catch (e) {}
+		heartOff();
 	}
 	hunt = null;
 	PAL = PALS.base;
@@ -2189,10 +2390,30 @@ function push(k, kind) {
 	checkSkill(); // se evalúa con cada tecla registrada
 }
 
-// Letras nuevas para cada salida abierta de la celda actual.  Con una carga de
-// DETERMINACIÓN encima, los MUROS que dan a una celda del tablero también reciben
-// letra: quedan marcados en `phase` y son las únicas que se pueden atravesar.  Los
-// muros del borde no entran: la letra caería fuera del canvas y no lleva a ningún lado.
+// Las letras VIOLETAS y nada más: los MUROS de la celda actual que dan a otra celda
+// del tablero.  Quedan marcados en `phase` y son los únicos que se pueden atravesar.
+// Los muros del borde no entran: la letra caería fuera del canvas y no lleva a ningún
+// lado.  Va aparte de deal() porque el ataque de determinación de la cacería las
+// prende A MITAD de una letra —la carga llega por acercarse a una presa, no por
+// teclear— y ahí NO se puede repartir de nuevo: eso reiniciaría `shownAt`.
+function dealPhase() {
+	const usadas = new Set(Object.values(letters)),
+		free = [...POOL]
+			.filter((c) => !usadas.has(c))
+			.sort(() => Math.random() - 0.5),
+		i = p.y * C + p.x;
+	["n", "e", "s", "w"].forEach((d) => {
+		const nx = p.x + DV[d][0],
+			ny = p.y + DV[d][1];
+		if (g[i][d] && !phase[d] && nx >= 0 && ny >= 0 && nx < C && ny < R) {
+			letters[d] = free.pop();
+			phase[d] = 1;
+		}
+	});
+}
+
+// Letras nuevas para cada salida abierta de la celda actual, más las violetas de
+// dealPhase() si hay DETERMINACIÓN encima.
 function deal() {
 	const free = [...POOL].sort(() => Math.random() - 0.5),
 		i = p.y * C + p.x;
@@ -2201,15 +2422,7 @@ function deal() {
 	["n", "e", "s", "w"].forEach((d) => {
 		if (!g[i][d]) letters[d] = free.pop();
 	});
-	if (det > 0)
-		["n", "e", "s", "w"].forEach((d) => {
-			const nx = p.x + DV[d][0],
-				ny = p.y + DV[d][1];
-			if (g[i][d] && nx >= 0 && ny >= 0 && nx < C && ny < R) {
-				letters[d] = free.pop();
-				phase[d] = 1;
-			}
-		});
+	if (det > 0) dealPhase();
 	shownAt = now();
 	durBase = Math.max(LV.durMin, LV.dur0 - combo * 70); // más combo => menos tiempo para reaccionar
 }
@@ -2503,13 +2716,27 @@ function frame() {
 	// ...y lo que entra en el lugar que deja la música: el latido y el ruido suben
 	// con el mismo `muf` (ver dreadOn).  Se van con él cuando la música vuelve, o
 	// de golpe si arrancó el jumpscare, que ya trae su propio grito.
-	// ...y en la cacería el latido NO se apaga entre presa y presa: es lo que hace
-	// que el sótano deje de tener silencios.  Acelera con cada una que cae.
-	if ((qte || huntOn()) && !frozen) dreadOn();
-	if (dreadAt) {
-		if (frozen || (!qte && !huntOn() && muf <= 0.02)) dreadOff();
-		else dreadSet(qte ? muf : huntOn() ? huntDread() : muf);
+	//
+	// LA CACERÍA TRAE SU PROPIO TERROR y no es el de la primera mitad.  Mientras
+	// dura, el ruido blanco NO suena: su lugar lo ocupa el mp3 del latido, también
+	// —y sobre todo— durante el QTE de anillo, que es justo donde el ruido blanco
+	// mandaba cuando el perseguido eras vos.  Es el mismo reemplazo que hace el
+	// ducking con la música, un escalón más arriba.
+	if (huntOn() && !frozen) {
+		dreadOff();
+		heartSet(huntHeart());
+	} else {
+		heartOff();
+		if (qte && !frozen) dreadOn();
+		if (dreadAt) {
+			if (frozen || (!qte && muf <= 0.02)) dreadOff();
+			else dreadSet(muf);
+		}
 	}
+	// ...y la fase del latido, que es lo que hace latir al ping del acechador en el
+	// tablero: mismo compás y misma prisa que el mp3, con el reloj REAL igual que el
+	// resto del audio.
+	if (heartV >= 0) heartPh = (heartPh + (mdt / 1000) * HEART_BPS * heartRate()) % 1;
 	// y el grito del acechador baja con su imagen: el mismo perfil que el CSS de
 	// #scare.fade (pleno hasta el 32%, y de ahí a cero), sin un timer más
 	if (scareFade && scareA) {
@@ -2556,6 +2783,7 @@ function frame() {
 
 	if (tutOn) tutCheck();
 	huntStep(T); // el reloj de las tres fases de la cacería
+	if (live) huntDet(); // ...y el ataque de determinación, que va por proximidad
 	if (resAt && T >= resAt) resShow(); // ganaste hace RES_MS: entra el resumen
 	if (qte && T > qte.until) qteEnd(false);
 	else if (live && !qte && left <= 0) penalize(400, "#f70", "late", "-");
@@ -2937,6 +3165,38 @@ function frame() {
 			x.arc(m.x * S, m.y * S, S * (0.19 + 0.13 * q), 0, 6.283);
 			x.stroke();
 		});
+		x.globalAlpha = 1;
+		x.shadowBlur = 0;
+	}
+
+	// EL CORAZÓN DEL ACECHADOR.  Cuando ya no queda nadie más, la música está apagada
+	// y el sótano se juega a oscuras con un solo sonido: su latido.  Acá se lo VE, y
+	// se lo ve con la MISMA pieza que el radar del maullido —un anillo flojo que
+	// aparece, se abre y se apaga—, porque es la misma idea: no es un mapa, es una
+	// pista que llega por el oído.  La diferencia es que ésta no se pide ni se apaga:
+	// late, y late con el mp3 (heartPh, heartRate) y con la distancia, así que
+	// acercarse se oye y se ve subir al mismo tiempo.  Va acá, DESPUÉS de la niebla,
+	// por lo mismo que el radar: si no, en el final del sótano no se vería nada.
+	if (hunt && hunt.solo && foes.length && !win) {
+		const F = foes[0],
+			HX = ((F % C) + 0.5) * S,
+			HY = (((F / C) | 0) + 0.5) * S;
+		x.lineWidth = 1.8;
+		x.strokeStyle = x.shadowColor = PAL.foe;
+		// dos golpes por latido —el lub y el dub—, el segundo más chico
+		for (const [off, esc] of [
+			[0, 1],
+			[0.26, 0.62],
+		]) {
+			const b = (heartPh - off + 1) % 1,
+				k = Math.min(1, b / 0.42); // el anillo se abre en el primer 42% del beat
+			if (b > 0.42) continue;
+			x.globalAlpha = (1 - k) * (1 - k) * 0.85 * (0.35 + 0.65 * heartK) * esc;
+			x.shadowBlur = (8 + 10 * heartK) * GLOW;
+			x.beginPath();
+			x.arc(HX, HY, S * (0.22 + 1.5 * k) * esc, 0, 6.283);
+			x.stroke();
+		}
 		x.globalAlpha = 1;
 		x.shadowBlur = 0;
 	}
@@ -3349,12 +3609,15 @@ rst.onclick = () => {
 }; // reinicio sólo por botón
 
 function key(k) {
-	if (track().paused) {
+	// la música arranca con la 1ª tecla... salvo en el final del sótano, donde se
+	// apagó A PROPÓSITO y lo único que queda sonando es el corazón del acechador
+	// (ver huntBite): sin este `hunt.solo` la primera tecla la devolvía.
+	if (track().paused && !(hunt && hunt.solo)) {
 		srcOn(track()); // en el teléfono el mp3 se baja recién acá
 		track()
 			.play()
 			.catch(() => {});
-	} // la música arranca con la 1ª tecla
+	}
 	if (
 		win ||
 		frozen ||

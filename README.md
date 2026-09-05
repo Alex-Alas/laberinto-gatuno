@@ -275,8 +275,9 @@ siendo la puerta. Lo enciende un solo campo del nivel, `hunt: 1`.
 
 Nada de esto es un motor nuevo. El campo de flujo es **el mismo** BFS de siempre, sólo que
 las presas lo suben en vez de bajarlo; el QTE es **el mismo**, con un anillo en lugar de
-una fila; el latido, el ruido blanco y el ducking de la música son los que ya estaban. Lo
-único de verdad nuevo son las tres fases y el zarpazo.
+una fila; el ducking de la música y el radar del maullido son los que ya estaban. Lo único
+de verdad nuevo son las tres fases, el zarpazo y —de audio— el mp3 del latido, que acá
+reemplaza al ruido blanco (ver *El corazón del sótano*).
 
 ### Fase 1 — el buildup (12 s)
 
@@ -314,7 +315,9 @@ ellas**.
 | Contacto | pisar su casilla | **zarpazo**: alcanza con quedar a 2 celdas |
 | Niebla | 4,2 celdas | 6,4 y **cerrándose** con cada presa devorada |
 | Presas | invisibles en la oscuridad | se ven **a través** de la niebla |
-| Latido | sólo en el QTE | **no para**, y acelera con cada presa que cae |
+| Latido | sintetizado, sólo en el QTE | `assets/heartbeat.mp3`: **no para**, y sube y acelera **con la distancia** |
+| Ruido blanco | debajo del QTE | **no suena**: su lugar lo ocupa el latido |
+| Determinación | una carga cada tres gatos vencidos | se **repone sola** con una presa cerca |
 | Salida | la casilla verde | **no hay** |
 
 **Por qué no puede fallar.** Una cacería que se pierde no es una cacería: es otra
@@ -329,9 +332,13 @@ mitad. Acá el jugador es inevitable *por diseño*, y son cuatro piezas:
 3. **El hambre pesa.** Cada dos presas devoradas, la que corre pierde un beat más: las
    primeras cuestan, las últimas se entregan. Es la forma que tiene que tener un clímax.
 4. **Cada escape te la deja más fácil.** Si le errás al anillo, esa presa gana un lastre:
-   se mueve un beat de cada tres (de cada cuatro con dos escapes) y su anillo pierde una
-   letra, con piso de tres. El único que puede salvar a una presa es el propio jugador, y
-   aun así se la vuelve a encontrar, y más blanda.
+   se mueve un beat de cada tres (de cada cuatro con dos escapes) y su anillo **pierde un
+   pedazo**, con piso de uno —y el reloj del anillo **no** se achica con él, así que lo que
+   crece es el margen por letra—. Vale para el acechador igual que para las otras cuatro.
+   El único que puede salvar a una presa es el propio jugador, y aun así se la vuelve a
+   encontrar, y más blanda.
+5. **El ataque de determinación.** Con una presa a tres celdas **en línea recta**, la carga
+   se repone sola y las paredes dejan de existir hasta que la mordés (ver más abajo).
 
 **Y sólo huyen si te sienten** (`HUNT_SENSE = 8` celdas). Con las cinco corriendo desde el
 primer cuadro terminaban las cinco apretadas en la esquina más lejana y la cacería era una
@@ -356,7 +363,14 @@ El QTE de la cacería no es una fila de letras en orden. La presa va al centro y
 porción del cuerpo —el sprite se dibuja por sectores y el sector de una letra ya comida
 simplemente no se pinta, con su chorro de partículas—. De un bicho se muerde por donde se
 puede. Por eso el dibujo tampoco marca ninguna como "la que toca": marcarla sería volver a
-pedir una secuencia por la ventana. Cuatro letras y 2,6 s.
+pedir una secuencia por la ventana. Cuatro letras y **3,2 s**.
+
+**Y los 3,2 s son fijos.** No se reparten entre las letras como en el QTE de la primera
+mitad (`n * MS_LETRA`): el anillo tiene **un** reloj y no se entera de cuántos pedazos le
+quedan a la presa. Es toda la corrección de balance: cada escape le come un pedazo y el
+tiempo sigue siendo el mismo, así que lo que crece —encuentro tras encuentro— es el margen
+**por letra**. Atarlo a `n` habría dejado la cacería exactamente igual de apretada después
+de cada escape, que es lo que la volvía intransitable.
 
 ### El acechador cierra
 
@@ -365,6 +379,40 @@ lo agarra; cuando ya es el último **se da vuelta y te carga**. Su devorada son 
 de 5 letras** encadenadas con el mismo mecanismo que la tanda de la primera mitad, con su
 cara y su grito, que ya estaban cargados. El que te cazó toda la partida termina comido, y
 el clímax no costó un asset nuevo.
+
+**Y no se regenera.** Las rondas que ya le ganaste quedan **cobradas** aunque después se te
+escape (`hunt.aceDone`): si te zafó en la segunda, vuelve con dos y no con tres. Los
+escapes, además, se **reparten** entre las rondas que le quedan —con uno y dos rondas por
+delante, la primera de esas dos viene con un pedazo menos y la otra entera—, con piso de
+dos pedazos por ronda. Es lo único del sótano que se guarda entre encuentros, y es lo que
+hace que la pelea termine: antes, errarle a la tercera te devolvía a la primera y la tanda
+no se acababa nunca.
+
+### El ataque de determinación
+
+En la cacería el que persigue es el jugador, y **un laberinto castiga al que persigue**: la
+presa está a dos celdas, hay una pared en el medio, y llegar cuesta veinte pasos por los
+que ella ya se movió seis veces. Eso no es una cacería, es un trámite.
+
+La **determinación** ya resolvía exactamente eso —la letra violeta atraviesa el muro— pero
+se cobra cada tres gatos vencidos, y en la cacería no hay gatos que vencer antes: entrás
+con las cargas que traías y se acaban enseguida.
+
+Así que acá **se gana por estar cerca**. Mientras haya una presa a `HUNT_DET_R = 3` celdas,
+la carga se repone sola: deja de ser un recurso que se administra y pasa a ser un *estado*
+—el hambre— que se prende cuando la tenés a tiro. Desde que la ves hasta que la mordés, las
+paredes no existen. Lo que se apaga al perderla es la **reposición**, no la carga ya puesta:
+sacártela a mitad de camino, con la pared enfrente, sería peor que no habértela dado.
+
+Dos detalles que hacen que no se sienta un parche:
+
+- **Se mide en línea recta, no por el laberinto.** Es a propósito: lo que molesta es
+  justamente que el camino de al lado de la pared no exista. Y sale gratis —`flow()` es un
+  BFS del tablero entero; esto son cinco restas.
+- **No reparte letras de nuevo.** La carga llega por acercarse, no por teclear, así que
+  puede caer *a mitad* de una letra. `dealPhase()` agrega sólo las violetas y no toca
+  `shownAt`; repartir ahí reiniciaría el reloj, o sea regalaría tiempo por caminar hacia
+  una presa.
 
 ### Fase 3 — el final
 
@@ -395,8 +443,8 @@ Todo esto reusa máquinas que ya estaban; ni un asset ni una dependencia:
 - **Visión de hambre.** Las presas se ven a través de la niebla, como rombos rojos con dos
   ojos que no parpadean. Es terror *y* es lo que impide que la cacería sea buscar a ciegas,
   que es justo la sensación de la primera mitad.
-- **El latido no para.** `dreadOn`/`dreadSet` quedan encendidos toda la fase y aceleran con
-  cada presa devorada, en vez de subir y bajar con cada QTE.
+- **El latido no para.** Y en la cacería es el mp3 (ver *El corazón del sótano*): suena toda
+  la fase, y sube y acelera con la **distancia** a la presa más cercana.
 - **Chillidos.** Un `sfx()` que sube y se va cuando una presa se te escapa.
 - **La cámara se cierra.** Con cada presa la niebla se achica: el final, encima del
   acechador, se juega casi a ciegas.
@@ -550,6 +598,41 @@ mp3. Si algún día hay archivos propios, el enchufe ya está puesto: las URLs v
 `DREAD_SRC` (`{heart, noise}`) y se usan ésos, en loop y con este mismo fade-in, sin tocar
 nada más — con el mp3 del latido el sintetizado no suena, porque el archivo ya trae su
 propio ritmo. El `♫` del menú los apaga junto con la música.
+
+Todo esto es el terror de la **primera** mitad del sótano —y el de los niveles 1 y 2—: ahí
+el perseguido sos vos y lo que te rodea es siseo. En la cacería los papeles están dados
+vuelta y el sonido también (ver lo que sigue).
+
+### El corazón del sótano
+
+En la cacería **no hay ruido blanco**. Su lugar —el del QTE incluido, que es justo donde
+mandaba— lo ocupa `assets/heartbeat.mp3`, y no es decoración: es el instrumento con el que
+el nivel te dice dónde está lo que estás buscando.
+
+Un solo mando, `k` de 0 a 1 (`huntHeart()`), y con él van las **dos** cosas a la vez:
+`volume` y `playbackRate`. Más cerca, **más fuerte y más rápido**. Manda el más alto de
+tres motivos:
+
+- **La proximidad.** Entra en fade a nueve celdas —en línea recta, igual que el ataque de
+  determinación— y llega al tope encima de la presa. Es el que se siente todo el tiempo.
+- **El QTE.** Durante el anillo sube con el mismo `muf` con el que se hunde la música: no
+  es un fade y después el otro, es el mismo **reemplazo** que hace el ducking, un escalón
+  más arriba.
+- **El acechador solo.** Cuando cae la penúltima presa **la música se apaga** —`hunt.solo`,
+  y ni siquiera la primera tecla la devuelve— y el latido se queda solo en la pista, con su
+  piso propio. Un final con banda sonora no es un final; el silencio con algo latiendo
+  adentro, sí.
+
+Y en ese último tramo el latido **se ve**. En el tablero aparece un anillo flojo sobre el
+acechador que se abre y se apaga a su compás —dos golpes, el *lub* y el *dub*—: es
+literalmente la misma pieza que el **radar del maullido**, dibujada **después de la
+niebla** por el mismo motivo (si no, en el final del sótano no se vería nada). No es un
+mapa: es una pista que llega por el oído. La fase la lleva `heartPh`, que avanza con el
+mismo `playbackRate` del mp3, así que acercarse se oye y se ve subir al mismo tiempo.
+
+Los 256 KB se bajan **al entrar a la cacería** y en ningún otro momento (`srcOn(HEART)`),
+igual que los 2,3 MB del tema y que la cara del acechador. El `♫` del menú lo apaga con
+todo lo demás.
 
 > **ponytail:** es un *ducking*, no un filtro. Un lowpass de verdad pide meter las dos
 > pistas en un `MediaElementSource` de WebAudio, y un `AudioContext` suspendido —que en el
@@ -1030,6 +1113,20 @@ Y el **37g** es el que sostiene la promesa entera de esa mitad del nivel: un bot
 cacería **tres veces** —con 0, 3 y 6 escapes regalados a propósito— y las tres tienen que
 terminar con las cinco presas devoradas. Una cacería que se puede trabar no es una
 cacería, y eso no se comprueba leyendo el código.
+
+Los tres que siguen son el balance de la cacería. El **37h** es el ataque de determinación:
+que con las presas lejos no dé nada, que con una cerca se prenda sola **y reparta las
+letras violetas en el acto sin reiniciar `shownAt`**, que la carga vuelva mientras la presa
+siga cerca, y que se apague al perderla. El **37i** es el anillo: que cada escape le coma un
+pedazo a la presa **y que el reloj no se achique con él**, y que el acechador pierda pedazos
+como cualquiera pero **se quede con las rondas ganadas** —zafarse en la segunda lo devuelve
+con dos, la primera de esas con un pedazo menos y la otra entera—. El **37j** es el latido:
+que haga fade-in con la distancia, que en el anillo tome el lugar del ruido blanco con el
+mismo `muf`, que suene más fuerte **y** más rápido con el mismo número, y que devorar a la
+penúltima presa apague la música sin que la primera tecla la devuelva. Los **39** y **40**
+son los mismos contratos leídos del fuente: que el mp3 del latido no se baje al abrir la
+página, que el `♫` lo apague, y que el reloj del anillo no vuelva a atarse a la cantidad de
+letras.
 
 El 17 y el 18 son el perfil de rendimiento: corren el mismo `game.js` en dos contextos
 —uno con `pointer:fine` y otro con `pointer:coarse`— y verifican que el lite prenda sólo
