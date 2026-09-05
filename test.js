@@ -616,7 +616,14 @@ const nlv=log.length; press('a');
 if(log.length!==nlv) throw new Error('acepta teclas con el selector abierto');
 lvlPick('sotano');
 if(pick!=='sotano'||lgo.disabled) throw new Error('no marco el nivel elegido');
+// cada nivel muestra SU foto en la ficha; los modos que no tienen la esconden
+if(!lpic.src.endsWith('assets/nivel3.webp')||lpic.style.display==='none') throw new Error('el sotano no mostro su foto');
+lvlPick('tutorial');
+if(!lpic.src.endsWith('assets/nivel1.webp')) throw new Error('el tutorial no mostro su foto');
+lvlPick('clasico');
+if(!lpic.src.endsWith('assets/nivel2.webp')) throw new Error('el laberinto no mostro su foto');
 lvlPick('contra');
+if(lpic.style.display!=='none') throw new Error('un modo sin foto dejo a la vista la del nivel anterior');
 if(!lgo.disabled) throw new Error('un modo PROXIMAMENTE no se deberia poder jugar');
 lvlPlay();
 if(!lvlOn) throw new Error('un modo sin implementar no deberia arrancar');
@@ -1215,7 +1222,7 @@ const flat=src.replace(/"/g,"'").replace(/ *([=?:,;{}()[\]]) */g,'$1');
 if(!/<link[^>]+href=style\.css/.test(mk)) throw new Error('el index no carga style.css');
 if(!/<script src=game\.js>/.test(mk)) throw new Error('el index no carga game.js');
 const rutas=[...new Set([...src.matchAll(/"(assets\/[\w.-]+)"/g)].map(m=>m[1]))];
-if(rutas.length!==11) throw new Error('el juego dejo de tener sus 11 assets: '+rutas.length);
+if(rutas.length!==14) throw new Error('el juego dejo de tener sus 14 assets: '+rutas.length);
 for(const a of rutas)
   if(!fs.existsSync(path.join(__dirname,a))) throw new Error('falta el archivo '+a);
 

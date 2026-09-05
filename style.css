@@ -2124,6 +2124,16 @@ p.help {
 	flex-direction: column;
 	gap: 9px;
 }
+/* La foto del nivel entera y sin recortar: son tres imágenes de proporciones
+   distintas y el fondo del recuadro ya es negro, así que lo que sobra ni se ve. */
+#lpic {
+	width: 100%;
+	aspect-ratio: 3/2;
+	object-fit: contain;
+	background: #05050a;
+	border: 2px ridge var(--mar);
+	border-radius: 2px;
+}
 #ltag {
 	font-size: 9px;
 	letter-spacing: 3px;
@@ -2515,6 +2525,11 @@ p.help {
 }
 .lite #ldet {
 	padding: 11px;
+}
+/* en el teléfono la ficha entra justa: la foto va más baja para no empujar
+   los baby points y el botón de JUGAR fuera de la pantalla */
+.lite #lpic {
+	aspect-ratio: 5/2;
 }
 .lite #lname {
 	font-size: 22px;
