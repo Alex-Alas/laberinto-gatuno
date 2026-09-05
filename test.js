@@ -1375,6 +1375,136 @@ for(const fallos of [0,3,6]){
   if(hunt.eaten!==HUNT_PREY) throw new Error('quedaron presas sin devorar');
   if(hunt.esc!==fallos) throw new Error('se contaron mal los escapes: '+hunt.esc);
 }
+
+// 37h) EL ATAQUE DE DETERMINACION.  En la cacería el que persigue es el jugador, y
+// un laberinto castiga al que persigue: la presa esta a dos celdas, hay una pared en
+// el medio y llegar cuesta veinte pasos.  La carga ya no se gana venciendo gatos —en
+// la cacería no hay gatos que vencer antes—: la da estar CERCA, y se repone sola
+// mientras la presa siga cerca.  Se mide en linea recta a proposito: lo que molesta
+// es justo que el camino de al lado de la pared no exista.
+juega('sotano'); gen(); foes=[]; coins=[]; got=LV.coins; t0=now();
+// una celda con al menos un muro que da a otra celda del tablero: si no, no hay
+// nada que atravesar y el test no probaria nada
+const conMuro=[...Array(C*R).keys()].find(i=>['n','e','s','w'].some(d=>{
+  const nx=i%C+DV[d][0], ny=(i/C|0)+DV[d][1];
+  return g[i][d]&&nx>=0&&ny>=0&&nx<C&&ny<R }));
+if(conMuro===undefined) throw new Error('el sotano no tiene una celda con muros');
+p={x:conMuro%C,y:conMuro/C|0}; deal();
+huntStart(); hunt.t0=now()-HUNT_BUILD; huntStep(now());
+const recta=i=>Math.hypot(i%C-p.x,(i/C|0)-p.y);
+const dLej=[...Array(C*R).keys()].find(i=>recta(i)>HUNT_DET_R+2),
+      dCer=[...Array(C*R).keys()].find(i=>recta(i)>0&&recta(i)<=HUNT_DET_R);
+if(dLej===undefined||dCer===undefined) throw new Error('el sotano no da para probar HUNT_DET_R');
+foes=[dLej,dLej]; hunt.slow=[0,0]; prevFoe=[]; hunt.det=0; det=0; qte=null;
+deal(); huntDet();
+if(det) throw new Error('la determinacion se regalo con las presas lejos');
+if(Object.keys(phase).length) throw new Error('sin carga no puede haber letras violetas');
+// ...y con una presa cerca se prende sola, con sus letras violetas puestas EN EL ACTO
+foes=[dLej,dCer]; hunt.slow=[0,0]; prevFoe=[];
+const shDet=shownAt;
+huntDet();
+if(det!==HUNT_DET_N) throw new Error('tener una presa cerca no dio determinacion');
+if(!Object.keys(phase).length) throw new Error('el ataque no repartio las letras violetas');
+if(shownAt!==shDet) throw new Error('el ataque reinicio el reloj de la letra: eso regala tiempo');
+if(!/ATAQUE DE DETERMINACI/.test(String(note&&note.a))) throw new Error('el ataque no se anuncia');
+// se gasta atravesando un muro... y mientras la presa siga cerca, vuelve
+const muro=Object.keys(phase)[0];
+press(letters[muro]);
+if(det) throw new Error('cruzar el muro no gasto la carga');
+foes=[dLej,foes[1]]; huntDet();
+if(det!==HUNT_DET_N) throw new Error('con la presa todavia cerca la carga no se repuso');
+// ...y deja de reponerse al perderla de vista (la carga ya puesta no se saca: con la
+// pared enfrente eso seria peor que no haberla dado)
+det=0; foes=[dLej,dLej]; huntDet();
+if(det) throw new Error('lejos de toda presa el ataque sigue dando cargas');
+if(hunt.det) throw new Error('el aviso no se rearmo para el proximo acercamiento');
+det=0; note=null;
+
+// 37i) EL BALANCE DEL ANILLO: cada escape le come UN PEDAZO a la presa y el RELOJ
+// NO SE ACHICA con el.  Es toda la correccion: el tiempo por letra es lo que crece.
+juega('sotano'); gen(); foes=[]; coins=[]; got=LV.coins; t0=now();
+p={x:C-1,y:R-1}; deal(); huntStart(); hunt.t0=now()-HUNT_BUILD; huntStep(now());
+foes=[far(),far()]; hunt.slow=[0,0]; prevFoe=[]; hunt.prey=1; qte=null;
+qteStart(); const rn0=qte.seq.length, rms0=qte.ms; qte=null;
+hunt.slow[1]=1; hunt.prey=1; qteStart();
+if(qte.seq.length!==rn0-1) throw new Error('el escape no le comio un pedazo a la presa');
+if(qte.ms!==rms0) throw new Error('el reloj del anillo se achico junto con las letras');
+hunt.slow[1]=99; hunt.prey=1; qteStart();
+if(qte.ms!==rms0) throw new Error('el reloj del anillo dejo de ser fijo en el piso');
+qte=null;
+
+// ...y EL ACECHADOR NO SE REGENERA: pierde pedazos como cualquier presa y ademas se
+// queda con las rondas que ya le ganaste.  Errarle a la tercera ya no te devuelve a
+// la primera, que era lo que hacia que la pelea no terminara nunca.
+const aceV=open(cell())[0];
+foes=[aceV]; hunt.slow=[0]; prevFoe=[]; hunt.aceDone=0; hunt.prey=0; qte=null;
+qteStart();
+if(qte.rounds!==HUNT_ACE_ROUNDS) throw new Error('el acechador entero no trae sus rondas');
+if(qte.seq.length!==HUNT_ACE_N) throw new Error('el acechador entero no trae sus pedazos');
+const aceMs=qte.ms;
+[...qte.eat].forEach(k=>press(k));                 // ronda 1 ganada
+if(!qte||qte.round!==2) throw new Error('la ronda ganada no encadeno la siguiente');
+if(hunt.aceDone!==1) throw new Error('la ronda ganada no quedo guardada');
+press([...POOL].find(c=>!qte.eat.has(c)));         // ...y en la 2 se zafa
+if(qte) throw new Error('errarle al anillo del acechador no lo cerro');
+if(hunt.slow[0]!==1) throw new Error('el escape del acechador no le comio nada');
+if(foes.length!==1) throw new Error('el acechador se fue del tablero al zafarse');
+hunt.prey=0; qteStart();
+if(qte.rounds!==HUNT_ACE_ROUNDS-1) throw new Error('el acechador se regenero las rondas ganadas');
+if(qte.seq.length!==HUNT_ACE_N-1) throw new Error('la ronda que vuelve no trae un pedazo menos');
+if(qte.ms!==aceMs) throw new Error('el reloj del acechador se achico con sus pedazos');
+[...qte.eat].forEach(k=>press(k));
+if(!qte||qte.round!==2) throw new Error('la tanda acortada no encadeno su ultima ronda');
+if(qte.seq.length!==HUNT_ACE_N) throw new Error('el escape le comio el pedazo a las dos rondas');
+[...qte.eat].forEach(k=>press(k));
+if(foes.length) throw new Error('el acechador sobrevivio a las rondas que le quedaban');
+
+// 37j) EL LATIDO DEL SOTANO.  En la cacería no hay ruido blanco: su lugar lo ocupa
+// el mp3 del corazon, que sube al acercarse a una presa, manda durante el anillo y
+// se queda SOLO en la pista cuando ya no queda mas que el acechador.
+juega('sotano'); gen(); foes=[]; coins=[]; got=LV.coins; t0=now();
+p={x:C-1,y:R-1}; deal(); huntStart(); hunt.t0=now()-HUNT_BUILD; huntStep(now());
+const hLej=[...Array(C*R).keys()].find(i=>Math.hypot(i%C-p.x,(i/C|0)-p.y)>HEART_NEAR),
+      hCer=open(cell())[0];
+if(hLej===undefined) throw new Error('el sotano no da para probar HEART_NEAR');
+foes=[hLej,hLej]; hunt.slow=[0,0]; prevFoe=[]; hunt.prey=-1; qte=null; muf=0;
+const kLej=huntHeart();
+foes=[hLej,hCer];
+const kCer=huntHeart();
+if(kLej!==HEART_BASE) throw new Error('lejos de todo el latido tendria que estar en su piso');
+if(!(kCer>kLej)) throw new Error('el latido no hace fade-in al acercarse a una presa');
+foes=[hLej,cell()];
+if(huntHeart()!==1) throw new Error('con la presa encima el latido tendria que estar al tope');
+// durante el anillo va pegado al MISMO muf que hunde la musica: es un reemplazo del
+// ruido blanco, no un fade suelto
+foes=[hLej,hLej]; qte={seq:['a'],i:0,ms:1000,until:now()+1000,ring:1,round:1,rounds:1};
+muf=0.8;
+if(huntHeart()!==0.8) throw new Error('en el anillo el latido no toma el lugar del ruido blanco');
+qte=null; muf=0;
+// mas fuerte y mas rapido cuanto mas cerca: las dos cosas salen del mismo nivel
+heartSet(0.2); const hv0=HEART.volume, hr0=HEART.playbackRate;
+heartSet(0.9);
+if(!(HEART.volume>hv0)) throw new Error('el latido no suena mas fuerte de cerca');
+if(!(HEART.playbackRate>hr0)) throw new Error('el latido no late mas rapido de cerca');
+if(!HEART.src) throw new Error('el mp3 del latido no se bajo al usarlo');
+if(HEART.paused) throw new Error('el latido no arranco');
+heartOff();
+if(!HEART.paused) throw new Error('heartOff no apago el latido');
+// ...y devorar a la penultima presa apaga la musica y deja el corazon solo
+foes=[far(),hCer]; hunt.slow=[0,0]; prevFoe=[]; hunt.prey=-1; qte=null;
+if(HUNT.paused) throw new Error('la cacería tendria que venir sonando');
+huntGrab(flow());
+if(!qte) throw new Error('el zarpazo no agarro a la ultima presa comun');
+[...qte.eat].forEach(k=>press(k));
+if(foes.length!==1) throw new Error('la penultima presa no se devoro');
+if(!hunt.solo) throw new Error('quedando solo el acechador no se marco el final');
+if(!HUNT.paused) throw new Error('la musica no se apago para el final');
+key('a');
+if(!HUNT.paused) throw new Error('la primera tecla devolvio la musica que se apago a proposito');
+if(!(huntHeart()>=HEART_SOLO)) throw new Error('con el acechador solo el latido no toma la pista');
+lastDraw=0; frame();   // el ping del acechador se dibuja sin romper el cuadro
+if(!HEART.src||HEART.paused) throw new Error('el cuadro del final no dejo el latido sonando');
+
 juega('clasico');
 
 // 17) escritorio: el perfil lite NO se aplica, todo queda como estaba
@@ -1588,7 +1718,7 @@ const flat=src.replace(/"/g,"'").replace(/ *([=?:,;{}()[\]]) */g,'$1');
 if(!/<link[^>]+href=style\.css/.test(mk)) throw new Error('el index no carga style.css');
 if(!/<script src=game\.js>/.test(mk)) throw new Error('el index no carga game.js');
 const rutas=[...new Set([...src.matchAll(/"(assets\/[\w.-]+)"/g)].map(m=>m[1]))];
-if(rutas.length!==16) throw new Error('el juego dejo de tener sus 16 assets: '+rutas.length);
+if(rutas.length!==17) throw new Error('el juego dejo de tener sus 17 assets: '+rutas.length);
 for(const a of rutas)
   if(!fs.existsSync(path.join(__dirname,a))) throw new Error('falta el archivo '+a);
 
@@ -1956,11 +2086,38 @@ if(/^STALK\.src *=/m.test(src)||/^LOBO\.src *=/m.test(src))
 // el terror del QTE: el latido y el ruido tienen que ir pegados al MISMO muf que
 // hunde la musica (si no, son dos fades sueltos que no se cruzan), y tiene que
 // quedar el enchufe para los mp3 propios del dia que existan
-// en el QTE el latido sigue atado a `muf` (el mismo hundimiento de la musica); fuera
-// del QTE ya hay otra fuente, la cacería, que lo mantiene encendido con su propio
-// nivel — pero el QTE manda sobre ella, y eso es lo que se comprueba acá
-if(!/dreadSet\(qte\?muf:/.test(flat)) throw new Error('el terror del QTE no va pegado al fade-out de la musica');
+// FUERA de la cacería el terror del QTE sigue siendo el sintetizado y sigue atado a
+// `muf` (el mismo hundimiento de la musica); dentro de la cacería lo reemplaza el
+// mp3 del latido, y eso se comprueba en el test 39
+if(!/dreadSet\(muf\)/.test(flat)) throw new Error('el terror del QTE no va pegado al fade-out de la musica');
 if(!/DREAD_SRC=\{heart:'',noise:''\}/.test(flat)) throw new Error('no quedo donde enchufar los mp3 del latido y el ruido');
+
+// ---- 39) EL LATIDO DE LA CACERÍA ----
+// El mp3 del corazon pesa 256KB y solo se usa en la segunda mitad de UN nivel:
+// mismo trato que el tema de la cacería y que la cara del acechador, se baja al
+// usarlo (srcOn) y ni un byte antes.
+if(/^HEART\.src *=/m.test(src)) throw new Error('el mp3 del latido se baja al abrir la pagina');
+if(!/HEART\.preload='none'/.test(flat)) throw new Error('el latido se precarga sin pedirlo');
+if(!/heartSet\(huntHeart\(\)\)/.test(flat)) throw new Error('el latido no va atado al nivel de la cacería');
+// en la cacería el ruido blanco NO suena: lo reemplaza el latido, tambien en el QTE
+if(!/if \(huntOn\(\) && !frozen\) \{\s*dreadOff\(\);\s*heartSet\(/.test(src))
+  throw new Error('en la cacería el ruido blanco no le deja el lugar al latido');
+// el ♫ del menu apaga las CUATRO pistas, no tres
+if(!/HEART\.muted=BGM\.muted/.test(flat)) throw new Error('el boton de musica no apaga el latido');
+// el latido del acechador se DIBUJA, y va despues de la niebla por lo mismo que el
+// radar: en el final del sotano no se ve nada, y esa es justo la gracia
+const iPing=src.indexOf('EL CORAZÓN DEL ACECHADOR');
+if(iPing<0) throw new Error('el tablero no dibuja el latido del acechador');
+
+// ---- 40) el reloj del anillo es FIJO ----
+// Es la correccion de balance entera: cada escape le come un pedazo a la presa y el
+// temporizador sigue siendo el mismo, asi que lo que crece es el margen POR letra.
+// Atarlo a la cantidad de letras —como hace el QTE de la primera mitad— dejaria la
+// cacería igual de apretada despues de cada escape.
+if(!/ms = HUNT_RING_MS \* babyK\(\)/.test(src))
+  throw new Error('el reloj del anillo dejo de ser fijo');
+if(/HUNT_RING_MS \* n|n \* HUNT_RING_MS/.test(src))
+  throw new Error('el reloj del anillo se ato a la cantidad de letras');
 // la cuenta de monedas se lee en el tablero, no solo arriba.  Va DESPUES de la
 // niebla: si no, en el sotano —donde mas hace falta— queda tapada.
 const iFog=src.indexOf('if (LV.fog) {'), iCoin=src.indexOf('las monedas, en el tablero');
