@@ -4906,7 +4906,7 @@ function resShow() {
 	const fin = !!hunt && hunt.ph === "end"; // se terminó la cacería: es EL final
 	rtag.textContent = fin ? "EL SÓTANO · FINAL" : LV.tag;
 	rttl.textContent = fin
-		? "FINAL DESBLOQUEADO"
+		? "FINAL COMPLETADO... POR AHORA."
 		: LV.tut
 			? "TUTORIAL COMPLETADO"
 			: "NIVEL COMPLETADO";
