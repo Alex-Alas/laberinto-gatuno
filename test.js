@@ -1583,6 +1583,143 @@ hunt.t0=now()-FIN_SKIP_AT-1;
 if(!meow()) throw new Error('ESPACIO no saltea el epilogo');
 resHide();
 
+// 42) EL PARRY: el maullido, tirado DESPUES de que te agarraron
+// Es el mismo boton y el mismo cooldown en otra ventana, asi que lo que hay que
+// probar es que NO se convirtio en una habilidad aparte: que paga menos que vencer
+// al gato, que se cobra el maullido entero y que al acechador no lo toca.
+juega('clasico'); gen(); foes=[]; nextAsk=1e9; baby=0; qte=null;
+// sin el maullido armado no hay parry, y el intento no se lleva el QTE puesto
+meowOn=false; meowAt=-1e9;
+const pcell=cell(); foes=[pcell]; qteStart();
+if(!qte) throw new Error('el gato no abrio su QTE');
+if(meow()) throw new Error('sin el maullido armado no puede haber parry');
+if(!qte) throw new Error('el parry negado cerro el QTE');
+// armado y dentro de la ventana: sale
+meowOn=true; meowAt=-1e9;
+const stl0=stl, cmb0=combo, par0=parries, win0=qteWins, det0=det, kil0=kills;
+if(!parryOpen()) throw new Error('la ventana del parry no esta abierta al abrirse el QTE');
+if(!meow()) throw new Error('el parry no salio con el maullido listo y la ventana abierta');
+if(qte) throw new Error('el parry no cerro el QTE');
+if(parries!==par0+1) throw new Error('el parry no se conto');
+if(!(stl>stl0)) throw new Error('el parry no pago estilo');
+if(combo!==cmb0+1) throw new Error('el parry no subio el combo');
+if(qteWins!==win0||det!==det0||kills!==kil0)
+  throw new Error('el parry pago como vencer al gato, y no lo vencio');
+if(foes[0]===pcell) throw new Error('el gato parriado se quedo encima tuyo');
+if(!(now()<scareUntil)) throw new Error('el parry no solto el ahuyentador del maullido');
+if(meowReady()) throw new Error('el parry no gasto el cooldown del maullido');
+if(!(graceT>now())) throw new Error('el parry no dejo el respiro');
+if(!/PARRY/.test(String(note&&note.a))) throw new Error('el parry no se canta en pantalla');
+// FUERA DE LA VENTANA no sale, y un intento tarde no puede gastar el maullido
+meowAt=-1e9; note=null; foes=[cell()]; qte=null; qteStart();
+qte.until-=PARRY_MS*babyK()+50;                  // el QTE se abrio hace mas de PARRY_MS
+if(parryOpen()) throw new Error('la ventana del parry no se cierra sola');
+if(meow()) throw new Error('el parry salio fuera de su ventana');
+if(!qte) throw new Error('el parry tarde cerro el QTE');
+if(!meowReady()) throw new Error('un parry tarde gasto el maullido');
+if(!qte.no) throw new Error('el intento negado no deja el motivo en pantalla');
+// ...y con el cooldown corriendo tampoco, aunque la ventana este abierta
+qte=null; qteStart(); meowAt=now();
+if(meow()) throw new Error('el parry salio sin maullido disponible');
+if(!qte) throw new Error('el parry sin maullido cerro el QTE');
+// EL ACECHADOR NO SE PARREA: la misma regla que ya tenia el ahuyentador
+qte=null; juega('sotano'); gen(); foes=[]; nextAsk=1e9; meowOn=true; meowAt=-1e9;
+foes=[cell()]; qteStart();
+if(!qte||!qte.st) throw new Error('el acechador no abrio su tanda');
+if(meow()) throw new Error('al acechador se lo parreo');
+if(!qte) throw new Error('el intento contra el acechador cerro su tanda');
+if(!meowReady()) throw new Error('el intento contra el acechador gasto el maullido');
+if(!/ACECHADOR/.test(String(qte.no&&qte.no.m)))
+  throw new Error('la pantalla no dice por que el acechador no se parrea');
+// (el gen() del sotano ya dejo la cuenta en cero: lo que se prueba es que el
+// intento negado no la mueve)
+if(parries) throw new Error('el intento contra el acechador conto como parry');
+// el overlay del QTE se dibuja igual con el cartel del parry encima, en sus tres
+// estados: negado, ventana abierta y acechador
+lastDraw=0; frame();
+qte.st=false; qte.no=null; qte.until=now()+qte.ms; lastDraw=0; frame();
+if(!parryOpen()) throw new Error('el QTE reabierto no ofrece la ventana');
+qte=null; scareUntil=0; meowAt=-1e9; note=null;
+
+// 43) LA TECLA DE BORRAR: volver un paso A PROPOSITO
+// Es el mismo movimiento que el castigo por errar, pero elegido, asi que no puede
+// pagar como un acierto ni regalar el reloj de la letra.
+juega('clasico'); gen(); foes=[]; coins=[]; lamps=[]; nextAsk=1e9; baby=0;
+qte=null; trail=[]; backAt=0; deal();
+if(back()) throw new Error('sin camino atras no hay nada que retroceder');
+const b0=cell(); step();
+if(cell()===b0) throw new Error('la letra no movio al gato');
+const cmbB=combo, hitB=hits, stlB=stl, shB=shownAt, penB=pen;
+backAt=0;
+if(!back()) throw new Error('el borrar no volvio un paso');
+if(cell()!==b0) throw new Error('el borrar no volvio POR EL CAMINO que se hizo');
+if(combo!==cmbB) throw new Error('retroceder a proposito no puede tocar el combo');
+if(hits!==hitB||stl!==stlB) throw new Error('retroceder no es un acierto: no paga');
+if(pen!==penB) throw new Error('retroceder tampoco es un error: no penaliza');
+if(shownAt!==shB) throw new Error('el borrar reinicio el reloj de la letra');
+if(trail.length) throw new Error('el borrar no se comio la migaja del camino');
+// EL FRENO: la tecla apretada no rebobina el laberinto entero
+step(); const b2=cell(); backAt=0; back();
+if(cell()===b2) throw new Error('el primer borrar no salio');
+const b3=cell(); back();
+if(cell()!==b3) throw new Error('dos borrar seguidos rebobinaron sin freno');
+// llega por el teclado fisico y por el del telefono (donde el input va vacio y
+// algunos navegadores solo avisan con beforeinput)
+backAt=0; step(); const b4=cell(); press('Backspace');
+if(cell()===b4) throw new Error('Backspace no retrocede');
+backAt=0; step(); const b5=cell(); kb.onbeforeinput({inputType:'deleteContentBackward'});
+if(cell()===b5) throw new Error('el borrar del telefono no retrocede');
+// con un QTE abierto NO: ahi la pantalla es otra
+backAt=0; step(); foes=[cell()]; qteStart(); const b6=cell();
+if(back()) throw new Error('el borrar se colo en un QTE');
+if(cell()!==b6) throw new Error('el borrar movio al gato con el QTE abierto');
+qte=null; foes=[];
+// ...y retroceder encima del gato que te viene siguiendo te mete en su boca: es
+// la MISMA rutina de aterrizaje que la de una letra (ver land)
+backAt=0; step(); foes=[trail[trail.length-1]]; back();
+if(!qte) throw new Error('retroceder encima de un gato no abrio su QTE');
+qte=null; foes=[]; backAt=0;
+
+// 44) LOS MORDISCOS DE LA CACERIA: la boca, el pedazo y lo que salta
+juega('sotano'); gen();
+if(!NOM.every(a=>String(a.src).endsWith('assets/nom.mp3')))
+  throw new Error('el sotano no bajo el mp3 del mordisco');
+if(NOM.length<2) throw new Error('un solo <audio> se corta a si mismo entre mordiscos');
+if(NOM.some(a=>a.preload!=='none'))
+  throw new Error('el mordisco se precarga en los niveles que no lo usan');
+BGM.muted=false;
+const nA=nom(1,0.5), nB=nom(1,0.5);
+if(!nA||nA===nB) throw new Error('el pool de mordiscos no rota: se cortan entre si');
+if(nA.paused) throw new Error('el mordisco no sono');
+if(!(nA.playbackRate>0)) throw new Error('el mordisco salio sin tono propio');
+BGM.muted=true;
+if(nom(1,0.5)) throw new Error('el mordisco sono con todo en mute');
+BGM.muted=false;
+// y adentro del anillo: cada letra es UNA dentellada, en el pedazo que se mordio
+gen(); foes=[]; t0=now(); nextAsk=1e9;
+huntStart(); hunt.t0-=HUNT_BUILD; huntStep(now());
+if(!huntOn()) throw new Error('no arranco la cacería');
+foes=[open(cell())[0]]; prevFoe=[]; hunt.prey=-1; qte=null;
+huntGrab(flow());
+if(!qte||!qte.ring) throw new Error('el zarpazo no abrio el anillo');
+gore=[]; qte.bit=null;
+const nom0=nomI, k0=[...qte.eat][0], i0=qte.seq.indexOf(k0);
+press(k0);
+if(nomI===nom0) throw new Error('la dentellada no sono');
+if(!gore.length) throw new Error('la dentellada no salpico');
+if(!qte||!qte.bit) throw new Error('la dentellada no dejo su marca para el dibujo');
+if(qte.bit.i!==i0) throw new Error('el mordisco no cayo en el pedazo que se mordio');
+if(Math.abs(qte.bit.a-ringAng(i0,qte.seq.length))>1e-9)
+  throw new Error('la sangre sale de un lado y el pedazo falta del otro');
+if(qte.eat.has(k0)) throw new Error('el pedazo mordido sigue en el cuerpo');
+// la sangre va en su propia lista porque el velo del anillo taparia la de siempre
+if(gore.some(q=>parts.includes(q))) throw new Error('la sangre se mezclo con las chispas');
+lastDraw=0; frame();                       // el anillo con el mordisco fresco
+qte.bit.t=now()-BITE_MS-1; lastDraw=0; frame();   // ...y con el tiron ya apagado
+const gN=gore.length; frame();
+if(!(gore.length<=gN)) throw new Error('la sangre no se apaga');
+huntReset(); qte=null; gore=[];
+
 juega('clasico');
 
 // 17) escritorio: el perfil lite NO se aplica, todo queda como estaba
@@ -1619,7 +1756,7 @@ if(document.fullscreenElement) throw new Error('el boton no salio de pantalla co
 if(fsb.className) throw new Error('el boton quedo marcado al salir');
 if(fsb.style.display==='none') throw new Error('con API disponible el boton tiene que verse');
 
-console.log('OK 32/32 | partida completa:',teclas,'teclas, precision',prec+'%');
+console.log('OK 35/35 | partida completa:',teclas,'teclas, precision',prec+'%');
 `;
 
 // ---- 19) el mismo juego en un teléfono: perfil lite, gameplay intacto ----
@@ -1796,7 +1933,7 @@ const flat=src.replace(/"/g,"'").replace(/ *([=?:,;{}()[\]]) */g,'$1');
 if(!/<link[^>]+href=style\.css/.test(mk)) throw new Error('el index no carga style.css');
 if(!/<script src=game\.js>/.test(mk)) throw new Error('el index no carga game.js');
 const rutas=[...new Set([...src.matchAll(/"(assets\/[\w.-]+)"/g)].map(m=>m[1]))];
-if(rutas.length!==17) throw new Error('el juego dejo de tener sus 17 assets: '+rutas.length);
+if(rutas.length!==18) throw new Error('el juego dejo de tener sus 18 assets: '+rutas.length);
 for(const a of rutas)
   if(!fs.existsSync(path.join(__dirname,a))) throw new Error('falta el archivo '+a);
 

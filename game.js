@@ -154,7 +154,15 @@ const fmt = (ms) => {
 	const t = Math.max(0, ms); // MM:SS:mmm
 	return `${pad(t / 60000, 2)}:${pad((t / 1000) % 60, 2)}:${pad(t % 1000, 3)}`;
 };
-const CLS = { ok: "k", bad: "b", late: "l", qte: "q", qtebad: "b" };
+const CLS = {
+	ok: "k",
+	bad: "b",
+	late: "l",
+	qte: "q",
+	qtebad: "b",
+	parry: "m", // el ♪ que devolvió un QTE
+	back: "w", // ...y el ⌫ que volvió un paso: ni acierto ni error, apagado
+};
 
 // Tipografía del tablero: la misma que la GUI, no el monoespaciado de antes.
 // CF es el condensado de sistema y se lleva todo lo que hay que LEER a las
@@ -254,6 +262,18 @@ HEART.preload = "none";
 HEART.loop = true;
 HEART.v0 = 0.95; // el tope: con el acechador encima esto TIENE que tapar todo
 HEART.volume = 0;
+// EL MORDISCO.  El sonido de la boca cuando le arrancás un pedazo a una presa: un
+// mp3 propio, corto y sucio, y es lo único de la cacería que no está sintetizado.
+// Va en POOL y no en un solo <audio> porque los mordiscos salen EN RÁFAGA —uno por
+// letra del anillo, y las últimas caen casi juntas— y un elemento suelto se corta a
+// sí mismo: el segundo mordisco mataría al primero y se oiría media dentellada.
+// Tres clones rotando alcanzan para que se pisen sin cortarse, que es exactamente
+// como suena comer.  La URL se la pone gen() al generar un nivel con cacería, igual
+// que la cara del acechador: los niveles 1 y 2 no bajan un byte de esto.
+const NOM_SRC = "assets/nom.mp3";
+const NOM = [new Audio(), new Audio(), new Audio()];
+NOM.forEach((a) => (a.preload = "none"));
+let nomI = 0;
 const play = (a) => {
 	try {
 		a.currentTime = 0;
@@ -290,12 +310,31 @@ const srcOn = (a) => {
 						? VIBE_SRC
 						: BGM_SRC;
 };
+// La dentellada, con su tono y su volumen: los pone QUIEN muerde, así que dos
+// mordiscos nunca salen iguales —el bicho se va quedando sin cuerpo y la boca se
+// va acercando al hueso: más grave y más fuerte cada vez—.  Rota el pool y devuelve
+// el elemento que sonó (los tests leen de ahí; el juego lo ignora).
+function nom(rate, vol) {
+	if (BGM.muted) return null;
+	const a = NOM[nomI++ % NOM.length];
+	srcNom(a);
+	try {
+		a.playbackRate = rate;
+		a.volume = Math.max(0, Math.min(1, vol));
+	} catch (e) {}
+	play(a).catch(() => {});
+	return a;
+}
+const srcNom = (a) => {
+	if (!a.src) a.src = NOM_SRC;
+};
 if (!PERF.lazy) srcOn(BGM);
 mus.onclick = () => {
 	BGM.muted = !BGM.muted;
 	VIBE.muted = BGM.muted;
 	HUNT.muted = BGM.muted;
 	HEART.muted = BGM.muted;
+	NOM.forEach((a) => (a.muted = BGM.muted)); // ...y el que estuviera masticando
 	mus.textContent = (BGM.muted ? "♫̸" : "♫") + " MUSICA";
 	mus.blur();
 };
@@ -737,6 +776,8 @@ let g,
 	baby = 0,
 	noes = 0, // cuántas veces se dijo "así está bien" (ver checkSkill)
 	dodges = 0, // gatos esquivados al cruce
+	parries = 0, // ...y gatos devueltos con el maullido en el primer instante
+	gore = [], // las partículas del mordisco (van aparte: ver spray)
 	pfrom = null, // la celda que el jugador acaba de dejar, y cuándo
 	paused = false,
 	pauseAt = 0,
@@ -898,7 +939,11 @@ const GRACE_MS = 2000, // respiro sin reloj al ganar un QTE
 	MEOW_ARM = 8, // combo que lo ARMA (de COMBO_MAX = 15)
 	MEOW_CD = 32000,
 	MEOW_KILL = 6000, // lo que cada gato vencido le descuenta al cooldown
-	MEOW_R = 7; // MEOW_R: "cercano" en celdas de laberinto
+	MEOW_R = 7, // MEOW_R: "cercano" en celdas de laberinto
+	// EL PARRY: la ventana desde que se abre el QTE (la agranda el baby mode, como
+	// todo reloj de reacción del juego) y lo que paga sacárselo de encima así
+	PARRY_MS = 420,
+	STYLE_PARRY = 10;
 // el eco del maullido en el sótano: cuánto dura y cuánto miente (en celdas)
 const RADAR_MS = 4500,
 	RADAR_J = 0.45;
@@ -923,7 +968,11 @@ const habTxt = (T) =>
 			: "" // callado si falta mucho
 		: meowCd(T)
 			? `  ·  MAULLIDO EN ${Math.ceil(meowCd(T) / 1000)}s`
-			: "  ·  MAULLIDO LISTO [ESPACIO]");
+			: // con un gato encima el mismo botón hace otra cosa, y el renglón lo
+				// grita: es la única pista escrita de que el QTE se puede devolver
+				qte && !qte.ring && !qte.st
+				? "  ·  ¡PARRY! [ESPACIO]"
+				: "  ·  MAULLIDO LISTO [ESPACIO]");
 // en el teléfono el ♪ tiene su propio botón en la barra (#bmeow), así que acá
 // queda sólo la determinación, que no tiene otro lugar donde leerse
 const habIco = () => (det ? "  " + "\u25C8".repeat(det) : "");
@@ -1113,6 +1162,9 @@ function gen() {
 	graceT = 0;
 	qteWins = 0;
 	dodges = 0;
+	parries = 0;
+	gore = [];
+	backAt = 0;
 	pfrom = null;
 	det = 0;
 	scareUntil = 0;
@@ -1147,6 +1199,7 @@ function gen() {
 	if (LV.hunt) {
 		if (!NUGG.src) NUGG.src = "assets/nuggets.jpg";
 		if (!REDPJ.src) REDPJ.src = "assets/gato-rojo.jpg";
+		NOM.forEach(srcNom); // ...y el mp3 del mordisco, que son 7KB y suena mucho
 	}
 	bakeMaze(); // el laberinto nuevo se hornea una sola vez
 	deal();
@@ -1370,18 +1423,13 @@ function moveFoes() {
 }
 
 // ---- el maullido -----------------------------------------------------------
-// No gasta combo (el precio es el cooldown, ver MEOW_CD arriba).
-// Devuelve true sólo si salió, para que quien lo llame sepa si hacer otra cosa.
-function meow() {
-	// durante el buildup de la cacería el ESPACIO no maulla: saltea la cinemática
-	// (y sólo si ya se vio entera alguna vez, ver huntSkip).  En el epílogo, ídem.
-	if (huntHold()) return huntSkip();
-	if (huntFin()) return huntFinSkip();
-	if (win || frozen || paused || qte || tutHold()) return false;
-	if (!meowReady()) {
-		sfx(120, 180, "sine", 0.035, 80);
-		return false;
-	} // negado: un gruñido
+// No gasta combo: el precio es el cooldown (ver MEOW_CD arriba).
+//
+// Lo que CUESTA un maullido, salga como ahuyentador o como parry: eso y nada más.
+// Va en su propia función porque las dos formas lo pagan igual —un parry no es una
+// habilidad nueva, es el mismo maullido tirado en otro momento— y porque el radar
+// del sótano tampoco distingue: el eco sale igual.
+function meowSpend() {
 	meowAt = now();
 	scareUntil = meowAt + MEOW_MS;
 	// RADAR: a oscuras el maullido vuelve con algo más que gatos asustados.  Las
@@ -1396,6 +1444,26 @@ function meow() {
 				...foes.map((i) => ping(i, 1)),
 			],
 		};
+	tmeow++; // el paso del tutorial que enseña el maullido espera esto
+}
+const growl = () => {
+	sfx(120, 180, "sine", 0.035, 80);
+	return false;
+};
+// Devuelve true sólo si salió, para que quien lo llame sepa si hacer otra cosa (en
+// el teléfono, el botón que no maulló abre el teclado).
+function meow() {
+	// durante el buildup de la cacería el ESPACIO no maulla: saltea la cinemática
+	// (y sólo si ya se vio entera alguna vez, ver huntSkip).  En el epílogo, ídem.
+	if (huntHold()) return huntSkip();
+	if (huntFin()) return huntFinSkip();
+	// EL PARRY.  Con un QTE abierto el maullido no ahuyenta a nadie —el gato ya te
+	// tiene— así que hace lo otro: se lo devuelve.  Mismo botón, mismo cooldown, y
+	// sólo en el primer instante del encuentro (ver parry).
+	if (qte) return parry();
+	if (win || frozen || paused || tutHold()) return false;
+	if (!meowReady()) return growl(); // negado: un gruñido
+	meowSpend();
 	// EL RUGIDO.  En la cacería el mismo botón hace lo contrario: no ahuyenta, PARALIZA.
 	// Dejarlo como estaba lo habría vuelto un botón muerto que además miente —el cartel
 	// diría "los gatos se alejan" mientras la mecánica de huida ni siquiera se lee en
@@ -1403,7 +1471,6 @@ function meow() {
 	// herramienta que el jugador se ganó en la primera mitad justo cuando pasa a ser el
 	// que caza.  Mismo cooldown, mismo `scareUntil`, sentido invertido: las presas
 	// cercanas se quedan clavadas del terror el tiempo que dura.
-	tmeow++; // el paso del tutorial que enseña el maullido espera esto
 	if (huntOn()) {
 		sfx(90, 520, "sawtooth", 0.085, 34);
 		setTimeout(() => sfx(62, 700, "sine", 0.07, 26), 120);
@@ -1424,6 +1491,70 @@ function meow() {
 			: "LOS GATOS NEGROS SE ALEJAN",
 		"#9ff",
 	);
+	return true;
+}
+
+// ---- EL PARRY --------------------------------------------------------------
+// El maullido siempre fue una herramienta de ANTES: se tira para que no te
+// alcancen, y una vez que el gato te tiene encima no servía para nada —con el QTE
+// abierto el botón directamente no hacía nada—.  El parry es el MISMO maullido
+// tirado justo DESPUÉS: en los primeros PARRY_MS del encuentro, con la secuencia
+// recién puesta en pantalla y el gato en la cara.  No es una habilidad nueva ni un
+// botón nuevo; es la ventana en la que el ahuyentador deja de ser prevención y
+// pasa a ser una respuesta.
+//
+// QUÉ CUESTA.  El maullido entero: el cooldown de 32 s y el ahuyentador que sale
+// con él (los gatos cercanos igual salen corriendo, y en el sótano igual queda el
+// radar).  O sea que se paga con la herramienta que ibas a usar para no llegar a
+// esta situación, y por eso no se puede tirar en todos los encuentros.
+//
+// QUÉ NO PAGA.  No cuenta como vencer al gato: no suma victoria de QTE, no da
+// carga de DETERMINACIÓN y no encadena la racha que multiplica el estilo. Salir de
+// un encuentro sin pelearlo no puede pagar lo mismo que pelearlo. Paga ESTILO
+// —más que un esquive al cruce, que sale gratis— y el respiro para acomodarte.
+//
+// Y AL ACECHADOR NO SE LO PARREA.  Es la misma regla que ya tenía el maullido, por
+// el mismo motivo: un maullido es un susto y a él los sustos no le hacen nada. Su
+// tanda se pelea entera o se pierde entera.  El intento ni siquiera le gasta el
+// cooldown al maullido —el jugador no eligió mal, eligió algo que no existe— y la
+// pantalla se lo dice ahí mismo, encima del cartel del QTE.
+//
+// El anillo de la cacería tampoco: ahí el que muerde sos vos, no hay ataque que
+// devolver.
+const qteAt = () => (qte ? qte.until - qte.ms : 0); // cuándo se abrió este QTE
+const parryOpen = (T) =>
+	!!qte && !qte.ring && !qte.st && (T || now()) - qteAt() <= PARRY_MS * babyK();
+// el intento que no salió: un gruñido y el motivo escrito en el overlay, que es
+// donde el jugador está mirando.  No gasta nada.
+const parryNo = (m) => {
+	if (qte) qte.no = { t: now(), m };
+	return growl();
+};
+function parry() {
+	if (!qte || win || frozen || paused) return false;
+	if (qte.ring) return growl(); // en la cacería mordés vos: no hay qué devolver
+	if (qte.st) return parryNo("AL ACECHADOR NO SE LO PARREA");
+	if (!meowReady()) return parryNo("EL MAULLIDO TODAVÍA NO VUELVE");
+	if (!parryOpen()) return parryNo("TARDE: ESO YA ES TECLEAR");
+	const cell = p.y * C + p.x;
+	qte = null; // antes de push(): con un QTE abierto no se evalúa el skill issue
+	meowSpend(); // el precio entero, ahuyentador y radar incluidos
+	parries++;
+	hits++; // fue una respuesta acertada: cuenta en la precisión
+	comboUp();
+	styleUp(STYLE_PARRY);
+	graceT = now() + GRACE_MS; // el mismo respiro que ganar el QTE
+	push("♪", "parry");
+	// el gato sale volando igual que si lo hubieras vencido: quedarse en tu casilla
+	// te abriría otro QTE en el próximo paso y el parry no habría servido de nada
+	foes = foes.map((f) => (f === cell ? far() : f));
+	shake = 16;
+	flash = 0.55;
+	sfx(1400, 45, "square", 0.05, 1900); // el chasquido...
+	setTimeout(() => sfx(520, 260, "sawtooth", 0.06, 1100), 55); // ...y el maullido
+	burst(p.x * S + S / 2, p.y * S + S / 2, "#9ff", 30);
+	say("¡PARRY!", `+${STYLE_PARRY} DE ESTILO · MAULLIDO GASTADO`, "#9ff");
+	deal(); // volviste al laberinto: las letras son las de esta celda
 	return true;
 }
 
@@ -2009,6 +2140,50 @@ function huntGrab(d) {
 	qteStart();
 }
 
+// ---- LA GEOMETRÍA DEL ANILLO -----------------------------------------------
+// Tres cuentas que necesitan IGUALES el dibujo del anillo y la dentellada: dónde
+// caen las letras, de qué tamaño está el cuerpo y en qué ángulo quedó cada pedazo.
+// Estaban sueltas adentro del overlay, y con eso la sangre de un mordisco salía de
+// un lado y el pedazo faltaba del otro.
+const ringRad = () => Math.min(BW, BH) * 0.3;
+const ringSz = (gr) => Math.min(BW, BH) * (0.42 - 0.1 * gr);
+const ringAng = (i, n) => -1.571 + (6.283 * i) / n;
+// lo que dura el golpe de una dentellada en pantalla: el tirón del cuerpo y el
+// fogonazo del pedazo se apagan juntos, en el mismo reloj
+const BITE_MS = 240;
+
+// ---- LA DENTELLADA ----------------------------------------------------------
+// Cada letra del anillo es un MORDISCO, y sonaba a menú: un blip sintetizado y
+// ocho chispas rojas que salían para todos lados.  Un mordisco de verdad son
+// cuatro cosas que pasan juntas, y son las cuatro que hace esto:
+//
+//   · LA BOCA.  El mp3 (`nom`), que es lo único de la cacería que no está
+//     sintetizado.  Cada dentellada sale más grave y más fuerte que la anterior:
+//     el bicho se va quedando sin cuerpo y la boca se va acercando al hueso.  Y
+//     debajo, el crujido sintetizado de siempre, que ahora hace de hueso.
+//   · EL PEDAZO.  El sector deja de dibujarse (eso ya estaba) y abajo aparece la
+//     carne: el hueco no puede ser el fondo de la pantalla.
+//   · LO QUE SALTA.  Sangre en cono y HACIA AFUERA del mordisco, no un chispazo
+//     redondo (ver spray).
+//   · EL TIRÓN.  El cuerpo se sacude para el lado contrario y vuelve solo. Es lo
+//     que separa "una porción dejó de dibujarse" de "algo le arrancó un pedazo".
+function huntChomp(i) {
+	const n = qte.seq.length,
+		k = qte.i / n, // 0..1: cuánto del bicho va, con éste adentro
+		a = ringAng(i, n),
+		gr = Math.min(1, Math.max(0, 1 - (qte.until - now()) / qte.ms)),
+		// el punto exacto del mordisco: sobre el cuerpo, en el ángulo del pedazo
+		bx = BW / 2 + Math.cos(a) * ringSz(gr) * 0.72,
+		by = BH / 2 + Math.sin(a) * ringSz(gr) * 0.72;
+	qte.bit = { t: now(), a, i }; // el tirón y el fogonazo los dibuja el overlay
+	nom(1.16 - 0.3 * k + (Math.random() - 0.5) * 0.09, 0.5 + 0.45 * k);
+	sfx(150 - 60 * k, 90 + 60 * k, "sawtooth", 0.05, 34 - 10 * k); // el hueso
+	shake = Math.max(shake, 9 + 7 * k);
+	flash = Math.max(flash, 0.22 + 0.2 * k);
+	spray(bx, by, a, "#f22", 16, 3.6); // la que sale disparada...
+	spray(bx, by, a + 3.1416, "#7d0d1c", 7, 1.5); // ...y la que chorrea para adentro
+}
+
 // Devorada resuelta.  Sale por acá TODO el QTE de anillo (ver qteEnd), así que no
 // toca ni una línea del QTE normal: son dos juegos distintos con la misma pantalla.
 function huntBite(okAll) {
@@ -2026,6 +2201,9 @@ function huntBite(okAll) {
 		// (ver qteStart).  Es lo único del sótano que se guarda entre encuentros.
 		if (ace) hunt.aceDone = (hunt.aceDone || 0) + 1;
 		shake = 13;
+		// la ronda se cierra de un tarascón: más grave que las dentelladas sueltas
+		// que la fueron abriendo, porque acá se lleva un pedazo entero
+		nom(0.82, 0.95);
 		sfx(160, 90, "sawtooth", 0.06, 60);
 		burst((p.x + 0.5) * S, (p.y + 0.5) * S, "#f22", 16);
 		qteStart({ round: round + 1, rounds });
@@ -2053,6 +2231,10 @@ function huntBite(okAll) {
 		hits++;
 		burst((p.x + 0.5) * S, (p.y + 0.5) * S, "#f22", 34);
 		play(BANG).catch(() => {});
+		// EL ÚLTIMO BOCADO: el mismo mp3 de los mordiscos, al tono más grave y a
+		// todo volumen.  Es la misma boca, y por eso la presa se termina con el
+		// sonido con el que se la estuvo abriendo, no con un efecto de otro lado.
+		nom(0.68, 1);
 		sfx(90, 320, "sawtooth", 0.08, 38); // el crujido
 		setTimeout(() => sfx(58, 220, "sine", 0.06, 30), 120);
 		if (!foes.length) return huntFinish();
@@ -2829,6 +3011,27 @@ function burst(cx, cy, col, n = 14) {
 		});
 	}
 }
+// Lo mismo, pero en CONO y hacia un lado: lo que salta de una dentellada no sale
+// en todas las direcciones, sale para afuera del mordisco.  Y sale en `gore`, que
+// es una lista aparte por una razón de dibujo y no de diseño: el anillo de la
+// cacería pinta un velo encima del tablero entero, así que las partículas de
+// siempre —que se dibujan ANTES— quedarían debajo del velo y no se verían.  `gore`
+// se dibuja adentro del anillo, sobre el cuerpo de la presa (ver el overlay).
+function spray(cx, cy, ang, col, n, sp) {
+	const m = Math.max(3, (n * PERF.dust) | 0);
+	for (let i = 0; i < m; i++) {
+		const a = ang + (Math.random() - 0.5) * 1.2,
+			s = sp * (0.3 + Math.random());
+		gore.push({
+			x: cx,
+			y: cy,
+			vx: Math.cos(a) * s,
+			vy: Math.sin(a) * s,
+			l: 1,
+			c: col,
+		});
+	}
+}
 // cada error te devuelve un paso atrás por el camino que recorriste
 function stepBack() {
 	const c = trail.pop();
@@ -3201,14 +3404,19 @@ function frame() {
 
 	vis.x += (p.x - vis.x) * 0.35;
 	vis.y += (p.y - vis.y) * 0.35;
-	parts.forEach((q) => {
-		q.x += q.vx;
-		q.y += q.vy;
-		q.vx *= 0.9;
-		q.vy *= 0.9;
-		q.l -= 0.04;
-	});
+	// las dos listas se mueven igual y sólo se dibujan en lugares distintos (ver
+	// spray): las chispas de siempre debajo del velo del anillo, la sangre encima
+	[parts, gore].forEach((l) =>
+		l.forEach((q) => {
+			q.x += q.vx;
+			q.y += q.vy;
+			q.vx *= 0.9;
+			q.vy *= 0.9;
+			q.l -= 0.04;
+		}),
+	);
 	parts = parts.filter((q) => q.l > 0);
+	gore = gore.filter((q) => q.l > 0);
 	shake *= 0.85;
 	flash *= 0.9;
 	cpop *= 0.88;
@@ -3725,10 +3933,35 @@ function frame() {
 			gr = Math.min(1, Math.max(0, 1 - left)),
 			// al revés que el QTE normal: acá el bicho no se te viene encima, se te
 			// ENCOGE.  Lo que crece es tu lugar en la pantalla.
-			rad = Math.min(BW, BH) * 0.3,
-			sz = Math.min(BW, BH) * (0.42 - 0.1 * gr),
+			rad = ringRad(),
+			sz = ringSz(gr),
 			cara = qte.st && ready(STALK) ? STALK : BIG,
-			ang = (i) => -1.571 + (6.283 * i) / n;
+			ang = (i) => ringAng(i, n),
+			// EL TIRÓN de la última dentellada: el cuerpo salta para el lado
+			// contrario al mordisco y vuelve solo en BITE_MS.  Al cuadrado, así que
+			// el golpe es seco y la vuelta lenta, que es como se mueve algo a lo que
+			// le arrancaron un pedazo (y no como un resorte).
+			bk = qte.bit ? Math.max(0, 1 - (T - qte.bit.t) / BITE_MS) : 0,
+			ox = qte.bit ? -Math.cos(qte.bit.a) * 8 * bk * bk : 0,
+			oy = qte.bit ? -Math.sin(qte.bit.a) * 8 * bk * bk : 0;
+		// LA CARNE.  Debajo del cuerpo, antes que nada: el hueco que deja un pedazo
+		// arrancado no puede ser el fondo de la pantalla, tiene que ser el ADENTRO
+		// del bicho.  Sin esto, morder se veía como recortar una porción de torta.
+		const gd = x.createRadialGradient(
+			cx + ox,
+			cy + oy,
+			sz * 0.1,
+			cx + ox,
+			cy + oy,
+			sz,
+		);
+		gd.addColorStop(0, "#8d0f20");
+		gd.addColorStop(0.65, "#4a0611");
+		gd.addColorStop(1, "#1a0207");
+		x.fillStyle = gd;
+		x.beginPath();
+		x.arc(cx + ox, cy + oy, sz * 0.95, 0, 6.283);
+		x.fill();
 		// el cuerpo, por sectores: uno por letra, y el sector de una letra ya comida
 		// simplemente no se pinta.  El bicho se va quedando en pedazos sueltos.
 		if (ready(cara))
@@ -3738,14 +3971,81 @@ function frame() {
 					a1 = ang(i) + 3.1416 / n;
 				x.save();
 				x.beginPath();
-				x.moveTo(cx, cy);
-				x.arc(cx, cy, sz, a0, a1);
+				x.moveTo(cx + ox, cy + oy);
+				x.arc(cx + ox, cy + oy, sz, a0, a1);
 				x.closePath();
 				x.clip();
 				x.globalAlpha = 0.55 + 0.4 * gr;
-				x.drawImage(cara, cx - sz, cy - sz, sz * 2, sz * 2);
+				x.drawImage(
+					cara,
+					cx + ox - sz,
+					cy + oy - sz,
+					sz * 2,
+					sz * 2,
+				);
 				x.restore();
 			});
+		x.globalAlpha = 1;
+		// EL HUECO, DENTADO.  El pedazo que falta se tapa con una cuña oscura y el
+		// filo va en ZIGZAG —radios alternados, que es la forma que deja una boca—.
+		// Sin esto el sector vacío se leía como una porción de torta que alguien se
+		// llevó prolija; con esto se lee como carne arrancada, y la carne de abajo
+		// sigue asomando en el medio, que es de donde salió el pedazo.
+		const D = 14; // dientes por pedazo: finos, o el filo se lee como una estrella
+		qte.seq.forEach((k, i) => {
+			if (qte.eat.has(k)) return;
+			const a0 = ang(i) - 3.1416 / n,
+				a1 = ang(i) + 3.1416 / n,
+				pt = (m) => {
+					const aa = a0 + ((a1 - a0) * m) / D,
+						rr = sz * (m % 2 ? 0.85 : 0.99);
+					return [
+						cx + ox + Math.cos(aa) * rr,
+						cy + oy + Math.sin(aa) * rr,
+					];
+				};
+			x.beginPath();
+			x.moveTo(cx + ox, cy + oy);
+			for (let m = 0; m <= D; m++) x.lineTo(...pt(m));
+			x.closePath();
+			x.fillStyle = "rgba(9,1,4,.62)";
+			x.fill();
+			// el filo se traza SOLO en el borde de afuera: los dos lados rectos de
+			// la cuña son el radio, y marcarlos dibujaba una tajada de pizza encima
+			// del bicho
+			x.beginPath();
+			x.moveTo(...pt(0));
+			for (let m = 1; m <= D; m++) x.lineTo(...pt(m));
+			x.strokeStyle = "#c0182c";
+			x.lineWidth = 1.4;
+			x.stroke();
+		});
+		// EL FOGONAZO del pedazo que se acaba de arrancar: un anillo que se abre y
+		// se apaga en el mismo tiempo que dura el tirón, justo donde entró la boca.
+		if (bk > 0) {
+			const a = qte.bit.a,
+				bx = cx + ox + Math.cos(a) * sz * 0.72,
+				by = cy + oy + Math.sin(a) * sz * 0.72;
+			x.globalAlpha = bk;
+			x.strokeStyle = "#fff";
+			x.lineWidth = 2 + 4 * bk;
+			x.shadowColor = "#f22";
+			x.shadowBlur = 22 * GLOW;
+			x.beginPath();
+			x.arc(bx, by, sz * (0.16 + 0.6 * (1 - bk)), 0, 6.283);
+			x.stroke();
+			x.shadowBlur = 0;
+			x.globalAlpha = 1;
+		}
+		// ...y la sangre, que se dibuja ACÁ y no con el resto de las partículas: el
+		// velo del anillo tapa el tablero entero, así que allá abajo no se vería
+		gore.forEach((q) => {
+			x.fillStyle = q.c;
+			x.globalAlpha = q.l * 0.28;
+			x.fillRect(q.x - 5, q.y - 5, 10, 10);
+			x.globalAlpha = q.l;
+			x.fillRect(q.x - 2, q.y - 2, 4, 4);
+		});
 		x.globalAlpha = 1;
 		x.font = "italic 900 16px " + DF;
 		x.shadowColor = "#f22";
@@ -3821,6 +4121,45 @@ function frame() {
 			BW / 2,
 			BH / 2 - 52,
 		);
+		// ---- LA VENTANA DEL PARRY ---------------------------------------------
+		// Arriba del cartel, y sólo cuando hay algo que decir.  Son tres estados y
+		// ninguno es un tutorial: la barra que se vacía ES la ventana (cuando se
+		// apagó, se apagó), el intento negado escribe su motivo donde el jugador ya
+		// está mirando, y con el acechador el renglón lo dice desde el principio
+		// —la regla se lee sin tener que perder un maullido probándola—.
+		const pno = qte.no && T - qte.no.t < 1400 ? qte.no : null,
+			pw = pno
+				? 0
+				: qte.st || !meowReady(T)
+					? 0
+					: Math.max(0, 1 - (T - qteAt()) / (PARRY_MS * babyK())),
+			pcol = pno ? "#f66" : "#9ff",
+			ptxt = pno
+				? pno.m
+				: qte.st
+					? meowOn
+						? "♪ AL ACECHADOR NO SE LO PARREA"
+						: ""
+					: pw > 0
+						? "♪ PARRY"
+						: "";
+		if (ptxt) {
+			const PY = BH / 2 - 78;
+			x.font = "bold 13px " + CF;
+			x.globalAlpha = pno || pw > 0 ? 1 : 0.5;
+			x.shadowColor = pcol;
+			x.shadowBlur = (pw > 0 ? 14 : 6) * GLOW;
+			x.fillStyle = pcol;
+			x.fillText(ptxt, BW / 2, PY);
+			x.shadowBlur = 0;
+			if (pw > 0) {
+				x.fillStyle = "rgba(150,255,255,.25)";
+				x.fillRect(BW / 2 - 40, PY + 11, 80, 3);
+				x.fillStyle = pcol;
+				x.fillRect(BW / 2 - 40, PY + 11, 80 * pw, 3);
+			}
+			x.globalAlpha = 1;
+		}
 		const n = qte.seq.length,
 			step = Math.min(54, (BW - 30) / n);
 		x.font = `bold ${Math.min(42, step * 0.8) | 0}px ` + CF;
@@ -4043,17 +4382,14 @@ function key(k) {
 		// cuántos pedazos faltan, pero ya no dice CUÁL toca.
 		if (qte.ring) {
 			if (qte.eat.has(k)) {
+				// QUÉ pedazo se arrancó: el dibujo y la sangre salen de ahí, así
+				// que hay que saberlo antes de sacarlo del cuerpo
+				const i = qte.seq.indexOf(k);
 				qte.eat.delete(k);
 				qte.i++;
 				push(k, "qte");
 				hits++;
-				sfx(120 + qte.i * 40, 70, "sawtooth", 0.055, 60);
-				burst(
-					(p.x + 0.5) * S,
-					(p.y + 0.5) * S,
-					"#f22",
-					8,
-				);
+				huntChomp(i);
 				if (!qte.eat.size) qteEnd(true);
 			} else {
 				push(k, "qtebad");
@@ -4111,6 +4447,17 @@ function key(k) {
 		sfx(150, 260, "sine", 0.055, 620);
 		burst(p.x * S + S / 2, p.y * S + S / 2, "#c8f", 26);
 	}
+	land();
+}
+
+// ---- PISAR LA CELDA NUEVA ---------------------------------------------------
+// Todo lo que pasa DESPUÉS de moverse: la moneda, el farol, la puerta, el zarpazo
+// de la cacería y el gato que estaba esperando ahí.  Lo comparten la letra (key) y
+// el retroceso a propósito (back), y por eso está acá afuera: volver un paso con ⌫
+// no puede tener reglas propias —si retrocediendo pisás la salida abierta, salís;
+// si pisás un gato, te agarra— o serían dos juegos distintos según con qué tecla
+// te moviste.
+function land() {
 	const j = coins.indexOf(p.y * C + p.x);
 	if (j > -1) {
 		coins.splice(j, 1);
@@ -4160,6 +4507,48 @@ function key(k) {
 	}
 	if (foes.includes(p.y * C + p.x)) return qteStart(); // le caíste encima a un enemigo
 	deal();
+}
+
+// ---- REGRESAR: la tecla de borrar ------------------------------------------
+// ⌫ (BORRAR) te devuelve UN paso por el camino que ya hiciste, sin tener que
+// buscar entre las cuatro letras de la pantalla cuál era la de vuelta.  Es el
+// mismo movimiento que ya hacía el castigo por errar (stepBack), pero a propósito,
+// y por eso se cobra distinto que una letra:
+//
+//   · NO ES UN ACIERTO.  No suma combo, ni estilo, ni el bono por reaccionar
+//     rápido, ni cuenta como tecla acertada: retroceder no es jugar bien, es
+//     acomodarse.
+//   · TAMPOCO ES UN ERROR: no rompe el combo ni suma penalización.  Si lo rompiera
+//     nadie lo usaría nunca y sería una tecla de adorno.
+//   · Y NO REGALA TIEMPO.  El reloj de la letra NO se reinicia: las letras nuevas
+//     de la celda vienen con lo que te quedaba del anterior.  Sin esto, ⌫ sería el
+//     botón de "reiniciar el reloj cuando no encuentro la letra" y el castigo por
+//     tardar dejaría de existir.
+//
+// El precio de verdad no hace falta inventarlo, lo cobra el laberinto: cada celda
+// que retrocedés es una celda que hay que volver a caminar tecleando, y como el
+// gato te viene siguiendo POR DETRÁS, retroceder es muchas veces meterse en su
+// boca —y si te lo cruzás justo, es un esquive al cruce (ver dodge)—.
+const BACK_MS = 120; // un paso por vez: ⌫ apretado no es un rebobinado
+let backAt = 0;
+function back() {
+	if (win || frozen || paused || qte || tutHold() || huntHold() || huntFin())
+		return false;
+	const T = now();
+	// El freno cubre dos cosas de una: que dejar la tecla apretada te lleve al
+	// principio del laberinto de un saque, y que el ⌫ del teléfono —que avisa por
+	// keydown y por beforeinput, según el navegador— cuente dos pasos por toque.
+	if (T - backAt < BACK_MS) return false;
+	if (!trail.length) return growl(); // no hay camino atrás: un gruñido y nada más
+	backAt = T;
+	const sa = shownAt; // el reloj de la letra sigue siendo el mismo (ver arriba)
+	push("⌫", "back");
+	stepBack();
+	sfx(280, 110, "sine", 0.035, 150);
+	burst(p.x * S + S / 2, p.y * S + S / 2, "#8ac", 8);
+	land();
+	if (!qte && !win) shownAt = sa;
+	return true;
 }
 
 // teclado físico.  ESPACIO y ENTER no son letras del laberinto: son el maullido.
@@ -4216,6 +4605,15 @@ onkeydown = (e) => {
 		meow();
 		return;
 	}
+	// BORRAR = REGRESAR.  Va antes del filtro de una sola letra porque "Backspace"
+	// mide nueve.  Delete entra también: en el Mac la tecla se llama "delete" y hay
+	// teclados donde la de borrar manda eso.
+	if (e.key === "Backspace" || e.key === "Delete" || e.key === "Del") {
+		if (enUI(e)) return;
+		e.preventDefault();
+		back();
+		return;
+	}
 	if (e.key.length !== 1) return;
 	e.preventDefault();
 	key(e.key.toLowerCase());
@@ -4227,6 +4625,13 @@ kb.oninput = () => {
 	for (const c of v.toLowerCase())
 		if (c === " " || c === "\n") meow();
 		else key(c);
+};
+// ...y el ⌫ de ese teclado no llega por oninput: el campo está siempre vacío, así
+// que no hay nada que borrar y el navegador no dispara input.  Algunos igual mandan
+// keydown (y ahí lo agarra el de arriba) y otros sólo avisan con beforeinput; back()
+// se banca que lleguen los dos, que es justo para lo que tiene el freno de BACK_MS.
+kb.onbeforeinput = (e) => {
+	if (e && /^delete/.test(String(e.inputType || ""))) back();
 };
 
 // ---- pantalla completa -----------------------------------------------------
@@ -4535,6 +4940,9 @@ function resShow() {
 		(dodges
 			? `<div><b>${dodges}</b><small>ESQUIVES AL CRUCE</small></div>`
 			: "") +
+		(parries
+			? `<div><b>${parries}</b><small>PARRIES</small></div>`
+			: "") +
 		(fin
 			? `<div><b>${hunt.eaten}/${HUNT_PREY}</b><small>PRESAS</small></div>` +
 				`<div><b>${hunt.esc}</b><small>SE TE ESCAPARON</small></div>`
@@ -4584,7 +4992,7 @@ const TUT = [
 		ok: () => hits >= 4,
 	},
 	{
-		t: "Ese <b>ANILLO</b> alrededor del gato es tu tiempo. Si se vacía —o tecleás una letra que no está— retrocedés un paso.",
+		t: "Ese <b>ANILLO</b> alrededor del gato es tu tiempo. Si se vacía —o tecleás una letra que no está— retrocedés un paso. Y si querés volver <b>a propósito</b>, la tecla de <b>BORRAR</b> (&#9003;).",
 		ok: () => hits >= 9,
 	},
 	{
