@@ -463,8 +463,10 @@ function dreadOn() {
 		}
 	} catch (e) {} // sin WebAudio el QTE se juega igual, mudo
 }
-// k = 0..1, el MISMO `muf` que está hundiendo la música
-function dreadSet(k) {
+// k = 0..1, el MISMO `muf` que está hundiendo la música.  `mudo` = sólo el ruido:
+// lo usa la carga del epílogo, donde el corazón que se oye ya es el mp3 y marcarle
+// otro pulso encima daría dos corazones desfasados.
+function dreadSet(k, mudo) {
 	if (!dreadAt) return;
 	if (BGM.muted) return dreadOff(); // el ♫ del menú apaga esto también
 	try {
@@ -472,6 +474,7 @@ function dreadSet(k) {
 			if (dreadN.g) dreadN.g.gain.value = DREAD_NOISE * k;
 			else dreadN.volume = Math.min(1, k);
 		}
+		if (mudo) return;
 		if (dreadH) {
 			dreadH.volume = Math.min(1, k);
 			return; // el mp3 late solo: no hay que marcarle el pulso
@@ -926,6 +929,15 @@ const qsCap = (ms) =>
 // va de las manos.  Lineal daba una rampa pareja que se lee como un motor, no como
 // un ataque de pánico.
 const qShake = (T) => {
+	// EL EPÍLOGO tiene su propio temblor y no hay ningún QTE que lo mande: la carga
+	// del final (ver finRush) sacude la pantalla entera con la misma cuenta que la
+	// mueve, al cuadrado igual que acá abajo, y por encima del QTE más largo que
+	// existe: es lo más violento que llega a estar el juego.  Y se corta de golpe con
+	// la imagen, porque finRush vuelve a cero en el mismo milisegundo.
+	if (huntFin()) {
+		const r = finRush(T - hunt.t0);
+		return FIN_QS * r * r;
+	}
 	if (!qte) return 0;
 	const gone = Math.max(0, Math.min(1, 1 - (qte.until - T) / qte.ms));
 	return qsCap(qte.ms) * gone * gone;
@@ -1033,12 +1045,7 @@ function unpause() {
 	if (revealT) revealT += d; // ni el farol, que si no se gasta en la pausa
 	if (radar) radar.t += d;
 	if (resAt) resAt += d; // ni el resumen, que si no salta sobre el menú
-	if (hunt) {
-		hunt.t0 += d; // ni la cinemática de la cacería (el mp3 lo para frame())
-		(hunt.marks || []).forEach((m) => {
-			if (m.at) m.at += d; // ...ni el fogonazo de una marca a medio encender
-		});
-	}
+	if (hunt) hunt.t0 += d; // ni la cinemática de la cacería (el mp3 lo para frame())
 	paused = false;
 }
 function babyEnd(yes) {
@@ -1840,18 +1847,36 @@ const HUNT_PREY = 5, // presas de la horda (el acechador es una de ellas)
 // lo que se abre es el sótano entero.  Allá el título entraba con el drop; acá entra
 // en silencio, con lo único que sigue sonando.
 //
+// Y no termina en un cartel: termina en LA CARGA.  Cuando el sótano ya dijo que no
+// queda nada y que el hambre está saciada —por ahora—, la cosa en la que te
+// convertiste se da vuelta y viene hacia ACÁ, creciendo igual que el enemigo de un
+// QTE, con la pantalla temblando y el ruido blanco y el latido subiendo juntos hasta
+// el tope.  Y justo antes de llegar, la imagen SE CORTA: negro, mudo, y el resumen.
+// El golpe que no llega es el que queda; el sótano se despide amenazando al que lo
+// jugó, que es exactamente lo que pasó adentro.
+//
 // Los tramos están medidos contra NOTE_MS (lo que dura un cartel a media pantalla):
 // ningún cartel de la escena puede seguir en pantalla cuando entra la pieza que
 // viene después, o el final se pisa a sí mismo.
 const FIN_T1 = 600, //    0 ->  600  el golpe: el sótano se cierra encima tuyo
 	FIN_T2 = 2800, //   600 -> 2800  a oscuras: no queda nada, y algo late igual
 	FIN_T3 = 4600, //  2800 -> 4600  la luz sale de vos y descubre el sótano entero
-	FIN_T4 = 6400, //  4600 -> 6400  las marcas de las que te comiste, encendidas
-	FIN_T5 = 8500, //  6400 -> 8500  el cartel, letra por letra
-	FIN_MS = 9200, //  8500 -> 9200  negro, y recién ahí el resumen
+	FIN_T4 = 6800, //  4600 -> 6800  el cartel: el hambre está saciada... por ahora
+	FIN_T5 = 8800, //  6800 -> 8800  LA CARGA: se te viene encima y todo va al tope
+	FIN_MS = 9700, //  8800 -> 9700  EL CORTE: negro y mudo, y recién ahí el resumen
 	FIN_SKIP_AT = 1500, // desde acá se ofrece saltarlo (sólo si ya se vio entero)
 	FIN_R = 1.15, // lo que se ve en el tramo a oscuras, en celdas
-	FIN_TTL = "SE ACABÓ EL HAMBRE"; // el cartel: se escribe letra por letra
+	FIN_QS = 18, // el temblor de la carga, por encima del QTE más largo (QS_MAX)
+	FIN_TTL = "EL HAMBRE ESTÁ SACIADA", // el cartel: se escribe letra por letra
+	FIN_TTL0 = "NO QUEDÓ NADA VIVO ACÁ ABAJO", // ...el renglón que lo abre...
+	FIN_TTL1 = "POR AHORA"; // ...y el remate, en voz baja, cuando ya está entero
+
+// LA CARGA, en un solo número: 0 antes de que empiece, 0..1 mientras se te viene
+// encima, y 0 otra vez apenas cae el corte.  De acá cuelgan las tres cosas que
+// pasan a la vez —el bicho creciendo, la pantalla temblando y el ruido subiendo—,
+// así que no pueden desincronizarse entre sí ni aunque el navegador se coma cuadros.
+const finRush = (e) =>
+	e < FIN_T4 || e >= FIN_T5 ? 0 : (e - FIN_T4) / (FIN_T5 - FIN_T4);
 
 // ¿ya se vio el buildup entero alguna vez?  Se guarda igual que el interruptor del
 // skill issue: la cinemática de 12 s es un golpe que se da UNA vez, y a partir de la
@@ -2053,11 +2078,8 @@ function huntStart() {
 		bit: 0, // ¿ya se comió la torre?
 		prey: -1, // a cuál le está clavando el diente
 		slow: [],
-		// EL EPÍLOGO se dibuja con lo que pasó en la cacería, no con un resumen de
-		// números: acá cae una marca por cada presa devorada —dónde cayó y si era el
-		// acechador— y al final la luz las va encendiendo una por una.  `beat` es el
-		// último corte del epílogo que ya sonó, para que cada golpe salga UNA vez.
-		marks: [],
+		// `beat` es el último corte del epílogo que ya sonó, para que cada golpe de la
+		// escena final salga UNA vez y no uno por cuadro (ver huntEnd).
 		beat: 0,
 	};
 	// LA HORDA.  Los que quedaron vivos al llegar a la puerta más los que falten para
@@ -2211,11 +2233,6 @@ function huntBite(okAll) {
 	}
 	if (okAll) {
 		// PRESA DEVORADA.  Se va de `foes` y con ella su lastre y su memoria de paso.
-		// Pero DEJA LA MARCA: la celda donde cayó, que el epílogo va a encender con
-		// la luz cuando el sótano se abra.  Es la única memoria que guarda la cacería
-		// de sí misma, y es lo que hace que el final hable de la partida que se jugó
-		// y no de una partida cualquiera.
-		hunt.marks.push({ x: foes[i] % C, y: (foes[i] / C) | 0, ace, at: 0 });
 		foes.splice(i, 1);
 		hunt.slow.splice(i, 1);
 		prevFoe.splice(i, 1);
@@ -2347,17 +2364,26 @@ function huntFinish() {
 // EL LATIDO DEL EPÍLOGO.  Durante la cacería el corazón que se oye es el de la presa
 // (ver huntHeart); cuando no queda ninguna, el que sigue latiendo es el tuyo —y es
 // la primera vez en todo el juego que el gato blanco tiene uno—.  Arranca desbocado
-// por la carrera y se va calmando hasta quedar en nada, con el volumen y la prisa
-// bajando juntos: es el único "fundido" del final y no hace falta ninguno más.
+// por la carrera y se va calmando —volumen y prisa bajando juntos— hasta el cartel,
+// que es donde el sótano parece haber terminado.
+//
+// Y ahí NO se apaga: con la carga vuelve a subir, y esta vez hasta el tope de las dos
+// cosas a la vez.  El mismo corazón que se estaba durmiendo es el que se te viene
+// encima, y lo que lo calla no es un fundido: es el corte.
 function heartFin(e) {
-	if (e >= FIN_T5) return heartOff(); // el último golpe lo da el epílogo, sintetizado
+	if (e >= FIN_T5) return heartOff(); // EL CORTE se lleva todo, y el corazón primero
+	const rk = finRush(e);
+	if (rk > 0) {
+		heartSl = 0.6 + 0.4 * rk; // deja de arrastrarse y recupera su prisa entera...
+		return heartSet(0.12 + 0.88 * rk); // ...con el volumen yendo al máximo detrás
+	}
 	const k =
 		e < FIN_T1
 			? 0.95
 			: e < FIN_T3
 				? 0.95 - 0.5 * ((e - FIN_T1) / (FIN_T3 - FIN_T1))
-				: 0.45 - 0.33 * ((e - FIN_T3) / (FIN_T5 - FIN_T3));
-	heartSl = 1 - 0.4 * Math.min(1, e / FIN_T5); // ...y se va quedando lento
+				: 0.45 - 0.33 * ((e - FIN_T3) / (FIN_T4 - FIN_T3));
+	heartSl = 1 - 0.4 * Math.min(1, e / FIN_T4); // ...y se va quedando lento
 	heartSet(k);
 }
 
@@ -2369,31 +2395,18 @@ function huntFinSkip() {
 	if (!huntFin() || !finSeen || now() - hunt.t0 < FIN_SKIP_AT) return false;
 	hunt.t0 = now() - FIN_MS; // la escena queda en su último cuadro: negro
 	hunt.beat = 5;
-	(hunt.marks || []).forEach((m) => {
-		if (!m.at) m.at = now() - 600; // encendidas y ya asentadas
-	});
 	heartOff();
+	dreadOff(); // ...y el ruido de la carga, que si no se lleva puesto el resumen
 	resShow();
 	return true;
 }
 
 // LOS CORTES DEL EPÍLOGO: lo único que hace es disparar UNA vez lo que suena en cada
-// tramo y encender las marcas cuando la luz las alcanza.  Todo lo demás —lo que se
-// ve— sale del mismo `e` en huntFinDraw, así que la escena no puede desincronizarse
-// consigo misma ni aunque el navegador se coma cuadros.
+// tramo.  Todo lo demás —lo que se ve, el temblor, el ruido que sube— sale del mismo
+// `e` cuadro a cuadro, así que la escena no puede desincronizarse consigo misma ni
+// aunque el navegador se coma cuadros.
 function huntEnd(T) {
 	const e = T - hunt.t0;
-	// las marcas se encienden CUANDO LA LUZ LAS TOCA, no por reloj: el orden y el
-	// ritmo con el que aparecen los pone la geometría de la partida que se jugó
-	if (e >= FIN_T2 && e < FIN_T4) {
-		const r = finLight(e) * 0.8; // el borde visible de la niebla, no su radio
-		hunt.marks.forEach((m, i) => {
-			if (m.at || Math.hypot(m.x - p.x, m.y - p.y) > r) return;
-			m.at = T;
-			sfx(300 + i * 55, 150, "triangle", 0.05, 190);
-			burst((m.x + 0.5) * S, (m.y + 0.5) * S, PAL.foe, 10);
-		});
-	}
 	const b =
 		e < FIN_T1
 			? 0
@@ -2415,23 +2428,20 @@ function huntEnd(T) {
 		sfx(120, 1600, "sine", 0.055, 640);
 		shake = 6;
 	} else if (b === 3) {
-		const n = hunt.marks.length;
-		say(
-			`${n} MARCA${n === 1 ? "" : "S"}`,
-			"NO QUEDÓ NADA VIVO ACÁ ABAJO",
-			PAL.foe,
-		);
-		sfx(70, 900, "sine", 0.07, 44);
-	} else if (b === 4) {
 		sfx(70, 1500, "sine", 0.09, 34); // el cartel entra con un golpe grave
 		shake = 10;
+	} else if (b === 4) {
+		// LA CARGA.  Lo único que se dispara acá es el arranque: un sub que se
+		// arrastra hacia arriba durante todo el tramo, debajo del ruido blanco y del
+		// latido, que suben solos con finRush (ver el bloque de audio de frame()).
+		sfx(34, FIN_T5 - FIN_T4, "sawtooth", 0.06, 88);
 	} else if (b === 5) {
-		// EL ÚLTIMO LATIDO, y ya sin mp3: cae en el silencio, con la pantalla en
-		// negro, y es lo último que se oye del sótano
+		// EL CORTE.  Ni un sonido, ni un cuadro más: la imagen se va a negro con el
+		// bicho todavía en el aire y el sótano se queda mudo de golpe.  El silencio
+		// después de todo eso es el susto, y es lo último que hace el nivel.
 		heartOff();
-		sfx(58, 150, "sine", 0.13, 34);
-		setTimeout(() => sfx(46, 220, "sine", 0.09, 26), 165);
-		shake = 8;
+		dreadOff();
+		shake = flash = 0;
 		finSaw(); // se vio entero: la próxima vez se puede saltar
 	}
 }
@@ -2637,8 +2647,8 @@ function huntScene(T) {
 //   la oscuridad  = el mismo relleno negro con el que se abre el buildup
 //   la luz        = el radio de la niebla (finLight), movido por el reloj del final
 //   el latido     = el anillo del acechador, pero saliendo del gato
-//   las marcas    = el rombo de la visión de hambre, apagado y en el piso
 //   el cartel     = el título de LA CACERÍA, letra por letra, sin música debajo
+//   la carga      = el enemigo del QTE viniéndose encima... siendo vos (ver finRushDraw)
 //
 // Ni un asset nuevo, ni un timer nuevo, ni una capa nueva: el final está hecho con
 // el vocabulario que el jugador viene aprendiendo desde que entró al sótano, que es
@@ -2671,9 +2681,9 @@ function huntFinDraw(T, e) {
 			? e / FIN_T1
 			: e < FIN_T2
 				? 1
-				: e < FIN_T5
-					? 0.45
-					: Math.max(0, 0.45 * (1 - (e - FIN_T5) / (FIN_MS - FIN_T5)));
+				: e >= FIN_T5
+					? 0 // el corte: no queda nada que dibujar, ni el anillo
+					: 0.45 + 0.55 * finRush(e); // ...y con la carga se va al tope
 	if (hw > 0.02) {
 		x.lineWidth = 1.8;
 		x.strokeStyle = x.shadowColor = PAL.pj;
@@ -2694,51 +2704,7 @@ function huntFinDraw(T, e) {
 		x.shadowBlur = 0;
 	}
 
-	// ---- 3) LAS MARCAS -------------------------------------------------------
-	// Una por presa devorada, en la celda donde cayó.  Se encienden solas cuando la
-	// luz las alcanza (ver huntEnd), así que el orden lo pone la partida: la que
-	// mordiste al lado tuyo prende primero y la del otro extremo del sótano cierra.
-	// Es el rombo de la visión de hambre —el mismo dibujo— pero sin los ojos: eso
-	// es exactamente lo que les pasó.
-	hunt.marks.forEach((m) => {
-		if (!m.at) return;
-		const age = T - m.at,
-			fl = Math.max(0, 1 - age / 420), // el fogonazo del encendido
-			q = 0.5 + 0.5 * Math.sin(T / 300 + m.x + m.y), // ...y después, la brasa
-			X = (m.x + 0.5) * S,
-			Y = (m.y + 0.5) * S,
-			col = m.ace ? "#f22" : PAL.foe,
-			rr = S * (0.2 + 0.06 * q);
-		x.shadowColor = col;
-		x.shadowBlur = (8 + 10 * q + 26 * fl) * GLOW;
-		x.globalAlpha = 0.35 + 0.3 * q + 0.5 * fl;
-		x.fillStyle = col;
-		x.beginPath();
-		x.moveTo(X, Y - rr);
-		x.lineTo(X + rr * 0.66, Y);
-		x.lineTo(X, Y + rr);
-		x.lineTo(X - rr * 0.66, Y);
-		x.closePath();
-		x.fill();
-		// el anillo que se abre al encenderse, y el doble para el acechador: en el
-		// sótano no todas las presas pesaban lo mismo, y el final tampoco miente
-		if (fl > 0) {
-			x.strokeStyle = col;
-			x.lineWidth = 1.5;
-			for (const o of m.ace ? [0, 0.28] : [0]) {
-				const kk = fl - o;
-				if (kk <= 0) continue;
-				x.globalAlpha = kk * 0.8;
-				x.beginPath();
-				x.arc(X, Y, S * (0.22 + 0.8 * (1 - kk)), 0, 6.283);
-				x.stroke();
-			}
-		}
-		x.globalAlpha = 1;
-		x.shadowBlur = 0;
-	});
-
-	// ---- 4) LA PUERTA --------------------------------------------------------
+	// ---- 3) LA PUERTA --------------------------------------------------------
 	// La casilla por la que se entró a la cacería, que desde entonces no existe más
 	// (exitOpen() da false con `hunt` encima).  Cuando la luz llega hasta allá vuelve
 	// a verse, y es lo ÚNICO que no es rojo en todo el sótano: el camino de salida
@@ -2753,7 +2719,7 @@ function huntFinDraw(T, e) {
 		x.shadowBlur = 0;
 	}
 
-	// ---- 5) EL SUSURRO -------------------------------------------------------
+	// ---- 4) EL SUSURRO -------------------------------------------------------
 	// El cartel de la última presa decía ESCUCHÁ SU CORAZÓN.  Ese corazón dejó de
 	// existir hace dos segundos y el sonido sigue: ésta es la única línea del juego
 	// que hacía falta escribir para que eso se entienda.  Va pegada al gato, no en
@@ -2778,47 +2744,141 @@ function huntFinDraw(T, e) {
 		x.shadowBlur = 0;
 	}
 
-	// ---- 6) EL CARTEL --------------------------------------------------------
+	// ---- 5) EL CARTEL --------------------------------------------------------
 	// Letra por letra, igual que LA CACERÍA en el buildup, y a propósito con la
 	// misma tipografía y el mismo halo rojo: son los dos extremos de la misma
 	// escena.  La diferencia es que aquél caía con el drop de la pista y éste entra
 	// sin música: abajo no hay más que un corazón yéndose.
-	if (e >= FIN_T4) {
-		const k = Math.min(1, (e - FIN_T4) / 1300),
-			t = FIN_TTL.slice(0, Math.max(1, Math.round(k * FIN_TTL.length))),
-			pl = Math.min(1, (e - FIN_T4) / 260); // la placa entra antes que el texto
+	//
+	// Y son TRES renglones, en el orden en que se entiende el final: primero que ya
+	// no queda nada, después que el hambre está saciada... y recién al final, en voz
+	// baja, el "por ahora" que es la única promesa que hace el sótano.  Se van
+	// encendiendo de a uno —ninguno entra antes de que el anterior esté entero— y los
+	// tres se apagan juntos cuando arranca la carga: ahí ya no hay nada que leer.
+	const ct = e - FIN_T3,
+		out = Math.max(0, 1 - Math.max(0, e - FIN_T4) / 320);
+	if (ct >= 0 && out > 0.01) {
+		const pl = Math.min(1, ct / 260) * out, // la placa entra antes que el texto
+			k = Math.min(1, Math.max(0, (ct - 320) / 1300)),
+			t = FIN_TTL.slice(0, Math.round(k * FIN_TTL.length));
 		x.globalAlpha = pl;
 		x.fillStyle = "rgba(2,0,4,.78)";
-		x.fillRect(0, BH / 2 - 44, BW, 88);
+		x.fillRect(0, BH / 2 - 52, BW, 104);
 		x.strokeStyle = "rgba(255,60,90,.55)";
 		x.lineWidth = 1;
-		x.strokeRect(0.5, BH / 2 - 43.5, BW - 1, 87);
-		x.font = "italic 900 " + Math.round(BW / 15) + "px " + DF;
+		x.strokeRect(0.5, BH / 2 - 51.5, BW - 1, 103);
+		// el renglón que abre: es la frase que antes cantaba las marcas, y ahora es lo
+		// primero que se lee del final
+		const ak = Math.min(1, Math.max(0, (ct - 180) / 320));
+		if (ak > 0) {
+			x.font = "bold 12px " + CF;
+			x.globalAlpha = pl * ak * 0.8;
+			x.shadowColor = "#f00";
+			x.shadowBlur = 8 * GLOW;
+			x.fillStyle = "#ffb3bd";
+			x.fillText(FIN_TTL0, BW / 2, BH / 2 - 32);
+		}
+		// el título.  Es más largo que LA CACERÍA del buildup, así que el cuerpo sale
+		// del LARGO DE LA FRASE y no de un número fijo: así entra a lo ancho del tablero
+		// aunque alguna vez se cambie el texto, y no baila de tamaño mientras se escribe
+		// letra por letra (se mide con el título entero, no con lo que va escrito).
+		x.font =
+			"italic 900 " +
+			Math.min(
+				Math.round(BW / 17),
+				Math.floor((BW - 24) / (FIN_TTL.length * 0.68)),
+			) +
+			"px " +
+			DF;
+		x.globalAlpha = pl;
 		x.shadowColor = "#f00";
 		x.shadowBlur = 26 * GLOW;
 		x.fillStyle = "#fff";
-		x.fillText(t, BW / 2, BH / 2 - 6);
+		if (t) x.fillText(t, BW / 2, BH / 2 - 2);
 		// ...y el remate, en voz baja, recién cuando el cartel ya está entero
-		const pk = Math.min(1, Math.max(0, (e - FIN_T4 - 1300) / 800));
+		const pk = Math.min(1, Math.max(0, (ct - 1720) / 420));
 		if (pk > 0) {
 			x.font = "bold 13px " + CF;
 			x.globalAlpha = pl * pk * 0.85;
 			x.shadowBlur = 10 * GLOW;
 			x.fillStyle = "#ffb3bd";
-			x.fillText("POR AHORA", BW / 2, BH / 2 + 26);
+			x.fillText(FIN_TTL1, BW / 2, BH / 2 + 32);
 		}
 		x.globalAlpha = 1;
 		x.shadowBlur = 0;
 	}
 
-	// SALTAR: mismas reglas y mismo lugar que el del buildup (ver huntFinSkip)
-	if (finSeen && e >= FIN_SKIP_AT && e < FIN_T5) {
+	// SALTAR: mismas reglas y mismo lugar que el del buildup (ver huntFinSkip).  Se
+	// va cuando arranca la carga: de ahí en adelante la pantalla es de la carga, y un
+	// renglón hundiéndose abajo de ella se lee como un error de dibujo, no como una
+	// oferta.  El botón sigue andando igual hasta el corte.
+	if (finSeen && e >= FIN_SKIP_AT && e < FIN_T4) {
 		x.font = "bold 11px " + CF;
 		x.globalAlpha = 0.5 + 0.2 * Math.sin(T / 300);
 		x.fillStyle = "#fbb";
 		x.fillText(MOBILE ? "TOCÁ PARA SALTAR" : "[ESPACIO] SALTAR", BW / 2, BH - 12);
 		x.globalAlpha = 1;
 	}
+}
+
+// ---- LA CARGA, DIBUJADA -----------------------------------------------------
+// En un QTE el enemigo se te viene encima creciendo desde el centro de la pantalla
+// según se acaba el reloj.  Acá pasa exactamente lo mismo, con la única diferencia
+// que importa: el que crece SOS VOS.  El sótano ya dijo todo lo que tenía para
+// decir, el cartel se apagó, y lo último que hace el nivel es darse vuelta y venir
+// hacia el que lo jugó.
+//
+// Sale de la celda donde quedó parado el gato —no del centro de la pantalla: de SU
+// lugar en el tablero, que es de donde tiene que salir—, se planta en el medio y de
+// ahí en adelante lo único que hace es agrandarse.  Detrás, el sótano se apaga; y el
+// tamaño respira con `heartPh`, que es el pulso del MISMO mp3 que en ese momento se
+// está yendo al tope: lo que se ve crecer y lo que se oye acelerar son la misma cosa.
+//
+// Se dibuja al final del cuadro, junto con el negro del corte y no con el resto de la
+// escena, por el mismo motivo que el negro: tiene que tapar TODO —la fila de fichas,
+// las partículas, el cartel—, o el susto se juega abajo de la GUI.
+function finRushDraw(e) {
+	const k = finRush(e);
+	if (k <= 0) return;
+	// el sótano se apaga detrás suyo: a mitad de la carga ya no queda nada más que ver
+	x.fillStyle = `rgba(3,0,5,${(0.93 * Math.min(1, k * 1.9)).toFixed(3)})`;
+	x.fillRect(0, 0, BW, BH);
+	const px = (vis.x + 0.5) * S,
+		py = (vis.y + 0.5) * S,
+		kp = Math.min(1, k / 0.45), // primero se planta en el medio de la pantalla...
+		ep = kp * (2 - kp),
+		cx = px + (BW / 2 - px) * ep,
+		cy = py + (BH / 2 - py) * ep,
+		// ...y de ahí se viene encima AL CUADRADO: los primeros pasos casi no se notan
+		// y los últimos se comen la pantalla.  El tope es apenas más que el alto del
+		// tablero A PROPÓSITO: en el último cuadro antes del corte tiene que verse
+		// enorme pero TODAVÍA VINIENDO, no ya encima —el golpe es el que no llega—.
+		hb = 1 + 0.06 * Math.max(0, Math.cos(heartPh * 6.283)), // y late mientras viene
+		sz = (S + (BH * 1.05 - S) * k * k) * hb;
+	x.globalAlpha = 0.55 + 0.45 * k;
+	x.shadowColor = "#f00";
+	x.shadowBlur = (16 + 40 * k) * GLOW;
+	if (ready(REDPJ)) x.drawImage(REDPJ, cx - sz / 2, cy - sz / 2, sz, sz);
+	else {
+		// mismo trato que en el tablero (ver el sprite del gato transformado): sin la
+		// foto, lo que se te viene encima igual se ve —una silueta y dos ojos que no
+		// parpadean—.  Nunca una pantalla rota por un 404, y menos ésta.
+		x.fillStyle = "#1a0207";
+		x.beginPath();
+		x.arc(cx, cy, sz * 0.46, 0, 6.283);
+		x.fill();
+		x.fillStyle = "#f22";
+		for (const o of [-0.17, 0.17]) {
+			x.beginPath();
+			x.arc(cx + o * sz, cy - 0.05 * sz, sz * 0.055, 0, 6.283);
+			x.fill();
+		}
+	}
+	x.shadowBlur = 0;
+	x.globalAlpha = 1;
+	// el rojo que sube con él: el velo de la cacería, ya sin ningún disimulo
+	x.fillStyle = `rgba(150,0,22,${(0.08 + 0.3 * k * k).toFixed(3)})`;
+	x.fillRect(0, 0, BW, BH);
 }
 
 // El velo rojo de la cacería: un vignette que respira y se cierra con cada presa.
@@ -3313,11 +3373,22 @@ function frame() {
 	// mandaba cuando el perseguido eras vos.  Es el mismo reemplazo que hace el
 	// ducking con la música, un escalón más arriba.
 	if (hunt && !frozen && (huntOn() || huntFin())) {
-		dreadOff();
+		// ...con UNA excepción, que es la última pieza del nivel: en la carga del final
+		// el ruido blanco VUELVE, y sube hasta el tope junto con el latido (ver
+		// finRush).  Es el siseo con el que el sótano te perseguía en la primera mitad,
+		// puesto ahora del otro lado.  El latido no se lo marca el terror sintetizado:
+		// lo pone el mp3, que en ese momento va a toda velocidad, y dos corazones
+		// desfasados no son un corazón.
+		const fe = (paused ? pauseAt : RT) - hunt.t0,
+			fr = huntFin() ? finRush(fe) : 0;
+		if (fr > 0) {
+			dreadOn();
+			dreadSet(fr, 1);
+		} else dreadOff();
 		// ...y en el epílogo el corazón no se apaga con la última presa: cambia de
 		// dueño (ver heartFin).  Va con el reloj DEL JUEGO, igual que la escena, así
 		// que el menú de pausa lo congela en el mismo cuadro que la imagen.
-		if (huntFin()) heartFin((paused ? pauseAt : RT) - hunt.t0);
+		if (huntFin()) heartFin(fe);
 		else heartSet(huntHeart());
 	} else {
 		heartOff();
@@ -4211,15 +4282,20 @@ function frame() {
 		x.strokeRect(1, 1, BW - 2, BH - 2);
 		x.shadowBlur = 0;
 	}
-	// EL NEGRO DEL EPÍLOGO (ver huntFinDraw) va acá abajo y no con el resto de la
-	// escena: es lo ÚLTIMO que se pinta, así que apaga también la fila de fichas, las
-	// partículas y el cartel.  Dibujado allá arriba dejaba media GUI encendida sobre
+	// LA CARGA Y EL CORTE (ver finRushDraw) van acá abajo y no con el resto de la
+	// escena: son lo ÚLTIMO que se pinta, así que tapan también la fila de fichas, las
+	// partículas y el cartel.  Dibujados allá arriba dejaban media GUI encendida sobre
 	// una pantalla que ya se había terminado, que es exactamente lo que no puede
 	// pasar en el cuadro anterior al resumen.
+	//
+	// Y el negro entra DE GOLPE, no con un fundido: es un corte, y un corte que se
+	// desvanece es un final que se despide.  Lo que tiene que quedar es que la imagen
+	// se cayó justo antes del golpe.
 	if (huntFin()) {
-		const k = (T - hunt.t0 - FIN_T5) / (FIN_MS - FIN_T5);
-		if (k > 0) {
-			x.fillStyle = `rgba(0,0,0,${Math.min(1, k).toFixed(3)})`;
+		const e = T - hunt.t0;
+		finRushDraw(e);
+		if (e >= FIN_T5) {
+			x.fillStyle = "#000";
 			x.fillRect(0, 0, BW, BH);
 		}
 	}
