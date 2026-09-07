@@ -1338,7 +1338,7 @@ if(hunt.ph!=='end') throw new Error('la cacería no llego a su fase final');
 // el resumen del final se llama distinto y trae sus fichas
 resAt=now()-1; lastDraw=0; frame();
 if(!resOn) throw new Error('el final no mostro su resumen');
-if(rttl.textContent!=='FINAL DESBLOQUEADO') throw new Error('el final no se anuncia como tal');
+if(rttl.textContent!=='FINAL COMPLETADO... POR AHORA.') throw new Error('el final no se anuncia como tal');
 resHide();
 
 // 37f) EL BUILDUP SE SALTA SOLO EN REJUGADAS, y al punto exacto de la pista
@@ -1373,7 +1373,6 @@ for(const fallos of [0,3,6]){
   p={x:C-1,y:R-1}; deal(); huntStart(); botHunt(fallos);
   if(!win||hunt.ph!=='end') throw new Error('la cacería no cerro con '+fallos+' escapes');
   if(hunt.eaten!==HUNT_PREY) throw new Error('quedaron presas sin devorar');
-  if(hunt.marks.length!==HUNT_PREY) throw new Error('el final no guardo una marca por presa');
   if(hunt.esc!==fallos) throw new Error('se contaron mal los escapes: '+hunt.esc);
 }
 
@@ -1509,23 +1508,19 @@ if(!HEART.src||HEART.paused) throw new Error('el cuadro del final no dejo el lat
 // 37k) EL EPILOGO.  El final era un chispazo y el resumen encima: doce segundos de
 // buildup para entrar a la cacería y ni uno para salir.  Ahora la ultima dentellada
 // abre una escena con su propio reloj, y la escena esta hecha de piezas que ya
-// estaban: la niebla es la luz, el latido cambia de dueño y las marcas son el rombo
-// de la vision de hambre, apagado.
+// estaban: la niebla es la luz, el latido cambia de dueño y LA CARGA del final es el
+// enemigo del QTE viniendosele encima al jugador... siendo el jugador.
 juega('sotano'); gen(); foes=[]; coins=[]; got=LV.coins; t0=now();
 p={x:C-1,y:R-1}; deal(); huntStart(); hunt.t0=now()-HUNT_BUILD; huntStep(now());
 finSeen=false; resHide(); note=null;
 // se devora al acechador, que es siempre la ultima, y con eso arranca el epilogo
 const aceE=open(cell())[0];
 foes=[aceE]; hunt.slow=[0]; prevFoe=[]; hunt.aceDone=0; hunt.prey=-1; qte=null;
-hunt.marks=[]; huntGrab(flow());
+huntGrab(flow());
 if(!qte) throw new Error('el acechador ultimo no se dejo morder');
 for(let r=0;r<HUNT_ACE_ROUNDS&&qte;r++) [...qte.eat].forEach(k=>press(k));
 if(foes.length) throw new Error('el acechador sobrevivio a su tanda');
 if(!huntFin()) throw new Error('la ultima presa no abrio el epilogo');
-// la marca queda DONDE cayo la presa, y sabe si era el acechador
-if(hunt.marks.length!==1||hunt.marks[0].x!==aceE%C||hunt.marks[0].y!==(aceE/C|0))
-  throw new Error('la presa devorada no dejo su marca en el piso');
-if(!hunt.marks[0].ace) throw new Error('la marca no distingue al acechador');
 // el resumen ya no pisa el final: espera a que la escena termine
 if(!(resAt-now()>FIN_MS-500)) throw new Error('el resumen no le dio lugar a la escena');
 // LA LUZ es la niebla: se cierra sobre el gato y despues descubre el sotano entero
@@ -1535,15 +1530,39 @@ if(!(finLight(FIN_T3)>=C+R)) throw new Error('la luz no llega a descubrir el sot
 hunt.t0=now()-FIN_T3;
 if(!(fogR()>=C+R)) throw new Error('la niebla del epilogo no se abrio con la escena');
 // LOS CORTES: cada uno cae en su tramo y suena UNA sola vez
-hunt.t0=now(); hunt.beat=0; hunt.marks.forEach(m=>m.at=0);
+hunt.t0=now(); hunt.beat=0;
 [0,FIN_T1,FIN_T2,FIN_T3,FIN_T4,FIN_T5].forEach((e,i)=>{
   hunt.t0=now()-e-1; huntStep(now());
   if(hunt.beat!==i) throw new Error('el corte '+i+' del epilogo no cayo en su tramo');
   huntStep(now());
   if(hunt.beat!==i) throw new Error('el corte '+i+' del epilogo sono dos veces');
 });
-if(!/MARCA/.test(String(note&&note.a))) throw new Error('el epilogo no canta las marcas');
-if(hunt.marks.some(m=>!m.at)) throw new Error('la luz no encendio las marcas de las presas');
+// LA CARGA: el ultimo tramo se te viene encima, y de UN solo numero salen las tres
+// cosas que pasan a la vez (el bicho creciendo, el temblor y el ruido subiendo)
+if(finRush(FIN_T4-1)!==0||finRush(FIN_T5)!==0) throw new Error('la carga se salio de su tramo');
+if(!(finRush(FIN_T5-1)>finRush(FIN_T4+1)&&finRush(FIN_T4+1)>0))
+  throw new Error('la carga no crece dentro de su tramo');
+// el temblor es de la pantalla ENTERA y pasa el techo del QTE mas largo que existe
+hunt.t0=now()-FIN_T5+1;
+if(!(qShake(now())>QS_MAX)) throw new Error('la carga no sacude mas que el QTE mas largo');
+if(!(qShake(now()-1000)<qShake(now()))) throw new Error('el temblor de la carga no crece');
+hunt.t0=now()-FIN_T5-1;
+if(qShake(now())!==0) throw new Error('el corte no paro el temblor de la pantalla');
+// el ruido blanco del QTE vuelve SOLO para la carga, y el latido se va al tope con el
+hunt.t0=now(); hunt.beat=5; dreadOff(); lastDraw=0; frame();
+if(dreadAt) throw new Error('el ruido blanco sono antes de la carga');
+hunt.t0=now()-FIN_T4-20; lastDraw=0; frame();
+const rv0=HEART.volume, rr0=HEART.playbackRate;
+if(!dreadAt) throw new Error('la carga no trajo el ruido blanco de vuelta');
+hunt.t0=now()-FIN_T5+20; lastDraw=0; frame();
+if(!(HEART.volume>rv0)||!(HEART.playbackRate>rr0))
+  throw new Error('el latido no se intensifica con la carga');
+// EL CORTE: negro y mudo de golpe, sin fundido y sin dejar nada sonando
+hunt.t0=now()-FIN_T5-1; hunt.beat=4; lastDraw=0; frame();
+if(hunt.beat!==5) throw new Error('el corte no cayo en su tramo');
+if(dreadAt) throw new Error('el corte dejo el ruido blanco sonando');
+if(!HEART.paused) throw new Error('el corte dejo el corazon sonando');
+if(shake!==0) throw new Error('el corte dejo la pantalla temblando');
 // EL CORAZON NO SE APAGA CON LA ULTIMA PRESA: cambia de dueño y se va calmando
 hunt.t0=now(); hunt.beat=0; heartOff(); lastDraw=0; frame();
 if(HEART.paused) throw new Error('el epilogo apago el latido de golpe');
@@ -1568,9 +1587,9 @@ hunt.t0=now()-FIN_SKIP_AT-1;
 if(!huntFinSkip()) throw new Error('en la rejugada el epilogo tiene que poder saltarse');
 if(!resOn) throw new Error('saltar el epilogo no llevo al resumen');
 if(!HEART.paused) throw new Error('saltar el epilogo dejo el corazon sonando');
-if(hunt.marks.some(m=>!m.at)) throw new Error('el salto dejo marcas sin encender');
+if(dreadAt) throw new Error('saltar el epilogo dejo el ruido blanco sonando');
 // el resumen del final se llama distinto, trae sus fichas y cierra la historia
-if(rttl.textContent!=='FINAL DESBLOQUEADO') throw new Error('el final no se anuncia como tal');
+if(rttl.textContent!=='FINAL COMPLETADO... POR AHORA.') throw new Error('el final no se anuncia como tal');
 if(!repi.textContent) throw new Error('el resumen del final no trae su epilogo');
 if(repi.style.display==='none') throw new Error('el epilogo del resumen quedo escondido');
 // ...y el mismo renglon no aparece en un nivel comun
@@ -2314,9 +2333,14 @@ if(!/DREAD_SRC=\{heart:'',noise:''\}/.test(flat)) throw new Error('no quedo dond
 if(/^HEART\.src *=/m.test(src)) throw new Error('el mp3 del latido se baja al abrir la pagina');
 if(!/HEART\.preload='none'/.test(flat)) throw new Error('el latido se precarga sin pedirlo');
 if(!/heartSet\(huntHeart\(\)\)/.test(flat)) throw new Error('el latido no va atado al nivel de la cacería');
-// en la cacería el ruido blanco NO suena: lo reemplaza el latido, tambien en el QTE
-if(!/if \(hunt && !frozen && \(huntOn\(\) \|\| huntFin\(\)\)\) \{\s*dreadOff\(\);/.test(src))
+// en la cacería el ruido blanco NO suena: lo reemplaza el latido, tambien en el QTE.
+// La UNICA excepcion es la carga del final: ahi el siseo vuelve y sube con ella
+if(!/if\(hunt && !frozen &&\(huntOn\(\)\|\| huntFin\(\)\)\)\{/.test(flat))
   throw new Error('en la cacería el ruido blanco no le deja el lugar al latido');
+if(!/fr=huntFin\(\)\?finRush\(fe\):0;/.test(flat)||!/\}else dreadOff\(\);/.test(flat))
+  throw new Error('el ruido blanco tiene que volver con la carga del final, y solo con ella');
+if(!/dreadSet\(fr,1\)/.test(flat))
+  throw new Error('la carga tiene que dejarle el pulso al mp3, no marcar un segundo corazon');
 // el ♫ del menu apaga las CUATRO pistas, no tres
 if(!/HEART\.muted=BGM\.muted/.test(flat)) throw new Error('el boton de musica no apaga el latido');
 // el latido del acechador se DIBUJA, y va despues de la niebla por lo mismo que el
