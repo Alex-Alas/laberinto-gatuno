@@ -2350,6 +2350,18 @@ p.help {
 		0 0 18px currentColor,
 		0 2px 0 #000;
 }
+/* el renglón del epílogo: es la única frase del juego que no está en mayúsculas
+   de consola, y por eso se lee como lo que es —una línea de la historia— y no como
+   otro dato del resumen */
+#repi {
+	margin: -6px 0 12px;
+	font-size: 12px;
+	line-height: 1.5;
+	letter-spacing: 0.5px;
+	color: #ff9aa8;
+	text-shadow: 0 0 10px #ff20406b;
+	opacity: 0.9;
+}
 #rtime {
 	font-size: 33px;
 	letter-spacing: 1px;

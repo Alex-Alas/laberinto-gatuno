@@ -414,11 +414,62 @@ Dos detalles que hacen que no se sienta un parche:
   `shownAt`; repartir ahí reiniciaría el reloj, o sea regalaría tiempo por caminar hacia
   una presa.
 
-### Fase 3 — el final
+### Fase 3 — el epílogo (9 s)
 
-Con la última presa cae `FINAL DESBLOQUEADO`: el mismo panel de resultados, con dos fichas
-más (presas devoradas y cuántas se te escaparon) y el récord del sótano, que a partir de
-ahora mide la historia entera y no la mitad.
+La última dentellada cerraba el nivel con un chispazo y, tres segundos después, el panel
+de resultados. Era el final de la historia contado como el final de una partida
+cualquiera: el juego se pasaba doce segundos **presentando** la cacería y ni uno
+despidiéndola. Ahora abre una escena, y la escena es **el buildup dado vuelta**: allá la
+oscuridad se cerraba sobre una presa y caía una torre; acá se cierra sobre el único que
+quedó vivo y lo que se abre es el sótano entero.
+
+Corre con el mismo mecanismo que el buildup —un solo número, los milisegundos desde que
+cayó la última presa— y no trae ni un asset, ni un timer, ni una capa nueva: cada pieza ya
+existía y lo único que cambió es hacia dónde apunta.
+
+| tramo | qué pasa | con qué está hecho |
+| --- | --- | --- |
+| **0–0,6 s** | el golpe: flash, partículas, el acorde que baja, y la oscuridad se cierra encima tuyo | el primer segundo del buildup, al revés |
+| **0,6–2,8 s** | quedás solo en el negro con un anillo latiendo alrededor tuyo, y el susurro `AHORA EL QUE LATE SOS VOS` | el anillo del corazón del acechador, ahora saliendo del gato |
+| **2,8–4,6 s** | la luz sale de vos y descubre **el sótano entero**, por primera y única vez | el radio de la niebla (`finLight`), movido por el reloj del final |
+| **4,6–6,4 s** | se encienden las **marcas** —una por presa, en la celda donde cayó— y cae `5 MARCAS · NO QUEDÓ NADA VIVO ACÁ ABAJO` | el rombo de la visión de hambre, apagado y en el piso |
+| **6,4–8,5 s** | el cartel `SE ACABÓ EL HAMBRE`, letra por letra, y debajo `POR AHORA` | el título de LA CACERÍA, con la misma tipografía y sin música abajo |
+| **8,5–9,2 s** | negro, y recién ahí el resumen | un `fillRect` al final del cuadro |
+
+Cuatro detalles que son la mitad del asunto:
+
+- **El corazón no se apaga con la última presa: cambia de dueño.** Durante toda la cacería
+  el latido que se oye es el de la presa (ver *El corazón del sótano*), y el cartel de la
+  última decía `ESCUCHÁ SU CORAZÓN`. Ese corazón dejó de existir hace dos segundos y el
+  sonido sigue. Arranca desbocado por la carrera y se va calmando —el volumen y la prisa
+  bajan juntos, con `heartSl` frenando el `playbackRate` del mismo mp3— hasta que en el
+  cartel se apaga, y el **último latido** es sintetizado y cae en el silencio.
+- **Las marcas las enciende la luz, no el reloj.** Cada una prende cuando el borde de la
+  niebla la alcanza, así que el orden y el ritmo con el que aparecen los pone **la partida
+  que se jugó**: la que mordiste al lado tuyo prende primero y la del otro extremo del
+  sótano cierra. La del acechador lleva un anillo doble.
+- **La puerta vuelve a verse.** La casilla por la que se entró a la cacería —que desde
+  entonces no existe: `exitOpen()` da `false` con `hunt` encima— reaparece cuando la luz
+  llega hasta allá, y es lo **único que no es rojo** en todo el sótano.
+- **El negro va al final del cuadro**, después del flash y del borde que late, no con el
+  resto de la escena. Dibujado con la escena dejaba encendidas la fila de fichas, las
+  partículas y el cartel encima de una pantalla que ya se había terminado.
+
+Los tramos están medidos contra `NOTE_MS` —lo que dura un cartel a media pantalla—: ningún
+cartel de la escena sigue en pantalla cuando entra la pieza que viene después. El susurro
+espera a que se vaya el de la última presa; el de las marcas se apaga justo cuando entra el
+título.
+
+**Se salta con su propio interruptor** (`lg.fin`), no con el del buildup. Son dos
+cinemáticas distintas y se ven en momentos distintos —al buildup se llega siempre, al final
+sólo si la cacería se termina—, así que haber visto una no da derecho a saltar la otra: el
+que llega por primera vez se lo mira entero aunque haya jugado el sótano diez veces. De ahí
+en adelante, `ESPACIO` (o el tablero, en el teléfono) lleva directo al resumen.
+
+Y el resumen entra sobre la pantalla ya apagada, con `FINAL DESBLOQUEADO`, dos fichas más
+(presas devoradas y cuántas se te escaparon), el récord del sótano —que a partir de ahora
+mide la historia entera y no la mitad— y **una línea que no es un número**: *Bajaste al
+sótano a escapar. Subís siendo otra cosa.*
 
 ### El tema de terror
 
@@ -708,6 +759,9 @@ no llegaba a ver ni su tiempo. Ahora todo nivel termina en su resumen (`#res`), 
   los baby points;
 - la **mejor marca**, o `¡NUEVA MEJOR MARCA!` si la partida la rompió (el tutorial no
   guarda marca);
+- sólo en el final del sótano, el renglón del **epílogo** (`#repi`): la única frase del
+  juego que no está en mayúsculas de consola, para que se lea como lo que es —una línea de
+  la historia— y no como otro dato del resumen;
 - y las tres salidas: **el nivel siguiente** (que en el último no se muestra),
   **reintentar** el mismo y **niveles**.
 
@@ -1108,6 +1162,17 @@ presas cercanas (37d-bis); que el acechador se guarde para el final, cargue en v
 y se coma en varias rondas encadenadas, y que la última desbloquee el final con su resumen
 propio (37e); que el buildup se salte **sólo en rejugadas** y cayendo en el segundo exacto
 del drop, y que `gen()` desarme la cacería y el tema rojo (37f).
+
+El **37k** es **el epílogo**: que devorar a la última presa lo abra y deje una marca en la
+celda donde cayó (y que sepa si era el acechador), que el resumen espere a que la escena
+termine en vez de pisarla, que la luz se cierre sobre el gato y después descubra el sótano
+entero, que cada corte caiga en su tramo y suene **una sola vez**, que la luz encienda las
+marcas, que el corazón siga sonando después de la última presa y se vaya **apagando y
+calmando** hasta el silencio, que la escena se dibuje sin romper el cuadro en los siete
+tramos, y que se salte con las mismas reglas que el buildup pero con su propio
+interruptor. El **41** son los mismos contratos leídos del fuente: que la luz siga siendo
+el radio de la niebla, que la escena se dibuje **después** de la niebla, que el latido
+llegue al epílogo y que el renglón de la historia exista en las tres capas.
 
 Y el **37g** es el que sostiene la promesa entera de esa mitad del nivel: un bot juega la
 cacería **tres veces** —con 0, 3 y 6 escapes regalados a propósito— y las tres tienen que
