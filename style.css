@@ -138,6 +138,14 @@ p.help {
 .v {
 	color: #d8a6ff;
 }
+/* el ♪ de un parry (celeste, el color del maullido) y el ⌫ de un retroceso a
+   propósito, que no es acierto ni error: apagado, del color de las paredes */
+.m {
+	color: #9ff;
+}
+.w {
+	color: #7f93ad;
+}
 #stage {
 	position: relative;
 	width: var(--w);

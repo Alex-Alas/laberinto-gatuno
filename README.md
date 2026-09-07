@@ -135,6 +135,22 @@ el `soon`.
   combo a cero y −2 de estilo.
 - Letra equivocada: +0.6 s, combo a cero y −2 de estilo. Cualquier error te devuelve
   **un paso** por el camino que recorriste.
+- **⌫ BORRAR te devuelve un paso a propósito.** El mismo movimiento que el castigo por
+  errar (`stepBack`), pero elegido: sirve para volver sobre tus pasos sin tener que buscar
+  entre las cuatro letras de la pantalla cuál era la de vuelta. Y como es *elegido*, se
+  cobra distinto que una letra: **no es un acierto** —no suma combo, ni estilo, ni el bono
+  por reaccionar rápido, ni cuenta como tecla acertada—, **tampoco es un error** —no rompe
+  el combo ni penaliza— y, sobre todo, **no regala tiempo**: el reloj de la letra *no se
+  reinicia*, las letras nuevas de la celda vienen con lo que te quedaba del anterior. Sin
+  eso, ⌫ sería el botón de "reiniciar el reloj cuando no encuentro la letra" y el castigo
+  por tardar dejaría de existir. Un paso cada 120 ms (`BACK_MS`): la tecla apretada no
+  rebobina el laberinto, y de paso el ⌫ del teléfono —que según el navegador avisa por
+  `keydown`, por `beforeinput` o por los dos— no cuenta dos pasos por toque. El precio de
+  verdad no hace falta inventarlo, lo cobra el laberinto: cada celda que retrocedés hay que
+  volver a caminarla tecleando, y como el gato viene **detrás** tuyo, retroceder es muchas
+  veces meterse en su boca. Aterriza por la **misma** rutina que una letra (`land()`), así
+  que si volvés a la salida abierta salís, si volvés encima de un gato te agarra y si te
+  lo cruzás justo, es un esquive al cruce.
 - Responder en menos de 350 ms descuenta tiempo, topado para que el neto nunca baje
   del 75% del tiempo real.
 - Los gatos oscuros te persiguen. Al alcanzarte se abre un QTE: tecleás la secuencia
@@ -265,6 +281,42 @@ animada, en los pasos 5 y 6 (arriba).
   listo. En escritorio la línea de la barra lo dice además con palabras
   (`MAULLIDO EN 27s`, `MAULLIDO LISTO [ESPACIO]`).
 
+### El PARRY: el mismo maullido, tirado después
+
+El maullido siempre fue una herramienta de **antes**: se tira para que no te alcancen, y
+una vez que el gato te tiene encima no servía para nada —con el QTE abierto el botón
+directamente no hacía nada—. El **parry** es el mismo maullido tirado justo **después**:
+**ESPACIO / ENTER** (o el `♪` de la barra) en los primeros **420 ms** del encuentro
+(`PARRY_MS`, y el baby mode la agranda como a todo reloj de reacción del juego), con la
+secuencia recién puesta en pantalla y el gato en la cara. El gato sale volando igual que si
+lo hubieras vencido, te quedás con el **respiro** de 2 s y no hay penalización ni retroceso.
+
+No es una habilidad nueva ni un botón nuevo: es la ventana en la que el ahuyentador deja de
+ser prevención y pasa a ser una respuesta. Y por eso las cuentas son las del maullido:
+
+- **Cuesta el maullido entero.** El cooldown de 32 s y el ahuyentador que sale con él —los
+  gatos cercanos igual arrancan a correr, y en el sótano igual queda el radar—. O sea que se
+  paga con la herramienta que ibas a usar para *no llegar a esta situación*, y por eso no se
+  puede tirar en todos los encuentros.
+- **No paga como vencer al gato.** Suma **+10 de estilo** (`STYLE_PARRY`: más que un esquive
+  al cruce, que sale gratis) y el combo, pero **no** cuenta como victoria de QTE: no da carga
+  de determinación, no encadena la racha que multiplica el estilo y no descuenta cooldown.
+  Salir de un encuentro sin pelearlo no puede pagar lo mismo que pelearlo. La cuenta va al
+  resumen, con su propia ficha (`PARRIES`).
+- **Al acechador no se lo parrea.** Es la misma regla que ya tenía el ahuyentador y por el
+  mismo motivo: un maullido es un susto y a él los sustos no le hacen nada. Su tanda se pelea
+  entera o se pierde entera. El intento **ni siquiera le gasta el cooldown** al maullido —el
+  jugador no eligió mal, eligió algo que no existe— y la pantalla se lo dice ahí mismo. En el
+  anillo de la cacería tampoco: ahí el que muerde sos vos, no hay ataque que devolver.
+
+**La ventana se ve.** Arriba del cartel del enemigo hay un renglón celeste `♪ PARRY` con una
+barrita que **se vacía en la ventana**: mientras tenga algo, se puede. Sólo aparece si de
+verdad se puede usar (maullido armado y sin cooldown); contra el acechador el renglón dice,
+desde el principio, que ahí no va —la regla se lee sin tener que perder un maullido
+probándola— y un intento negado escribe su motivo en ese mismo lugar, que es donde el
+jugador ya está mirando. En escritorio la línea de la barra cambia sola de
+`MAULLIDO LISTO [ESPACIO]` a `¡PARRY! [ESPACIO]` mientras el QTE está abierto.
+
 ## La Cacería — el final del sótano
 
 El sótano es el **modo historia**, y su historia no termina en la puerta. Juntar las siete
@@ -317,6 +369,7 @@ ellas**.
 | Presas | invisibles en la oscuridad | se ven **a través** de la niebla |
 | Latido | sintetizado, sólo en el QTE | `assets/heartbeat.mp3`: **no para**, y sube y acelera **con la distancia** |
 | Ruido blanco | debajo del QTE | **no suena**: su lugar lo ocupa el latido |
+| Letra del QTE | un blip sintetizado | `assets/nom.mp3`: una **dentellada** por letra, cada vez más grave |
 | Determinación | una carga cada tres gatos vencidos | se **repone sola** con una presa cerca |
 | Salida | la casilla verde | **no hay** |
 
@@ -364,6 +417,41 @@ porción del cuerpo —el sprite se dibuja por sectores y el sector de una letra
 simplemente no se pinta, con su chorro de partículas—. De un bicho se muerde por donde se
 puede. Por eso el dibujo tampoco marca ninguna como "la que toca": marcarla sería volver a
 pedir una secuencia por la ventana. Cuatro letras y **3,2 s**.
+
+**Cada letra es una DENTELLADA.** Sonaba a menú —un blip sintetizado y ocho chispas rojas
+saliendo para todos lados— y lo que está pasando en pantalla es que le estás arrancando
+pedazos a un bicho. Un mordisco son cuatro cosas que pasan juntas, y son las cuatro que
+hace `huntChomp()`:
+
+- **La boca.** `assets/nom.mp3`, lo único de la cacería que **no** está sintetizado. Va en
+  un **pool de tres `<audio>`** porque los mordiscos salen en ráfaga y un elemento suelto se
+  corta a sí mismo: el segundo mordisco mataría al primero y se oiría media dentellada. Cada
+  uno sale con su propio `playbackRate` y su propio volumen, y la serie **baja de tono y sube
+  de volumen** a medida que el cuerpo se vacía: el bicho se queda sin carne y la boca se
+  acerca al hueso. El último bocado —el que se lleva la presa— es el más grave de todos, y
+  cierra con el mismo sonido con el que se la estuvo abriendo. Debajo sigue el crujido
+  sintetizado de siempre, que ahora hace de hueso. Son 7 KB y se bajan **sólo al generar un
+  nivel con cacería**, igual que la cara del acechador.
+- **El pedazo.** El sector deja de dibujarse (eso ya estaba) y debajo aparece la **carne**:
+  un disco con degradado rojo oscuro, porque el hueco que deja un pedazo arrancado no puede
+  ser el fondo de la pantalla. Encima, el hueco se cierra con un **filo dentado** —radios
+  alternados, la forma que deja una boca—: sin eso el sector vacío se leía como una porción
+  de torta que alguien se llevó prolija. Sólo se traza el borde de **afuera**: los dos lados
+  rectos de la cuña son el radio, y marcarlos dibujaba una tajada de pizza encima del bicho.
+- **Lo que salta.** Sangre **en cono y hacia afuera** del mordisco (`spray()`), no un
+  chispazo redondo. Va en su propia lista (`gore`) por una razón de dibujo y no de diseño: el
+  anillo pinta un velo encima del tablero entero, así que las partículas de siempre —que se
+  dibujan antes— quedarían debajo del velo. `gore` se dibuja **adentro** del anillo, sobre el
+  cuerpo. Las dos listas se mueven con la misma cuenta.
+- **El tirón.** El cuerpo salta para el lado contrario al mordisco y vuelve solo en 240 ms
+  (`BITE_MS`), con un fogonazo que se abre justo donde entró la boca. Es lo que separa "una
+  porción dejó de dibujarse" de "algo le arrancó un pedazo". Y la pantalla acompaña: el
+  temblor y el destello crecen con cada pedazo que falta.
+
+Las tres cuentas de la geometría del anillo (dónde caen las letras, de qué tamaño está el
+cuerpo, en qué ángulo quedó cada pedazo) viven en `ringRad/ringSz/ringAng` porque las
+necesitan **iguales** el dibujo y la dentellada: sueltas adentro del overlay, la sangre
+salía de un lado y el pedazo faltaba del otro.
 
 **Y los 3,2 s son fijos.** No se reparten entre las letras como en el QTE de la primera
 mitad (`n * MS_LETRA`): el anillo tiene **un** reloj y no se entera de cuántos pedazos le
@@ -1192,6 +1280,29 @@ penúltima presa apague la música sin que la primera tecla la devuelva. Los **3
 son los mismos contratos leídos del fuente: que el mp3 del latido no se baje al abrir la
 página, que el `♫` lo apague, y que el reloj del anillo no vuelva a atarse a la cantidad de
 letras.
+
+El **42** es el **parry**, y lo que comprueba es que no se haya vuelto una habilidad
+aparte: que sin el maullido armado no salga y el intento **no** se lleve el QTE puesto, que
+dentro de la ventana cierre el encuentro, suba el combo, pague estilo y mande al gato lejos,
+que gaste el cooldown y suelte el ahuyentador, que **no** cuente como victoria de QTE ni dé
+carga de determinación ni encadene la racha, que fuera de la ventana —o con el cooldown
+corriendo— no salga **y tampoco gaste el maullido**, que contra el **acechador** no salga,
+no gaste nada y deje el motivo escrito en pantalla, y que el overlay se dibuje en sus tres
+estados (ventana abierta, intento negado y acechador).
+
+El **43** es la tecla de **borrar**: que sin camino atrás no haga nada, que vuelva por el
+camino que se hizo comiéndose la migaja, que no toque el combo ni el estilo ni la
+penalización —no es acierto ni error—, que **no reinicie el reloj de la letra**, que el
+freno de `BACK_MS` no deje rebobinar de a dos, que llegue por `keydown` y por `beforeinput`
+(el ⌫ del teléfono), que no se cuele con un QTE abierto, y que aterrizar encima de un gato
+le abra el QTE, que es la prueba de que comparte `land()` con una letra.
+
+El **44** son los **mordiscos**: que el sótano baje `assets/nom.mp3` y ningún otro nivel lo
+precargue, que el pool **rote** (un solo `<audio>` se cortaría a sí mismo entre dentelladas),
+que el `♫` en mute también apague la boca, y adentro del anillo: que cada letra suene, deje
+su marca para el dibujo **en el pedazo que se mordió** —el ángulo de la sangre y el del
+sector tienen que ser el mismo—, salpique en `gore` y no en las partículas de siempre, y que
+el anillo se dibuje con el mordisco fresco y con el tirón ya apagado.
 
 El 17 y el 18 son el perfil de rendimiento: corren el mismo `game.js` en dos contextos
 —uno con `pointer:fine` y otro con `pointer:coarse`— y verifican que el lite prenda sólo
