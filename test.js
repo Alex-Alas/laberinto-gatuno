@@ -1373,6 +1373,7 @@ for(const fallos of [0,3,6]){
   p={x:C-1,y:R-1}; deal(); huntStart(); botHunt(fallos);
   if(!win||hunt.ph!=='end') throw new Error('la cacería no cerro con '+fallos+' escapes');
   if(hunt.eaten!==HUNT_PREY) throw new Error('quedaron presas sin devorar');
+  if(hunt.marks.length!==HUNT_PREY) throw new Error('el final no guardo una marca por presa');
   if(hunt.esc!==fallos) throw new Error('se contaron mal los escapes: '+hunt.esc);
 }
 
@@ -1505,6 +1506,83 @@ if(!(huntHeart()>=HEART_SOLO)) throw new Error('con el acechador solo el latido 
 lastDraw=0; frame();   // el ping del acechador se dibuja sin romper el cuadro
 if(!HEART.src||HEART.paused) throw new Error('el cuadro del final no dejo el latido sonando');
 
+// 37k) EL EPILOGO.  El final era un chispazo y el resumen encima: doce segundos de
+// buildup para entrar a la cacería y ni uno para salir.  Ahora la ultima dentellada
+// abre una escena con su propio reloj, y la escena esta hecha de piezas que ya
+// estaban: la niebla es la luz, el latido cambia de dueño y las marcas son el rombo
+// de la vision de hambre, apagado.
+juega('sotano'); gen(); foes=[]; coins=[]; got=LV.coins; t0=now();
+p={x:C-1,y:R-1}; deal(); huntStart(); hunt.t0=now()-HUNT_BUILD; huntStep(now());
+finSeen=false; resHide(); note=null;
+// se devora al acechador, que es siempre la ultima, y con eso arranca el epilogo
+const aceE=open(cell())[0];
+foes=[aceE]; hunt.slow=[0]; prevFoe=[]; hunt.aceDone=0; hunt.prey=-1; qte=null;
+hunt.marks=[]; huntGrab(flow());
+if(!qte) throw new Error('el acechador ultimo no se dejo morder');
+for(let r=0;r<HUNT_ACE_ROUNDS&&qte;r++) [...qte.eat].forEach(k=>press(k));
+if(foes.length) throw new Error('el acechador sobrevivio a su tanda');
+if(!huntFin()) throw new Error('la ultima presa no abrio el epilogo');
+// la marca queda DONDE cayo la presa, y sabe si era el acechador
+if(hunt.marks.length!==1||hunt.marks[0].x!==aceE%C||hunt.marks[0].y!==(aceE/C|0))
+  throw new Error('la presa devorada no dejo su marca en el piso');
+if(!hunt.marks[0].ace) throw new Error('la marca no distingue al acechador');
+// el resumen ya no pisa el final: espera a que la escena termine
+if(!(resAt-now()>FIN_MS-500)) throw new Error('el resumen no le dio lugar a la escena');
+// LA LUZ es la niebla: se cierra sobre el gato y despues descubre el sotano entero
+if(!(finLight(FIN_T1)<finLight(0))) throw new Error('la oscuridad no se cierra sobre el gato');
+if(finLight(FIN_T2)!==FIN_R) throw new Error('el tramo a oscuras no se queda quieto');
+if(!(finLight(FIN_T3)>=C+R)) throw new Error('la luz no llega a descubrir el sotano entero');
+hunt.t0=now()-FIN_T3;
+if(!(fogR()>=C+R)) throw new Error('la niebla del epilogo no se abrio con la escena');
+// LOS CORTES: cada uno cae en su tramo y suena UNA sola vez
+hunt.t0=now(); hunt.beat=0; hunt.marks.forEach(m=>m.at=0);
+[0,FIN_T1,FIN_T2,FIN_T3,FIN_T4,FIN_T5].forEach((e,i)=>{
+  hunt.t0=now()-e-1; huntStep(now());
+  if(hunt.beat!==i) throw new Error('el corte '+i+' del epilogo no cayo en su tramo');
+  huntStep(now());
+  if(hunt.beat!==i) throw new Error('el corte '+i+' del epilogo sono dos veces');
+});
+if(!/MARCA/.test(String(note&&note.a))) throw new Error('el epilogo no canta las marcas');
+if(hunt.marks.some(m=>!m.at)) throw new Error('la luz no encendio las marcas de las presas');
+// EL CORAZON NO SE APAGA CON LA ULTIMA PRESA: cambia de dueño y se va calmando
+hunt.t0=now(); hunt.beat=0; heartOff(); lastDraw=0; frame();
+if(HEART.paused) throw new Error('el epilogo apago el latido de golpe');
+const fhv=HEART.volume, fhr=HEART.playbackRate;
+hunt.t0=now()-FIN_T3; lastDraw=0; frame();
+if(!(HEART.volume<fhv)) throw new Error('el latido del epilogo no se va apagando');
+if(!(HEART.playbackRate<fhr)) throw new Error('el latido del epilogo no se va calmando');
+hunt.t0=now()-FIN_T5-1; lastDraw=0; frame();
+if(!HEART.paused) throw new Error('el ultimo latido no dejo el sotano en silencio');
+// ...y la escena entera se dibuja sin romper el cuadro, tramo por tramo
+[0,FIN_T1,FIN_T2,FIN_T3,FIN_T4,FIN_T5,FIN_MS].forEach(e=>{
+  hunt.t0=now()-e; lastDraw=0; frame();
+});
+// SE SALTA COMO EL BUILDUP, y por el mismo motivo: la primera vez, nunca
+hunt.t0=now(); hunt.beat=0; finSeen=false; resHide();
+if(huntFinSkip()) throw new Error('la primera vez el final no se salta');
+hunt.t0=now()-FIN_SKIP_AT-1;
+if(huntFinSkip()) throw new Error('esperar no habilita el salto si nunca se vio entero');
+finSeen=true; hunt.t0=now();
+if(huntFinSkip()) throw new Error('el salto se ofrecio antes de FIN_SKIP_AT');
+hunt.t0=now()-FIN_SKIP_AT-1;
+if(!huntFinSkip()) throw new Error('en la rejugada el epilogo tiene que poder saltarse');
+if(!resOn) throw new Error('saltar el epilogo no llevo al resumen');
+if(!HEART.paused) throw new Error('saltar el epilogo dejo el corazon sonando');
+if(hunt.marks.some(m=>!m.at)) throw new Error('el salto dejo marcas sin encender');
+// el resumen del final se llama distinto, trae sus fichas y cierra la historia
+if(rttl.textContent!=='FINAL DESBLOQUEADO') throw new Error('el final no se anuncia como tal');
+if(!repi.textContent) throw new Error('el resumen del final no trae su epilogo');
+if(repi.style.display==='none') throw new Error('el epilogo del resumen quedo escondido');
+// ...y el mismo renglon no aparece en un nivel comun
+resHide(); const guardaFin=hunt.ph; hunt.ph='hunt'; resShow();
+if(repi.textContent||repi.style.display!=='none')
+  throw new Error('el epilogo se colo en un resumen que no es el del final');
+hunt.ph=guardaFin; resHide();
+// ESPACIO tambien lo saltea (en el telefono, el tablero: ver cv.onclick)
+hunt.t0=now()-FIN_SKIP_AT-1;
+if(!meow()) throw new Error('ESPACIO no saltea el epilogo');
+resHide();
+
 juega('clasico');
 
 // 17) escritorio: el perfil lite NO se aplica, todo queda como estaba
@@ -1541,7 +1619,7 @@ if(document.fullscreenElement) throw new Error('el boton no salio de pantalla co
 if(fsb.className) throw new Error('el boton quedo marcado al salir');
 if(fsb.style.display==='none') throw new Error('con API disponible el boton tiene que verse');
 
-console.log('OK 31/31 | partida completa:',teclas,'teclas, precision',prec+'%');
+console.log('OK 32/32 | partida completa:',teclas,'teclas, precision',prec+'%');
 `;
 
 // ---- 19) el mismo juego en un teléfono: perfil lite, gameplay intacto ----
@@ -2100,7 +2178,7 @@ if(/^HEART\.src *=/m.test(src)) throw new Error('el mp3 del latido se baja al ab
 if(!/HEART\.preload='none'/.test(flat)) throw new Error('el latido se precarga sin pedirlo');
 if(!/heartSet\(huntHeart\(\)\)/.test(flat)) throw new Error('el latido no va atado al nivel de la cacería');
 // en la cacería el ruido blanco NO suena: lo reemplaza el latido, tambien en el QTE
-if(!/if \(huntOn\(\) && !frozen\) \{\s*dreadOff\(\);\s*heartSet\(/.test(src))
+if(!/if \(hunt && !frozen && \(huntOn\(\) \|\| huntFin\(\)\)\) \{\s*dreadOff\(\);/.test(src))
   throw new Error('en la cacería el ruido blanco no le deja el lugar al latido');
 // el ♫ del menu apaga las CUATRO pistas, no tres
 if(!/HEART\.muted=BGM\.muted/.test(flat)) throw new Error('el boton de musica no apaga el latido');
@@ -2127,4 +2205,33 @@ if(!/p\.y === 0 \? BH - 15 : 15/.test(src))
   throw new Error('la cuenta no se corre cuando el gato esta en la primera fila, que es donde arranca');
 if(src.indexOf('ESQUIVES AL CRUCE')<0) throw new Error('el resumen no cuenta los esquives');
 
-console.log('OK 36/36 | el perfil lite prende solo en pointer:coarse y no toca la dificultad');
+// ---- 41) EL EPILOGO esta hecho con lo que ya estaba ----
+// El valor del final no es que dure nueve segundos: es que los nueve segundos estan
+// hechos del vocabulario que el jugador viene aprendiendo desde que entro al sotano.
+// Si alguna de estas tres cosas se rompe, el final volvio a ser una pantalla aparte.
+const iFin=src.indexOf('EL EPÍLOGO, DIBUJADO');
+if(iFin<0) throw new Error('el tablero no dibuja el epilogo');
+// 1. la luz del final ES la niebla, no una capa nueva
+if(!/huntFin\(\)\s*\?\s*finLight\(/.test(src))
+  throw new Error('la luz del epilogo dejo de ser el radio de la niebla');
+// 2. la escena va DESPUES de la niebla, por lo mismo que la torre y el radar
+const iScene=src.indexOf('\thuntScene(T);');
+if(!(iScene>iFog)) throw new Error('la escena del final quedaria debajo de la niebla');
+// 3. el corazon sigue sonando en el epilogo (cambia de dueño, no se apaga)
+if(!/if \(huntFin\(\)\) heartFin\(/.test(src))
+  throw new Error('el latido no llego al epilogo');
+if(!/heartSl = 1 - /.test(src)) throw new Error('el latido del epilogo no se va calmando');
+// el resumen espera a que la escena termine, y se salta igual que el buildup
+if(!/resAt = now\(\) \+ FIN_MS/.test(src)) throw new Error('el resumen no espera al epilogo');
+if(!/if \(huntFin\(\)\) return huntFinSkip\(\);/.test(src))
+  throw new Error('ESPACIO no saltea el epilogo');
+if(!/if \(huntFin\(\) && huntFinSkip\(\)\) return;/.test(src))
+  throw new Error('el tablero del telefono no saltea el epilogo');
+// la fila de fichas se queda encendida en el final: es el 5/5 de la cacería
+if(!/!win \|\| huntOn\(\) \|\| huntFin\(\)/.test(src))
+  throw new Error('la cuenta de presas se apaga justo cuando termina de llenarse');
+// y el renglon de la historia existe en las tres capas
+if(!/id=repi/.test(mk)) throw new Error('el resumen no tiene donde poner el epilogo');
+if(!/#repi/.test(style)) throw new Error('el renglon del epilogo no tiene estilo');
+
+console.log('OK 37/37 | el perfil lite prende solo en pointer:coarse y no toca la dificultad');
