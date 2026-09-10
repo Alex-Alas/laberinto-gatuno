@@ -2431,6 +2431,84 @@ p.help {
 	flex: 1;
 	min-width: 118px;
 }
+/* La tabla en línea: misma chapa que #rgrid, pero en renglones.  Nada de
+   animaciones acá — el resumen ya es de lo más caro que se pinta. */
+#rlb {
+	margin: 10px 0 2px;
+	border: 1px solid #1ff4;
+	border-radius: 6px;
+	background: #0b0b12;
+	overflow: hidden;
+}
+#rlb div {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	padding: 5px 9px;
+	font-size: 11px;
+	letter-spacing: 1px;
+	color: #cff;
+	border-top: 1px solid #1ff2;
+}
+#rlb div:first-child {
+	border-top: 0;
+}
+#rlb b {
+	min-width: 16px;
+	text-align: right;
+	opacity: 0.45;
+}
+#rlb span {
+	flex: 1;
+	text-align: left;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+#rlb i {
+	font-style: normal;
+	letter-spacing: 0;
+}
+#rlb small {
+	min-width: 34px;
+	text-align: right;
+	opacity: 0.5;
+}
+/* La fila propia: el mismo dorado del renglón de la mejor marca.  Ese resalte
+   ES el "se subió", por eso no hay ningún cartel de confirmación. */
+#rlb .me {
+	color: #fd0;
+	text-shadow: 0 0 12px #fd06;
+	background: #fd00000d;
+}
+#rlb .me b,
+#rlb .me small {
+	opacity: 0.8;
+}
+/* La línea de estado: candado de baby points, sin conexión, o tabla vacía.
+   Una sola línea, nunca un párrafo. */
+#rlb .msg {
+	display: block;
+	text-align: center;
+	font-size: 10px;
+	letter-spacing: 1px;
+	opacity: 0.6;
+	color: #cff;
+}
+/* Sin esto el ✎ se estira al min-width de los otros botones del resumen.  El
+   min-width que le queda es el del dedo, no el del glifo: en el teléfono un
+   botón de 30px no se acierta. */
+#rlbrow #rname {
+	flex: 0 0 auto;
+	min-width: 44px;
+	padding-left: 0;
+	padding-right: 0;
+	font-size: 15px;
+}
+#res .row button[disabled] {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
 
 /* las scanlines no las dibuja el canvas: eran ~150 fillRect por cuadro y ahora son
     una capa CSS sobre el tablero, en los dos perfiles.  Con extra vibes el beat
