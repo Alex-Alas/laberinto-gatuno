@@ -48,6 +48,10 @@ const cv = $("cv"),
 	rsub = $("rsub"),
 	rgrid = $("rgrid"),
 	rpb = $("rpb"),
+	rlb = $("rlb"),
+	rlbrow = $("rlbrow"),
+	rsend = $("rsend"),
+	rname = $("rname"),
 	rnext = $("rnext"),
 	ragain = $("ragain"),
 	rlvls = $("rlvls"),
@@ -4970,6 +4974,140 @@ const nextLv = () => {
 	const i = LEVELS.findIndex((l) => l.id === LV.id);
 	return i < 0 ? null : LEVELS[i + 1] || null;
 };
+
+// ---- la tabla en línea -----------------------------------------------------
+// La única red del juego, y es opcional: sin `fetch` —los tests corren game.js
+// en un vm que no lo tiene, y un file:// offline tampoco— todo esto se va por el
+// guard y el juego sigue igual.  Nunca se dispara sola: el botón del resumen es
+// el consentimiento.
+//
+// La key es pública a propósito (es la publishable de Supabase): lo que protege
+// la tabla es el RLS —sólo select e insert, nada de update ni delete— y los
+// CHECK de las columnas, que son la validación del lado del servidor.  El
+// cliente es JS abierto en el navegador, así que no es una fuente confiable.
+//
+// ponytail: sin rate limit.  Una marca siempre va a ser falsificable mientras el
+// juego corra en el navegador, así que los CHECK son el piso honesto; si alguien
+// spamea, el paso siguiente es una Edge Function con Turnstile, no más
+// validación acá.
+const LB_URL = "https://asfsjjafvfgxaaqxxqdz.supabase.co/rest/v1/marcas",
+	LB_KEY = "sb_publishable_UyOE9QeoF_yHk6EKeoC6kw_LPMk9VMn",
+	LB_H = {
+		apikey: LB_KEY,
+		Authorization: "Bearer " + LB_KEY,
+		"Content-Type": "application/json",
+	},
+	LB_TOP = 10;
+let lbSent = false; // ya se subió esta partida: el botón no sube dos veces
+
+// LA MARCA: el tiempo neto castigado por la precisión.  Las dos cosas que el
+// jugador ya lee en el resumen, en una sola cifra y en la misma unidad, así que
+// se muestra con el fmt() de siempre y no hay una unidad nueva que explicar.
+// Al 100% la marca ES el neto; al 80% la infla un 25%.  El piso de acc() evita
+// la división por cero y capea el castigo en 4x.
+const marca = () => Math.round((tEnd + pen) / Math.max(acc(), 0.25));
+
+// El nombre se guarda en el aparato con el mismo try/catch que lg.hunt: dentro
+// de un iframe localStorage tira, y eso no puede voltear el juego.
+const lbName = () => {
+	try {
+		return localStorage.getItem("lg.name") || "";
+	} catch (e) {
+		return "";
+	}
+};
+// El prompt() sale UNA vez en la vida (o cuando se toca el ✎, que lo abre con el
+// nombre puesto).  Un <input> adentro de #res chocaría con el #kb invisible y
+// con el onkeydown global, que se come todas las letras como movimiento.
+const lbAsk = (force) => {
+	let n = lbName();
+	if (n && !force) return n;
+	if (typeof prompt != "function") return n;
+	const v = prompt("¿CON QUÉ NOMBRE ENTRÁS A LA TABLA?", n);
+	if (v === null) return n; // cancelar no borra el que ya había
+	n = v
+		.trim()
+		.toUpperCase()
+		.replace(/[^A-ZÑ0-9 ._-]/g, "")
+		.slice(0, 12)
+		.trim();
+	if (!n) return lbName();
+	try {
+		localStorage.setItem("lg.name", n);
+	} catch (e) {}
+	return n;
+};
+
+const lbGet = (id) => {
+	if (typeof fetch != "function") return Promise.resolve(null);
+	return fetch(
+		`${LB_URL}?select=nombre,ms,prec&nivel=eq.${id}&order=ms.asc&limit=${LB_TOP}`,
+		{ headers: LB_H },
+	)
+		.then((r) => (r.ok ? r.json() : null))
+		.catch(() => null);
+};
+const lbPost = (row) => {
+	if (typeof fetch != "function") return Promise.resolve(false);
+	return fetch(LB_URL, {
+		method: "POST",
+		headers: LB_H,
+		body: JSON.stringify(row),
+	})
+		.then((r) => r.ok)
+		.catch(() => false);
+};
+
+// Pinta #rlb.  El gamer no lee: el estado se dice con UNA línea de siete
+// palabras o con la fila propia resaltada, nunca con un párrafo.
+// Las filas se arman con nodos y textContent, no con un template string como
+// #rgrid: los nombres los escribe cualquiera que pueda hacer POST y el regex de
+// la tabla ya los limita, pero acá no entra markup ni de casualidad.
+function lbLine(txt) {
+	const d = document.createElement("div");
+	d.className = "msg";
+	d.textContent = txt;
+	return d;
+}
+// Cada pintada se lleva un número.  El GET tarda, y para cuando vuelve la lista
+// puede haberse limpiado —otra partida, o la repintada de después de subir—: sin
+// esto las filas viejas se apilan sobre las nuevas.
+let lbRun = 0;
+function lbShow(mine) {
+	const id = LV.id,
+		run = ++lbRun;
+	rlb.textContent = "";
+	// Con baby points la tabla se ve igual —mirar el top es la mitad de las
+	// ganas—, pero con el candado arriba: por qué no entrás y qué hacer.  El
+	// botón ▦ NIVELES al que apunta está en la fila de abajo de este panel, y
+	// los baby points se eligen ahí, antes de entrar.
+	if (baby)
+		rlb.appendChild(
+			lbLine("\u{1F512} LA TABLA ES EN 0 BABY POINTS → ▦ NIVELES"),
+		);
+	lbGet(id).then((rows) => {
+		// estas filas ya no son las que el panel está mostrando
+		if (run !== lbRun || id !== LV.id || !resOn) return;
+		if (!rows) return rlb.appendChild(lbLine("— SIN CONEXIÓN —"));
+		if (!rows.length) return rlb.appendChild(lbLine("— TODAVÍA NADIE —"));
+		rows.forEach((r, i) => {
+			const d = document.createElement("div");
+			// la fila propia se resalta sola: ése es el "se subió", no un cartel
+			d.className =
+				mine && r.nombre === mine.nombre && r.ms === mine.ms ? "me" : "";
+			const pos = document.createElement("b"),
+				nm = document.createElement("span"),
+				ms = document.createElement("i"),
+				pc = document.createElement("small");
+			pos.textContent = i + 1;
+			nm.textContent = r.nombre;
+			ms.textContent = fmt(r.ms);
+			pc.textContent = r.prec + "%";
+			d.append(pos, nm, ms, pc);
+			rlb.appendChild(d);
+		});
+	});
+}
 function resShow() {
 	resAt = 0;
 	if (resOn) return;
@@ -5031,6 +5169,17 @@ function resShow() {
 			: "";
 	rnext.textContent = nx ? "\u25B6 " + nx.name : "\u25B6 SIGUIENTE";
 	rnext.style.display = nx ? "" : "none"; // del último nivel no se sigue a ningún lado
+	// La tabla en línea.  El tutorial no la ve: no tiene marca ni la tuvo nunca,
+	// y meterle una tabla competitiva al nivel que enseña a caminar es ruido.
+	// Con baby points se ve, pero no se sube: el candado de lbShow() dice por qué.
+	lbSent = false;
+	// `nick`, no `nom`: nom() es el mp3 de masticar de la cacería y esto lo taparía
+	const nick = lbName();
+	rlb.style.display = rlbrow.style.display = LV.tut ? "none" : "";
+	rsend.disabled = !!baby;
+	rsend.textContent = nick ? "▲ SUBIR COMO " + nick : "▲ SUBIR MI MARCA";
+	rname.style.display = nick && !baby ? "" : "none";
+	if (!LV.tut) lbShow();
 	res.className = "open";
 }
 function resHide() {
@@ -5050,6 +5199,39 @@ rnext.onclick = () => {
 	resGo(nx ? nx.id : null);
 };
 ragain.onclick = () => resGo(null);
+// Subir la marca.  El nombre se pide sólo si no hay ninguno guardado; si ya hay,
+// el botón lo dice y tocarlo ES la confirmación.  Sin cartel de "listo": la fila
+// propia queda resaltada en la tabla y eso alcanza.
+rsend.onclick = () => {
+	if (lbSent || baby || LV.tut) return;
+	const nombre = lbAsk();
+	if (!nombre) return; // canceló: no pasa nada, se puede volver a tocar
+	const row = {
+		nivel: LV.id,
+		nombre,
+		ms: marca(),
+		neto: tEnd + pen,
+		prec: Math.round(acc() * 100),
+		baby: 0,
+	};
+	lbSent = true;
+	rsend.disabled = true;
+	rname.style.display = "none";
+	rsend.textContent = "SUBIENDO...";
+	lbPost(row).then((ok) => {
+		if (!resOn) return;
+		lbSent = ok;
+		rsend.disabled = ok;
+		rsend.textContent = ok ? "✔ EN LA TABLA" : "↻ NO SUBIÓ, REINTENTAR";
+		rname.style.display = ok ? "none" : "";
+		if (ok) lbShow(row);
+	});
+};
+// El ✎: el único modo de cambiar el nombre después de la primera vez.
+rname.onclick = () => {
+	const n = lbAsk(1);
+	if (n) rsend.textContent = "▲ SUBIR COMO " + n;
+};
 rlvls.onclick = () => {
 	const nx = nextLv();
 	resHide();

@@ -865,6 +865,81 @@ no llegaba a ver ni su tiempo. Ahora todo nivel termina en su resumen (`#res`), 
 Saltar el tutorial con **SALTAR** sigue llevando derecho al selector: ahí no hay partida
 que resumir. `tutEnd()` sólo abre el selector si el tutorial **no** terminó ganando.
 
+## La tabla en línea
+
+El resumen decía "MEJOR MARCA" de una marca que sólo existía en esa pestaña
+(`bests` es un objeto en memoria). Ahora abajo del resumen hay un **top 10 en
+línea** por nivel, y la partida se puede subir con un nombre.
+
+### La marca: tiempo Y precisión
+
+```js
+marca = Math.round((tEnd + pen) / Math.max(acc(), 0.25));   // menos es mejor
+```
+
+No es un puntaje nuevo con unidad propia: es **el tiempo neto castigado por la
+precisión**, o sea las dos cifras que el resumen ya muestra, en una sola y en
+`MM:SS:mmm`. Al 100 % la marca *es* el neto; al 80 % lo infla un 25 %. Correr sin
+mirar deja de pagar. El piso de `0.25` en `acc()` evita dividir por cero y capea
+el castigo en 4×.
+
+Entran **`clasico` y `sotano` con cero baby points**. El tutorial nunca guardó
+marca, y cada baby point da +35 % de tiempo de reacción: una marca con handicap no
+es comparable con una sin él.
+
+### El nombre se pide una vez en la vida
+
+Vive en `localStorage` (`lg.name`), con el mismo `try/catch` que `lg.hunt`. El
+`prompt()` sale **la primera vez y nunca más**: después el botón **dice el
+nombre** —`▲ SUBIR COMO ALEX`— así que tocarlo *es* la confirmación, sin leer
+nada, y el `✎` de al lado lo cambia (abre el prompt con el nombre puesto).
+
+Es `prompt()` y no un `<input>` a propósito: un campo de texto dentro de `#res`
+choca con el `#kb` invisible y con el `onkeydown` global, que se come todas las
+letras como movimiento. Habría que agregarle un guard al teclado para ganar un
+cuadro de texto que se ve una vez por dispositivo.
+
+### Todo el estado cabe en un renglón
+
+El jugador no lee párrafos, prueba. Cada situación se dice en una línea o con el
+botón mismo:
+
+| Situación | Lo que ve |
+|---|---|
+| Con baby points | `🔒 LA TABLA ES EN 0 BABY POINTS → ▦ NIVELES` y el botón apagado |
+| Sin red / `file://` | `— SIN CONEXIÓN —` |
+| Nadie subió todavía | `— TODAVÍA NADIE —` |
+| Se subió | **la fila propia queda dorada** — no hay cartel de "listo" |
+
+El candado dice **por qué** (los baby points) y **qué hacer** (el `▦ NIVELES` que
+está en la fila de abajo del mismo panel, que es donde se eligen). Y la tabla se
+**ve igual** con baby points: mirar el top es la mitad de las ganas de sacárselos.
+El tutorial no la muestra: no tiene marca ni la tuvo nunca.
+
+### La única red del juego, y es opcional
+
+`fetch` contra el REST de una tabla de Supabase (`marcas`), sin SDK ni build step.
+Los dos call sites arrancan con `typeof fetch != "function"` y los dos terminan en
+un `.catch()`: **sin red el juego no cambia en nada** —el `vm` de los tests no
+tiene `fetch`, y `index.html` abierto con doble clic tampoco—. Nunca se dispara
+sola: el botón del resumen es el consentimiento.
+
+La key que está en `game.js` es la **publishable**, pública por diseño. Lo que
+protege la tabla es el RLS —sólo `select` e `insert`, así que nadie borra ni pisa
+la marca de otro— y los `CHECK` de las columnas, que son la validación del lado
+del servidor: el nombre pasa por un regex (`^[A-ZÑ0-9 ._-]{1,12}$`, que de paso
+mata cualquier markup), el nivel tiene que existir, los tiempos tienen que ser
+posibles y `baby` tiene que ser `0`. El cliente es JS abierto en el navegador: no
+es una fuente confiable y no se lo trata como tal.
+
+Las filas se pintan con **nodos y `textContent`**, no con un template string como
+`#rgrid`: los nombres los escribe cualquiera que pueda hacer POST.
+
+Dos cosas que **no** están, a propósito: **anti-cheat** —mientras el juego corra
+en el navegador la marca es falsificable, y los `CHECK` son el piso honesto— y
+**rate limit**, hasta que alguien spamee. El paso siguiente para las dos es una
+Edge Function, no más validación en el cliente.
+
 ## GUI del teléfono
 
 La pantalla útil es la que **deja el teclado**, así que todo va alineado arriba

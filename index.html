@@ -141,6 +141,18 @@
 		<div id="rsub">-</div>
 		<div id="rgrid"></div>
 		<div id="rpb"></div>
+		<!-- La tabla en línea. Vive DENTRO del resumen a propósito: como panel
+		     aparte habría que sumarlo a las cuatro listas de selectores de
+		     botones, a la regla .lite y al test 27.  Acá `#res button` ya lo
+		     cubre.  El botón dice con qué nombre vas a entrar: tocarlo ES la
+		     confirmación, y el ✎ de al lado lo cambia. -->
+		<div id="rlb"></div>
+		<div class="row" id="rlbrow">
+			<button id="rsend">&#9650; SUBIR MI MARCA</button
+			><button id="rname" aria-label="Cambiar nombre" title="Cambiar nombre">
+				&#9998;
+			</button>
+		</div>
 		<div class="row">
 			<button id="rnext">&#9654; SIGUIENTE</button
 			><button id="ragain">&#10227; REINTENTAR</button

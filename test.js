@@ -12,6 +12,10 @@ const el=()=>({getContext:()=>noop,style:{},value:'',className:'',
   set textContent(v){this._t=String(v)},get textContent(){return this._t},
   set innerHTML(v){},
   set src(v){this._s=v},get src(){return this._s},
+  // la tabla en linea arma sus filas con nodos (textContent, no innerHTML: los
+  // nombres los escribe cualquiera), asi que el stub tiene que poder recibirlos
+  appendChild(c){(this._k||(this._k=[])).push(c);return c},
+  append(...c){(this._k||(this._k=[])).push(...c)},
   insertAdjacentHTML(){},blur(){},focus(){},addEventListener(){},width:0,height:0});
 
 // El mismo index.html se corre en dos contextos: uno "escritorio" (pointer:fine)
@@ -1775,6 +1779,35 @@ if(document.fullscreenElement) throw new Error('el boton no salio de pantalla co
 if(fsb.className) throw new Error('el boton quedo marcado al salir');
 if(fsb.style.display==='none') throw new Error('con API disponible el boton tiene que verse');
 
+// 18b) LA TABLA EN LINEA: la marca, y quien puede subirla
+// La marca es el tiempo neto castigado por la precision, en la misma unidad que
+// el reloj. Si esta cuenta cambia, la tabla deja de comparar lo que dice.
+juega('clasico'); baby=0;
+tEnd=60000; pen=0; hits=100; fails=0;
+if(marca()!==60000) throw new Error('al 100% de precision la marca tiene que ser el neto');
+hits=80; fails=20;                       // 80% de precision: +25%
+if(marca()!==75000) throw new Error('la precision no castiga la marca');
+tEnd=60000; pen=-10000; hits=100; fails=0;
+if(marca()!==50000) throw new Error('la marca no cuenta la penalizacion ni el bonus');
+tEnd=60000; pen=0; hits=0; fails=10;     // acc()=0: no puede dividir por cero
+if(marca()!==240000) throw new Error('el piso de precision no capea el castigo en 4x');
+
+// El candado de los baby points: la tabla se VE igual (mirar el top es la mitad
+// de las ganas) pero el boton de subir no deja, y el resumen lo dice ahi mismo.
+tEnd=60000; pen=0; hits=100; fails=0; win=true; hunt=null;
+resOn=false; baby=0; resShow();
+if(rsend.disabled) throw new Error('en 0 baby points la marca tiene que poder subirse');
+if(rlb.style.display==='none') throw new Error('la tabla no se ve en un nivel normal');
+if(rsend.textContent!=='▲ SUBIR MI MARCA')
+  throw new Error('sin nombre guardado el boton no puede decir uno');
+resOn=false; baby=2; resShow();
+if(!rsend.disabled) throw new Error('con baby points no se puede entrar a la tabla');
+if(rlb.style.display==='none') throw new Error('con baby points la tabla se ve igual');
+// el tutorial no la ve: no tiene marca ni la tuvo nunca
+resOn=false; baby=0; juega('tutorial'); win=true; tEnd=60000; pen=0; resShow();
+if(rlb.style.display!=='none') throw new Error('el tutorial no deberia mostrar la tabla');
+resOn=false; baby=0;
+
 console.log('OK 35/35 | partida completa:',teclas,'teclas, precision',prec+'%');
 `;
 
@@ -2395,4 +2428,49 @@ if(!/!win \|\| huntOn\(\) \|\| huntFin\(\)/.test(src))
 if(!/id=repi/.test(mk)) throw new Error('el resumen no tiene donde poner el epilogo');
 if(!/#repi/.test(style)) throw new Error('el renglon del epilogo no tiene estilo');
 
-console.log('OK 37/37 | el perfil lite prende solo en pointer:coarse y no toca la dificultad');
+
+// ---- 42) LA TABLA EN LINEA no puede voltear al juego ni abrir la base ----
+// Es la unica red del juego y tiene que ser OPCIONAL: sin fetch —este mismo vm no
+// lo tiene, y un file:// offline tampoco— todo se va por el guard y el juego sigue.
+// Que las 41 secciones de arriba pasen ya es media prueba; esto fija la forma.
+const guards=(flat.match(/typeof fetch\s*!=\s*'function'/g)||[]).length;
+if(guards<2) throw new Error('los dos call sites de fetch no estan guardados: '+guards);
+if(!/\.catch\(\(\)=>\s*null\)/.test(flat)||!/\.catch\(\(\)=>\s*false\)/.test(flat))
+  throw new Error('un fetch que falla tiene que ser silencioso, no romper el resumen');
+
+// La key que va en un archivo estatico es la PUBLICA. El service_role saltea el
+// RLS entero: si alguna vez aparece aca, la base queda abierta a cualquiera.
+if(/service_role|SUPABASE_SERVICE|secret_/i.test(src))
+  throw new Error('hay una key de servidor en el cliente');
+if(!/sb_publishable_/.test(src)) throw new Error('falta la key publica de la tabla');
+
+// Los nombres los escribe cualquiera que pueda hacer POST: las filas se arman con
+// nodos y textContent. Un innerHTML aca seria XSS con la tabla de municion.
+const iLb=src.indexOf('function lbShow');
+const cuerpo=src.slice(iLb,src.indexOf('\nfunction resShow',iLb));
+if(/innerHTML/.test(cuerpo)) throw new Error('la tabla se pinta con innerHTML');
+if(!/\.textContent\s*=\s*r\.nombre/.test(cuerpo))
+  throw new Error('el nombre ajeno no entra por textContent');
+
+// El nombre se pide UNA vez en la vida y queda en el aparato; despues el boton lo
+// dice y tocarlo es la confirmacion, con el lapiz al lado para cambiarlo.
+if(!/localStorage.setItem\('lg.name'/.test(flat)) throw new Error('el nombre no se guarda');
+if(!/if\(n\s*&&\s*!force\)return n;/.test(flat))
+  throw new Error('el prompt del nombre tiene que salir una sola vez');
+if(!/'▲ SUBIR COMO '\s*\+/.test(flat)) throw new Error('el boton no dice con que nombre entras');
+if(!/rname.onclick/.test(flat)) throw new Error('no hay como cambiar el nombre');
+
+// El candado de los baby points dice POR QUE y QUE HACER, en un solo renglon, y
+// apunta a un boton que esta a la vista en el mismo panel.
+if(!/0 BABY POINTS/.test(src)) throw new Error('falta el mensaje de los baby points');
+if(!/NIVELES/.test(src.slice(iLb-2000,iLb+2000)))
+  throw new Error('el mensaje no dice adonde ir a sacarselos');
+
+// y las tres capas: markup, estilo y la fila propia resaltada
+for(const id of ['rlb','rlbrow','rsend','rname'])
+  if(mk.indexOf('id='+id)<0) throw new Error('al resumen le falta '+id);
+if(style.indexOf('#rlb{')<0) throw new Error('la tabla no tiene estilo');
+if(style.indexOf('#rlb .me{')<0) throw new Error('la fila propia no se resalta');
+if(style.indexOf('#rlbrow #rname{')<0) throw new Error('el lapiz se va a estirar como los otros botones');
+
+console.log('OK 38/38 | el perfil lite prende solo en pointer:coarse y no toca la dificultad');
