@@ -1821,6 +1821,20 @@ if(fila.nivel!=='clasico'||fila.nombre!=='ALEX'||fila.baby!==0)
   throw new Error('la fila no lleva lo que la tabla espera');
 if(!lbFits(fila)) throw new Error('una marca normal tiene que entrar en la tabla');
 
+// Y la cifra que se sube es LA QUE EL JUGADOR VIO. fmt() trunca con n|0, asi
+// que redondear hacia arriba hacia que el resumen dijera 02:05:999 y la tabla
+// 02:06:000 para la misma corrida. Con precision 100% la marca ES el neto, que
+// es lo que promete el README: si eso se rompe, la tabla compara otra cosa.
+for(const v of [60000.6, 125999.7, 60000.4]){
+  tEnd=v; pen=0; hits=100; fails=0;
+  const f=lbRow('ALEX');
+  if(fmt(f.neto)!==fmt(tEnd+pen))
+    throw new Error('la tabla sube un tiempo distinto del que muestra el resumen: '
+                    +fmt(f.neto)+' vs '+fmt(tEnd+pen));
+  if(f.ms!==f.neto)
+    throw new Error('al 100% de precision la marca tiene que seguir siendo el neto');
+}
+
 // Los CHECK del servidor, de este lado. No son la validacion —esa es la de la
 // tabla— sino la diferencia entre "no subio" y "reintentar": lo que no pasa el
 // CHECK da 400 siempre, y reintentarlo es golpear una pared.

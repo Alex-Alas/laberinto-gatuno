@@ -5005,7 +5005,10 @@ let lbSent = false; // ya se subió esta partida: el botón no sube dos veces
 // se muestra con el fmt() de siempre y no hay una unidad nueva que explicar.
 // Al 100% la marca ES el neto; al 80% la infla un 25%.  El piso de acc() evita
 // la división por cero y capea el castigo en 4x.
-const marca = () => Math.round((tEnd + pen) / Math.max(acc(), 0.25));
+// Trunca, no redondea: fmt() muestra el tiempo con `n | 0`, asi que redondear
+// hacia arriba hacia que la tabla dijera 02:06:000 donde el resumen decia
+// 02:05:999.  La cifra que se sube tiene que ser LA QUE EL JUGADOR VIO.
+const marca = () => Math.trunc((tEnd + pen) / Math.max(acc(), 0.25));
 
 // LA FILA que se sube, armada en un solo lugar.  `ms`, `neto` y `prec` son
 // columnas INT del otro lado y PostgREST no redondea: manda el número tal cual y
@@ -5018,8 +5021,8 @@ const marca = () => Math.round((tEnd + pen) / Math.max(acc(), 0.25));
 const lbRow = (nombre) => ({
 	nivel: LV.id,
 	nombre,
-	ms: Math.round(marca()),
-	neto: Math.round(tEnd + pen),
+	ms: Math.trunc(marca()),
+	neto: Math.trunc(tEnd + pen),
 	prec: Math.round(acc() * 100),
 	baby: 0,
 });

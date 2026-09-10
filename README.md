@@ -949,6 +949,12 @@ igual que estar sin señal. Por eso `lbRow()` es el **único** lugar donde se ar
 la fila y redondea todo lo que va a una columna `int`, y por eso el rechazo del
 servidor ahora se escribe en la consola.
 
+Y redondean **hacia abajo**, no al más cercano: `fmt()` muestra el tiempo con
+`n | 0`, así que redondear hacia arriba hacía que la tabla dijera `02:06:000`
+donde el resumen decía `02:05:999`. La cifra que se sube tiene que ser **la que
+el jugador vio** — y así al 100 % la marca sigue siendo *exactamente* el neto,
+que es lo que promete este mismo documento.
+
 `lbFits()` repite los `CHECK` de la tabla del lado del cliente. No es validación
 —la de verdad es la del servidor, y el cliente es JS abierto— sino la diferencia
 entre **"no subió"** y **"reintentar"**: una marca fuera de rango (una partida que
