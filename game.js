@@ -5007,6 +5007,42 @@ let lbSent = false; // ya se subió esta partida: el botón no sube dos veces
 // la división por cero y capea el castigo en 4x.
 const marca = () => Math.round((tEnd + pen) / Math.max(acc(), 0.25));
 
+// LA FILA que se sube, armada en un solo lugar.  `ms`, `neto` y `prec` son
+// columnas INT del otro lado y PostgREST no redondea: manda el número tal cual y
+// Postgres lo rechaza con un 400.  Y `tEnd` sale de performance.now(), que en el
+// navegador devuelve un double CON decimales (45123.399999976158) —Date.now(),
+// el que usan los tests, es entero y por eso acá nunca se vio—, así que el neto
+// crudo era un 400 garantizado en CADA intento: eso, y no la red, era el "NO
+// SUBIÓ, REINTENTAR".  Redondear en el punto de salida es la única forma de que
+// no vuelva a colarse un flotante por otro camino.
+const lbRow = (nombre) => ({
+	nivel: LV.id,
+	nombre,
+	ms: Math.round(marca()),
+	neto: Math.round(tEnd + pen),
+	prec: Math.round(acc() * 100),
+	baby: 0,
+});
+// Los CHECK del servidor, acá.  No son validación —la de verdad es la de la
+// tabla, el cliente es JS abierto— sino la diferencia entre "no subió" y
+// "reintentar": una marca fuera de rango (una partida dejada abierta una hora)
+// da 400 siempre, y reintentarla es golpear una pared.  Si esto y los CHECK se
+// separan, el peor caso vuelve a ser un botón que miente, no una fila mala.
+const LB_MIN = 1000,
+	LB_MAX_MS = 14400000,
+	LB_MAX_NETO = 3600000;
+const lbFits = (r) =>
+	Number.isInteger(r.ms) &&
+	Number.isInteger(r.neto) &&
+	Number.isInteger(r.prec) &&
+	r.ms >= LB_MIN &&
+	r.ms <= LB_MAX_MS &&
+	r.neto >= LB_MIN &&
+	r.neto <= LB_MAX_NETO &&
+	r.prec >= 0 &&
+	r.prec <= 100 &&
+	/^[A-ZÑ0-9 ._-]{1,12}$/.test(r.nombre);
+
 // El nombre se guarda en el aparato con el mismo try/catch que lg.hunt: dentro
 // de un iframe localStorage tira, y eso no puede voltear el juego.
 const lbName = () => {
@@ -5054,8 +5090,21 @@ const lbPost = (row) => {
 		headers: LB_H,
 		body: JSON.stringify(row),
 	})
-		.then((r) => r.ok)
-		.catch(() => false);
+		// El motivo del rechazo se tira a la consola.  Sin esto el 400 de arriba
+		// era indistinguible de estar sin señal, y "no subió" era todo lo que
+		// quedaba para diagnosticar.
+		.then(
+			(r) =>
+				r.ok ||
+				r.text().then((t) => {
+					console.warn("la marca no entró:", r.status, t);
+					return false;
+				}),
+		)
+		.catch((e) => {
+			console.warn("la marca no salió:", e);
+			return false;
+		});
 };
 
 // Pinta #rlb.  El gamer no lee: el estado se dice con UNA línea de siete
@@ -5206,14 +5255,16 @@ rsend.onclick = () => {
 	if (lbSent || baby || LV.tut) return;
 	const nombre = lbAsk();
 	if (!nombre) return; // canceló: no pasa nada, se puede volver a tocar
-	const row = {
-		nivel: LV.id,
-		nombre,
-		ms: marca(),
-		neto: tEnd + pen,
-		prec: Math.round(acc() * 100),
-		baby: 0,
-	};
+	const row = lbRow(nombre);
+	// Fuera de rango no se reintenta: el servidor va a decir que no las veces que
+	// haga falta, y el botón tiene que decirlo en vez de invitar a insistir.
+	if (!lbFits(row)) {
+		lbSent = true;
+		rsend.disabled = true;
+		rname.style.display = "";
+		rsend.textContent = "MARCA FUERA DE TABLA";
+		return;
+	}
 	lbSent = true;
 	rsend.disabled = true;
 	rname.style.display = "none";
