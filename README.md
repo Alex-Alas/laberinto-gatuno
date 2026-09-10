@@ -874,12 +874,13 @@ línea** por nivel, y la partida se puede subir con un nombre.
 ### La marca: tiempo Y precisión
 
 ```js
-marca = Math.round((tEnd + pen) / Math.max(acc(), 0.25));   // menos es mejor
+marca = Math.trunc((tEnd + pen) / Math.max(acc(), 0.25));   // menos es mejor
 ```
 
 No es un puntaje nuevo con unidad propia: es **el tiempo neto castigado por la
 precisión**, o sea las dos cifras que el resumen ya muestra, en una sola y en
-`MM:SS:mmm`. Al 100 % la marca *es* el neto; al 80 % lo infla un 25 %. Correr sin
+`MM:SS:mmm`. Al 100 % la marca *es* el neto —`trunc`, no `round`, justamente
+para que lo sea al milisegundo: ver más abajo—; al 80 % lo infla un 25 %. Correr sin
 mirar deja de pagar. El piso de `0.25` en `acc()` evita dividir por cero y capea
 el castigo en 4×.
 
