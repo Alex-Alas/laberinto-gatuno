@@ -874,12 +874,13 @@ línea** por nivel, y la partida se puede subir con un nombre.
 ### La marca: tiempo Y precisión
 
 ```js
-marca = Math.round((tEnd + pen) / Math.max(acc(), 0.25));   // menos es mejor
+marca = Math.trunc((tEnd + pen) / Math.max(acc(), 0.25));   // menos es mejor
 ```
 
 No es un puntaje nuevo con unidad propia: es **el tiempo neto castigado por la
 precisión**, o sea las dos cifras que el resumen ya muestra, en una sola y en
-`MM:SS:mmm`. Al 100 % la marca *es* el neto; al 80 % lo infla un 25 %. Correr sin
+`MM:SS:mmm`. Al 100 % la marca *es* el neto —`trunc`, no `round`, justamente
+para que lo sea al milisegundo: ver más abajo—; al 80 % lo infla un 25 %. Correr sin
 mirar deja de pagar. El piso de `0.25` en `acc()` evita dividir por cero y capea
 el castigo en 4×.
 
@@ -910,6 +911,8 @@ botón mismo:
 | Sin red / `file://` | `— SIN CONEXIÓN —` |
 | Nadie subió todavía | `— TODAVÍA NADIE —` |
 | Se subió | **la fila propia queda dorada** — no hay cartel de "listo" |
+| La marca no entra en los `CHECK` | `MARCA FUERA DE TABLA` y el botón apagado |
+| El POST falló | `↻ NO SUBIÓ, REINTENTAR`, y el motivo queda en la consola |
 
 El candado dice **por qué** (los baby points) y **qué hacer** (el `▦ NIVELES` que
 está en la fila de abajo del mismo panel, que es donde se eligen). Y la tabla se
@@ -934,6 +937,35 @@ es una fuente confiable y no se lo trata como tal.
 
 Las filas se pintan con **nodos y `textContent`**, no con un template string como
 `#rgrid`: los nombres los escribe cualquiera que pueda hacer POST.
+
+### La fila se arma en un solo lugar, y sale entera
+
+`ms`, `neto` y `prec` son columnas **`int`**, y PostgREST no redondea: le pasa el
+número tal cual a Postgres, así que un decimal es un `400` seco. Y el neto sale
+con decimales **solo**: es `tEnd + pen`, y `tEnd` viene de `performance.now()`,
+que en el navegador devuelve un `double` con coma (`45123.399999976158`). Mandar
+el neto crudo era, por eso, un `400` garantizado en *cada* intento — y como el
+`.catch()` sólo devolvía `false`, el botón decía "no subió" sin más: se veía
+igual que estar sin señal. Por eso `lbRow()` es el **único** lugar donde se arma
+la fila y redondea todo lo que va a una columna `int`, y por eso el rechazo del
+servidor ahora se escribe en la consola.
+
+Y redondean **hacia abajo**, no al más cercano: `fmt()` muestra el tiempo con
+`n | 0`, así que redondear hacia arriba hacía que la tabla dijera `02:06:000`
+donde el resumen decía `02:05:999`. La cifra que se sube tiene que ser **la que
+el jugador vio** — y así al 100 % la marca sigue siendo *exactamente* el neto,
+que es lo que promete este mismo documento.
+
+`lbFits()` repite los `CHECK` de la tabla del lado del cliente. No es validación
+—la de verdad es la del servidor, y el cliente es JS abierto— sino la diferencia
+entre **"no subió"** y **"reintentar"**: una marca fuera de rango (una partida que
+quedó abierta más de una hora) va a dar `400` siempre, y ofrecer reintentarla es
+mandar a golpear una pared.
+
+El `performance.now()` de mentira que usan los tests devolvía enteros de
+`Date.now()`, y ese entero fue el que tapó todo esto: ahora reparte decimales
+dentro de cada milisegundo, así que cualquier flotante que se escape a un payload
+entero vuelve a ser visible desde `node test.js`.
 
 Dos cosas que **no** están, a propósito: **anti-cheat** —mientras el juego corra
 en el navegador la marca es falsificable, y los `CHECK` son el piso honesto— y

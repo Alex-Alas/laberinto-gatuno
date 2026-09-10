@@ -35,7 +35,20 @@ const mkctx=coarse=>{
               requestFullscreen(){ doc.fullscreenElement=root; fire();
                                    return Promise.resolve() }};
   doc.documentElement=root;
-  const ctx={console,Int16Array,performance:{now:()=>Date.now()},requestAnimationFrame:()=>0,
+  // performance.now() del navegador devuelve un double CON DECIMALES
+  // (45123.399999976158).  El stub devolvia Date.now() pelado, entero, y ese
+  // entero de mentira fue el que tapo que la tabla en linea le mandaba el neto
+  // fraccionario a una columna int: el servidor lo rechazaba con un 400 en todos
+  // los intentos y ningun test podia verlo.  Este reparte decimales dentro de
+  // cada milisegundo y los reinicia cuando el reloj avanza: nunca retrocede, no
+  // acumula deriva, y las restas entre dos llamadas vuelven a salir con coma
+  // como en el navegador.  La magnitud sigue siendo la del epoch a proposito:
+  // hay tests que usan `lastDraw=0` como "hace muchisimo que no dibuja".
+  let msAnt=0, frac=0;
+  const pnow=()=>{ const d=Date.now();
+    if(d!==msAnt){ msAnt=d; frac=0 } else frac=Math.min(frac+.25,.75);
+    return d+frac };
+  const ctx={console,Int16Array,performance:{now:pnow},requestAnimationFrame:()=>0,
     setTimeout:()=>0,clearTimeout:()=>0,addEventListener:()=>0,innerWidth:375,
     visualViewport:{width:375,height:700,addEventListener:()=>0},
     matchMedia:q=>({matches:coarse&&/coarse/.test(q)}),
@@ -1792,6 +1805,48 @@ if(marca()!==50000) throw new Error('la marca no cuenta la penalizacion ni el bo
 tEnd=60000; pen=0; hits=0; fails=10;     // acc()=0: no puede dividir por cero
 if(marca()!==240000) throw new Error('el piso de precision no capea el castigo en 4x');
 
+// LA FILA QUE SE SUBE. ms, neto y prec son columnas INT del otro lado y
+// PostgREST no redondea: le manda el numero tal cual a Postgres y un decimal es
+// un 400 seco. Y el neto sale con decimales SOLITO, porque tEnd es
+// performance.now(), que en el navegador devuelve un double con coma. Eso era el
+// "NO SUBIO, REINTENTAR": no la red, un flotante. Que la fila se arme en un solo
+// lugar y ese lugar redondee es lo unico que impide que vuelva por otro camino.
+tEnd=60000.3999999761581421; pen=0; hits=100; fails=0;
+const fila=lbRow('ALEX');
+for(const k of ['ms','neto','prec'])
+  if(!Number.isInteger(fila[k]))
+    throw new Error('la columna int '+k+' viaja con decimales: el servidor la rechaza');
+if(fila.neto!==60000) throw new Error('redondear el neto no puede mover la marca');
+if(fila.nivel!=='clasico'||fila.nombre!=='ALEX'||fila.baby!==0)
+  throw new Error('la fila no lleva lo que la tabla espera');
+if(!lbFits(fila)) throw new Error('una marca normal tiene que entrar en la tabla');
+
+// Y la cifra que se sube es LA QUE EL JUGADOR VIO. fmt() trunca con n|0, asi
+// que redondear hacia arriba hacia que el resumen dijera 02:05:999 y la tabla
+// 02:06:000 para la misma corrida. Con precision 100% la marca ES el neto, que
+// es lo que promete el README: si eso se rompe, la tabla compara otra cosa.
+for(const v of [60000.6, 125999.7, 60000.4]){
+  tEnd=v; pen=0; hits=100; fails=0;
+  const f=lbRow('ALEX');
+  if(fmt(f.neto)!==fmt(tEnd+pen))
+    throw new Error('la tabla sube un tiempo distinto del que muestra el resumen: '
+                    +fmt(f.neto)+' vs '+fmt(tEnd+pen));
+  if(f.ms!==f.neto)
+    throw new Error('al 100% de precision la marca tiene que seguir siendo el neto');
+}
+
+// Los CHECK del servidor, de este lado. No son la validacion —esa es la de la
+// tabla— sino la diferencia entre "no subio" y "reintentar": lo que no pasa el
+// CHECK da 400 siempre, y reintentarlo es golpear una pared.
+tEnd=4000000; pen=0;                     // mas de una hora de partida
+if(lbFits(lbRow('ALEX'))) throw new Error('un neto de mas de una hora no entra en la tabla');
+tEnd=500; pen=0;                         // por debajo del minimo
+if(lbFits(lbRow('ALEX'))) throw new Error('un neto por debajo del minimo no entra');
+tEnd=60000;
+if(lbFits(lbRow('alex')))   throw new Error('el nombre en minusculas no pasa el CHECK');
+if(lbFits(lbRow('')))       throw new Error('un nombre vacio no pasa el CHECK');
+if(lbFits(lbRow('ALEJANDRO ALAS'))) throw new Error('un nombre de mas de 12 no pasa el CHECK');
+
 // El candado de los baby points: la tabla se VE igual (mirar el top es la mitad
 // de las ganas) pero el boton de subir no deja, y el resumen lo dice ahi mismo.
 tEnd=60000; pen=0; hits=100; fails=0; win=true; hunt=null;
@@ -2433,10 +2488,27 @@ if(!/#repi/.test(style)) throw new Error('el renglon del epilogo no tiene estilo
 // Es la unica red del juego y tiene que ser OPCIONAL: sin fetch —este mismo vm no
 // lo tiene, y un file:// offline tampoco— todo se va por el guard y el juego sigue.
 // Que las 41 secciones de arriba pasen ya es media prueba; esto fija la forma.
+const cuerpoLb=src.slice(src.indexOf('const lbGet'),src.indexOf('function lbLine'));
 const guards=(flat.match(/typeof fetch\s*!=\s*'function'/g)||[]).length;
 if(guards<2) throw new Error('los dos call sites de fetch no estan guardados: '+guards);
-if(!/\.catch\(\(\)=>\s*null\)/.test(flat)||!/\.catch\(\(\)=>\s*false\)/.test(flat))
+// Atajar es obligatorio —un fetch que falla no puede romper el resumen— pero
+// callarse no: la subida escribe el motivo en la consola antes de devolver false,
+// que es lo que faltaba el dia que un 400 y estar sin senal se veian igual.
+if((flat.match(/\.catch\(/g)||[]).length<2)
   throw new Error('un fetch que falla tiene que ser silencioso, no romper el resumen');
+if(!/\.catch\(\(\)=>\s*null\)/.test(flat))
+  throw new Error('la lectura de la tabla tiene que atajar en null');
+if(!/\.catch\([^)]*\)=>\{[\s\S]*?return false;\s*\}\)/.test(flat))
+  throw new Error('la subida de la tabla tiene que atajar en false');
+if(!/console\.warn/.test(cuerpoLb))
+  throw new Error('un rechazo del servidor tiene que dejar el motivo en la consola');
+
+// La fila se arma en UN lugar y no se sube sin pasar por el filtro: si el boton
+// vuelve a construirse el objeto a mano, el flotante vuelve con el.
+if(!/const row=lbRow\(nombre\);/.test(flat))
+  throw new Error('el boton arma la fila a mano en vez de usar lbRow');
+if(!/if\(!lbFits\(row\)\)/.test(flat))
+  throw new Error('el boton sube sin pasar por los CHECK de este lado');
 
 // La key que va en un archivo estatico es la PUBLICA. El service_role saltea el
 // RLS entero: si alguna vez aparece aca, la base queda abierta a cualquiera.
